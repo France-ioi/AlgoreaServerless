@@ -1,5 +1,5 @@
 
-export interface Thread {
+export interface ThreadId {
   itemId: string,
   participantId: string,
 }

@@ -1,14 +1,14 @@
-import * as D from 'io-ts/Decoder';
 import { DynamoDB, ExecuteStatementCommandOutput } from '@aws-sdk/client-dynamodb';
-import { fromDBItem, toDBItem, toDBParameters } from './dynamodb';
-import { DBError } from './utils/errors';
+import { fromDBItem, toDBItem, toDBParameters } from '../dynamodb';
+import { DBError } from '../utils/errors';
+import { z } from 'zod';
 
-export const tableKeyDecoder = D.struct({
-  pk: D.string,
-  time: D.number,
+export const tableKeySchema = z.object({
+  pk: z.string(),
+  sk: z.number(),
 });
 
-export type TableKey = D.TypeOf<typeof tableKeyDecoder>;
+export type TableKey = z.infer<typeof tableKeySchema>;
 
 export interface DBStatement {
   query: string,

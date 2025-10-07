@@ -1,4 +1,4 @@
-service: alg-forum
+service: alg-serverless
 frameworkVersion: '3'
 useDotenv: true
 
@@ -20,6 +20,7 @@ provider:
     STAGE: ${opt:stage, 'dev'}
     BACKEND_PUBLIC_KEY: ${env:BACKEND_PUBLIC_KEY}
     TABLE_NAME: ${env:TABLE_NAME}
+    APIGW_ENDPOINT: ${env:APIGW_ENDPOINT}
   runtime: nodejs20.x
   deploymentMethod: direct
   deploymentBucket:
@@ -44,61 +45,65 @@ provider:
             - "dynamodb:DeleteItem"
             - "dynamodb:PartiQL*"
           Resource:
-            - Fn::GetAtt: [ForumTable, Arn]
-
+            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/${env:TABLE_NAME}"
 functions:
+
+  # global to websockets
   connection:
-    handler: src/ws-handlers/connection.handler
+    handler: src/handlers/ws-ok.handler
     events:
       - websocket:
           route: $connect
   disconnection:
-    handler: src/ws-handlers/disconnection.handler
+    handler: src/handlers/ws-ok.handler
     events:
       - websocket:
           route: $disconnect
-  publish:
-    handler: src/ws-handlers/publish.handler
-    events:
-      - websocket:
-          route: publish
-  subscribe:
-    handler: src/ws-handlers/subscribe.handler
-    events:
-      - websocket:
-          route: subscribe
-  unsubscribe:
-    handler: src/ws-handlers/unsubscribe.handler
-    events:
-      - websocket:
-          route: unsubscribe
+
   heartbeat:
-    handler: src/ws-handlers/heartbeat.handler
+    handler: src/handlers/ws-ok.handler
     events:
       - websocket:
           route: heartbeat
+
+  # forum app
+  forum-thread-subscription-create:
+    handler: src/handlers/forum.threadSubscribe
+    events:
+      - websocket:
+          route: subscribe
+
+  forum-thread-subscription-delete:
+    handler: src/handlers/forum.threadUnsubscribe
+    events:
+      - websocket:
+          route: unsubscribe
+
+  forum-message-getAll:
+    handler: src/handlers/forum.threadMessageGetAll
+    events:
+      - alb:
+          priority: 60
+          listenerArn: ${env:ALB_LISTENER_ARN}
+          conditions:
+            path: /sls/forum/message
+            method:
+              - GET
+              - OPTIONS
+
+  forum-message-create:
+    handler: src/handlers/forum.threadMessageCreate
+    events:
+      - alb:
+          priority: 70
+          listenerArn: ${env:ALB_LISTENER_ARN}
+          conditions:
+            path: /sls/forum/message
+            method:
+              - POST
+              - OPTIONS
+
 plugins:
   - serverless-plugin-typescript
   - serverless-dynamodb-local
   - serverless-offline
-
-resources:
-  Resources:
-    ForumTable:
-      Type: "AWS::DynamoDB::Table"
-      Properties:
-        BillingMode: PAY_PER_REQUEST
-        TableName: ${env:TABLE_NAME}
-        TimeToLiveSpecification:
-          AttributeName: "ttl"
-          Enabled: true
-        AttributeDefinitions:
-          - AttributeName: pk
-            AttributeType: "S"
-          - AttributeName: time
-            AttributeType: "N"
-        KeySchema:
-          - AttributeName: pk
-            KeyType: HASH
-          - AttributeName: time
-            KeyType: RANGE
