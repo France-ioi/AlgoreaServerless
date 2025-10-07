@@ -2,6 +2,13 @@ import { ForumTable } from '../table';
 import { ThreadId } from './thread';
 import { literal, z } from 'zod';
 
+/**
+ * DB labels of the thread events
+ */
+export enum ThreadEventLabel {
+  Message = 'forum.message',
+}
+
 const threadEventBaseSchema = z.object({
   sk: z.number(),
   label: z.string(),
@@ -9,10 +16,11 @@ const threadEventBaseSchema = z.object({
 });
 
 const threadMessageSchema = threadEventBaseSchema.safeExtend({
-  label: literal('message'),
+  label: literal(ThreadEventLabel.Message),
   data: z.object({
     authorId: z.string(),
     text: z.string(),
+    uuid: z.string(),
   }),
 });
 const threadEventSchema = z.discriminatedUnion('label', [ threadMessageSchema ]);
@@ -45,8 +53,8 @@ export class ThreadEvents extends ForumTable {
 
   async getAllMessages(threadId: ThreadId, options: { limit: number }): Promise<ThreadMessage[]> {
     const results = await this.sqlRead({
-      query: `SELECT sk, label, data FROM "${this.tableName}" WHERE pk = ? AND label = 'message' ORDER BY sk DESC`,
-      params: [ pk(threadId) ],
+      query: `SELECT sk, label, data FROM "${this.tableName}" WHERE pk = ? AND label = ? ORDER BY sk DESC`,
+      params: [ pk(threadId), ThreadEventLabel.Message ],
       limit: options.limit,
     });
     return results

@@ -7,8 +7,21 @@ export interface SendResult {
   error?: unknown,
 }
 
-type Message = unknown;
+export enum ForumMessageAction {
+  NewMessage = 'forum.message.new',
+}
 
+interface ForumNewMessage {
+  action: ForumMessageAction.NewMessage,
+  participantId: string,
+  itemId: string,
+  authorId: string,
+  time: number,
+  text: string,
+  uuid: string,
+}
+
+type Message = ForumNewMessage; // will add new messages here
 
 /**
  * The websocket connection id. It is really a string!
