@@ -37,7 +37,6 @@ provider:
         - Effect: Allow
           Action:
             - "dynamodb:GetItem"
-            - "dynamodb:Scan"
             - "dynamodb:Query"
             - "dynamodb:PutItem"
             - "dynamodb:UpdateItem"
