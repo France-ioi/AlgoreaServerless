@@ -1,24 +1,21 @@
-import { ALBEvent, ALBResult } from 'aws-lambda';
-import { ForumToken } from '../../handlers/forum-parse';
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
 import { ThreadEventLabel, ThreadEvents } from '../../dbmodels/forum/thread-events';
 import { dynamodb } from '../../dynamodb';
-import { DecodingError, Forbidden } from '../../utils/errors';
+import { Forbidden } from '../../utils/errors';
 import { z } from 'zod';
 import { ForumMessageAction, isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
-import { created } from '../../utils/responses';
-import { ReqBody, ReqQueryParams } from '../../handlers/common';
+import { HandlerFunction, Request, Response } from 'lambda-api';
+import { extractToken } from '../token';
 
 const subscriptions = new ThreadSubscriptions(dynamodb);
 const threadEvents = new ThreadEvents(dynamodb);
 
-export async function createMessage(token: ForumToken, body: ReqBody, _queryParams: ReqQueryParams): Promise<ALBResult> {
-  const { participantId, itemId, userId, canWrite } = token;
-  if (!canWrite) throw new Forbidden(`This operation required canWrite, got ${JSON.stringify(token)} `);
-  if (!body) throw new DecodingError('Missing body');
+async function create(req: Request, resp: Response): Promise<void> {
+  const { participantId, itemId, userId, canWrite } = await extractToken(req.headers);
+  if (!canWrite) throw new Forbidden('This operation required canWrite');
 
   const threadId = { participantId, itemId };
-  const { text, uuid } = z.object({ text: z.string(), uuid: z.string() }).parse(JSON.parse(body));
+  const { text, uuid } = z.object({ text: z.string(), uuid: z.string() }).parse(req.body);
   const time = Date.now();
   const authorId = userId;
 
@@ -37,19 +34,17 @@ export async function createMessage(token: ForumToken, body: ReqBody, _queryPara
       return subscriptions.unsubscribeSet(threadId, goneSubscribers);
     }),
   ]);
-  return created();
+  resp.sendStatus(201);
 }
 
 const defaultLimit = 10;
 const maxLimit = 20;
 
-export async function getAllMessages(token: ForumToken, _body: ReqBody, queryParams: ALBEvent['queryStringParameters']):
-  Promise<{ time: number, text: string, authorId: string, uuid: string }[]> {
+async function getAll(req: Request): Promise<{ time: number, text: string, authorId: string, uuid: string }[]> {
+  const token = await extractToken(req.headers);
   const { canWatch, isMine } = token;
   if (!canWatch && !isMine) throw new Forbidden(`This operation required canWatch or isMine, got ${JSON.stringify(token)} `);
-  const limit = queryParams && queryParams['limit'] ?
-    z.number().positive().max(maxLimit).default(defaultLimit).parse(+queryParams['limit']) :
-    defaultLimit;
+  const limit = z.number().positive().max(maxLimit).default(defaultLimit).parse(+(req.query['limit']||''));
 
   const messages = await threadEvents.getAllMessages(token, { limit });
   return messages.map(m => ({
@@ -59,3 +54,6 @@ export async function getAllMessages(token: ForumToken, _body: ReqBody, queryPar
     uuid: m.data.uuid,
   }));
 }
+
+export const getAllMessages: HandlerFunction = getAll;
+export const createMessage: HandlerFunction = create;

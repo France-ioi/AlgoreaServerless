@@ -78,29 +78,8 @@ functions:
       - websocket:
           route: unsubscribe
 
-  forum-message-getAll:
-    handler: src/handlers/forum.threadMessageGetAll
-    events:
-      - alb:
-          priority: 60
-          listenerArn: ${env:ALB_LISTENER_ARN}
-          conditions:
-            path: /sls/forum/message
-            method:
-              - GET
-              - OPTIONS
-
-  forum-message-create:
-    handler: src/handlers/forum.threadMessageCreate
-    events:
-      - alb:
-          priority: 70
-          listenerArn: ${env:ALB_LISTENER_ARN}
-          conditions:
-            path: /sls/forum/message
-            method:
-              - POST
-              - OPTIONS
+  sls-http:
+    handler: src/handlers/alb.handler
 
 plugins:
   - serverless-plugin-typescript
