@@ -1,0 +1,25 @@
+version: 2.1
+jobs:
+
+  github-release:
+    docker:
+    - image: cibuilds/github:0.10
+    steps:
+      - checkout
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -b "`awk '/##.*/{n++;next};n==1;n==2{exit}' CHANGELOG.md`" -delete ${CIRCLE_TAG} ./
+
+
+workflows:
+  version: 2
+  default:
+    jobs:
+      - github-release:
+          context: github
+          filters:
+            tags:
+              only: /^v\d+\.\d+\..*/
+            branches:
+              ignore: /.*/
