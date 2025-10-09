@@ -5,13 +5,13 @@ import { Forbidden } from '../../utils/errors';
 import { z } from 'zod';
 import { ForumMessageAction, isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
 import { HandlerFunction, Request, Response } from 'lambda-api';
-import { extractToken } from '../token';
+import { extractTokenFromHttp } from '../token';
 
 const subscriptions = new ThreadSubscriptions(dynamodb);
 const threadEvents = new ThreadEvents(dynamodb);
 
 async function create(req: Request, resp: Response): Promise<void> {
-  const { participantId, itemId, userId, canWrite } = await extractToken(req.headers);
+  const { participantId, itemId, userId, canWrite } = await extractTokenFromHttp(req.headers);
   if (!canWrite) throw new Forbidden('This operation required canWrite');
 
   const threadId = { participantId, itemId };
@@ -41,7 +41,7 @@ const defaultLimit = 10;
 const maxLimit = 20;
 
 async function getAll(req: Request): Promise<{ time: number, text: string, authorId: string, uuid: string }[]> {
-  const token = await extractToken(req.headers);
+  const token = await extractTokenFromHttp(req.headers);
   const { canWatch, isMine } = token;
   if (!canWatch && !isMine) throw new Forbidden(`This operation required canWatch or isMine, got ${JSON.stringify(token)} `);
   const limit = z.number().positive().max(maxLimit).default(defaultLimit).parse(+(req.query['limit']||''));

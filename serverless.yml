@@ -47,36 +47,15 @@ provider:
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/${env:TABLE_NAME}"
 functions:
 
-  # global to websockets
-  connection:
-    handler: src/handlers/ws-ok.handler
+  sls-ws:
+    handler: src/handlers/apigw-ws.handler
     events:
       - websocket:
           route: $connect
-  disconnection:
-    handler: src/handlers/ws-ok.handler
-    events:
       - websocket:
           route: $disconnect
-
-  heartbeat:
-    handler: src/handlers/ws-ok.handler
-    events:
       - websocket:
-          route: heartbeat
-
-  # forum app
-  forum-thread-subscription-create:
-    handler: src/handlers/forum.threadSubscribe
-    events:
-      - websocket:
-          route: subscribe
-
-  forum-thread-subscription-delete:
-    handler: src/handlers/forum.threadUnsubscribe
-    events:
-      - websocket:
-          route: unsubscribe
+          route: $default
 
   sls-http:
     handler: src/handlers/alb.handler

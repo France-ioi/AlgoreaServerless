@@ -4,6 +4,7 @@ import { compactVerify, importSPKI } from 'jose';
 import { toUtf8 } from '@smithy/util-utf8';
 import * as z from 'zod';
 import { ServerError } from '../utils/errors';
+import { WsRequest } from '../utils/lambda-ws-server';
 
 const jwsPayloadSchema = z.object({
   item_id: z.string(),
@@ -39,10 +40,16 @@ async function parseToken(token: string): Promise<ForumToken> {
   };
 }
 
-export async function extractToken(headers: Request['headers']): Promise<ForumToken> {
+export async function extractTokenFromHttp(headers: Request['headers']): Promise<ForumToken> {
   const token = headers['authorization'];
   if (!token) throw new DecodingError('no Authorization header found in the headers.');
   if (!token.startsWith('Bearer ')) throw new DecodingError('the Authorization header is not a Bearer token');
   const jws = token.slice(7);
   return await parseToken(jws);
+}
+
+export async function extractTokenFromWs(body: WsRequest['body']): Promise<ForumToken> {
+  const result = z.object({ token: z.string() }).safeParse(body);
+  if (!result.success) throw new DecodingError(`unable to fetch the token from the ws message: ${result.error.message}`);
+  return await parseToken(result.data.token);
 }

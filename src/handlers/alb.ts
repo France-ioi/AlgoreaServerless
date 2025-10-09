@@ -1,6 +1,6 @@
 import { ALBEvent, APIGatewayProxyEvent, Context } from 'aws-lambda';
 import createAPI, { Request, Response } from 'lambda-api';
-import forumRoutes from '../forum/routes';
+import { forumRoutes } from '../forum/routes';
 import errorHandlingMiddleware from '../middlewares/error-handling';
 import corsMiddleware from '../middlewares/cors';
 

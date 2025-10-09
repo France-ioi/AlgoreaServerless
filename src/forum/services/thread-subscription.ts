@@ -1,18 +1,19 @@
 import { dynamodb } from '../../dynamodb';
-import { ForumToken } from '../../handlers/forum-parse';
-import { ConnectionId } from '../../websocket-client';
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
+import { WsRequest } from '../../utils/lambda-ws-server';
+import { extractTokenFromWs } from '../token';
 
 const subscriptions = new ThreadSubscriptions(dynamodb);
 
-export async function subscribe(connectionId: ConnectionId, token: ForumToken, _payload: unknown): Promise<void> {
-  const { participantId, itemId, userId } = token;
-  await subscriptions.subscribe({ participantId, itemId }, connectionId, userId);
+export async function subscribe(request: WsRequest): Promise<void> {
+  const { participantId, itemId, userId } = await extractTokenFromWs(request.body);
+  await subscriptions.subscribe({ participantId, itemId }, request.connectionId(), userId);
 }
 /**
  * Unsubscribe from a thread
  * It is a connection which unsubscribes, not a user, as just stops sending messages to an instance of the application (possibly many)
  */
-export async function unsubscribe(connectionId: ConnectionId, token: ForumToken, _payload: unknown): Promise<void> {
-  await subscriptions.unsubscribeConnectionId(token, connectionId);
+export async function unsubscribe(request: WsRequest): Promise<void> {
+  const token = await extractTokenFromWs(request.body);
+  await subscriptions.unsubscribeConnectionId(token, request.connectionId());
 }

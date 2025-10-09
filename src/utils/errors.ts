@@ -31,6 +31,11 @@ export class DecodingError implements Error {
   constructor(public message: string) {}
 }
 
+export class RouteNotFound implements Error {
+  name = 'RouteNotFound';
+  constructor(public message: string) {}
+}
+
 export class Forbidden implements Error {
   name = 'Forbidden';
   constructor(public message: string) {}
