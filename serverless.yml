@@ -47,18 +47,16 @@ provider:
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/${env:TABLE_NAME}"
 functions:
 
-  sls-ws:
-    handler: src/handlers/apigw-ws.handler
-    events:
-      - websocket:
-          route: $connect
-      - websocket:
-          route: $disconnect
-      - websocket:
-          route: $default
-
-  sls-http:
-    handler: src/handlers/alb.handler
+  server:
+    handler: src/handlers.globalHandler
+    # events: To be configured by hand to support using lambda aliases for ops
+    #   - websocket:
+    #       route: $connect
+    #   - websocket:
+    #       route: $disconnect
+    #   - websocket:
+    #       route: $default
+    #   - ALB
 
 plugins:
   - serverless-plugin-typescript
