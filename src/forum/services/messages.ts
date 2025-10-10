@@ -34,7 +34,7 @@ async function create(req: Request, resp: Response): Promise<void> {
       return subscriptions.unsubscribeSet(threadId, goneSubscribers);
     }),
   ]);
-  resp.status(201).send({ message: 'created', success: true });
+  resp.status(201).json({ message: 'created', success: true });
 }
 
 const defaultLimit = 10;
