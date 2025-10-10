@@ -9,7 +9,7 @@ jobs:
       - run:
           name: "Publish Release on GitHub"
           command: |
-            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -b "`awk '/##.*/{n++;next};n==1;n==2{exit}' CHANGELOG.md`" -delete ${CIRCLE_TAG} ./
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -b "`awk '/##.*/{n++;next};n==1;n==2{exit}' CHANGELOG.md`" -delete ${CIRCLE_TAG} ./CHANGELOG.md
 
 
 workflows:
