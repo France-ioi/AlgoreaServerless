@@ -49,6 +49,7 @@ functions:
 
   server:
     handler: src/handlers.globalHandler
+    description: ${param:description}
     # events: To be configured by hand to support using lambda aliases for ops
     #   - websocket:
     #       route: $connect
