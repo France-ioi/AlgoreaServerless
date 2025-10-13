@@ -3,16 +3,19 @@ frameworkVersion: '3'
 useDotenv: true
 
 custom:
- dynamodb:
-   stages:
-     - local
-   start:
-     port: 7000
-     inMemory: true
-     heapInitial: 200m
-     heapMax: 1g
-     migrate: true
-     convertEmptyValues: true
+  dynamodb:
+    stages:
+      - local
+    start:
+      port: 7000
+      inMemory: true
+      heapInitial: 200m
+      heapMax: 1g
+      migrate: true
+      convertEmptyValues: true
+  prune:
+    automatic: true
+    number: 1
 
 provider:
   name: aws
@@ -63,3 +66,4 @@ plugins:
   - serverless-plugin-typescript
   - serverless-dynamodb-local
   - serverless-offline
+  - serverless-prune-plugin
