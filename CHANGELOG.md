@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## v2.0.6 - 2025-10-16
+- fix: do not create an parsing loop on parsing error. handle GoneException
+
 ## v2.0.5 - 2025-10-16
 - return the error correctly on 500
 - fix the way we return responses
