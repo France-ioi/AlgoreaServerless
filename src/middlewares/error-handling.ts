@@ -18,7 +18,7 @@ function errorHandler(err: Error, req: Request, res: Response, next: NextFunctio
     return;
   }
   if (err instanceof Error) {
-    res.status(500).send({ message: 'internal server error', details: JSON.stringify(err) });
+    res.status(500).send({ message: 'internal server error', details: String(err) });
     return;
   }
   next();
