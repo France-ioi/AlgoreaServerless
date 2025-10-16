@@ -37,7 +37,7 @@ export function logSendResults(results: SendResult[]): void {
     // eslint-disable-next-line no-console
     console.warn(
       `Message successfully sent to: ${results.filter(r => r.success).map(r => r.connectionId).join(', ')} and got error to: `,
-      `${results.filter(r => !r.success).map(r => `${r.connectionId} [${errorToString(JSON.stringify(r.error))}]`).join(', ')}`
+      `${results.filter(r => !r.success).map(r => `${r.connectionId} [${errorToString(r.error)}]`).join(', ')}`
     );
   // eslint-disable-next-line no-console
   } else console.log(`Messages successfully sent to ${results.length} recipients.`);

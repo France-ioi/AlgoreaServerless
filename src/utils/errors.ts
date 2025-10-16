@@ -1,3 +1,4 @@
+import { GoneException } from '@aws-sdk/client-apigatewaymanagementapi';
 import { TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 
 export function logError(err: unknown): void {
@@ -13,6 +14,9 @@ export function errorToString(err: unknown): string {
   }
   if (err instanceof DBError) {
     return `${err.name}: ${err.message} - Statement(s): ${err.details}`;
+  }
+  if (err instanceof GoneException) {
+    return 'Connection closed';
   }
   if (err instanceof Error || err instanceof Forbidden || err instanceof ServerError ||
     err instanceof DecodingError || err instanceof OperationSkipped) {
