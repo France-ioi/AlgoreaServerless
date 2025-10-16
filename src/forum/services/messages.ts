@@ -6,11 +6,12 @@ import { z } from 'zod';
 import { ForumMessageAction, isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
 import { HandlerFunction, Request, Response } from 'lambda-api';
 import { extractTokenFromHttp } from '../token';
+import { created } from '../../utils/rest-responses';
 
 const subscriptions = new ThreadSubscriptions(dynamodb);
 const threadEvents = new ThreadEvents(dynamodb);
 
-async function create(req: Request, resp: Response): Promise<void> {
+async function create(req: Request, resp: Response): Promise<ReturnType<typeof created>> {
   const { participantId, itemId, userId, canWrite } = await extractTokenFromHttp(req.headers);
   if (!canWrite) throw new Forbidden('This operation required canWrite');
 
@@ -34,7 +35,7 @@ async function create(req: Request, resp: Response): Promise<void> {
       return subscriptions.unsubscribeSet(threadId, goneSubscribers);
     }),
   ]);
-  resp.status(201).json({ message: 'created', success: true });
+  return created(resp);
 }
 
 const defaultLimit = 10;

@@ -1,5 +1,5 @@
 import { ALBEvent, APIGatewayProxyEvent, Context } from 'aws-lambda';
-import createAPI, { Request, Response } from 'lambda-api';
+import createAPI from 'lambda-api';
 import createWsServer from './utils/lambda-ws-server';
 import { forumRoutes, forumWsActions } from './forum/routes';
 import errorHandlingMiddleware from './middlewares/error-handling';
@@ -19,9 +19,7 @@ api.use(errorHandlingMiddleware);
 api.use(corsMiddleware);
 
 // OPTION handling (cors headers are injected by the middleware)
-api.options('/*', (_req: Request, res: Response) => {
-  res.status(200).send({});
-});
+api.options('/*', () => ({}));
 
 // routes registration
 api.register(forumRoutes, { prefix: '/forum' });
