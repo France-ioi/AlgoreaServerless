@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## v2.0.5 - 2025-10-16
+- return the error correctly on 500
+- fix the way we return responses
+
 ## v2.0.4 - 2025-10-13
 - enable autoprune in serverless
 - add description to lambda function
