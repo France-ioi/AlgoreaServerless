@@ -11,11 +11,19 @@ jobs:
           command: |
             ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -b "`awk '/##.*/{n++;next};n==1;n==2{exit}' CHANGELOG.md`" -delete ${CIRCLE_TAG} ./CHANGELOG.md
 
+  tests:
+    docker:
+    - image: node:20-alpine
+    steps:
+      - checkout
+      - run: npm install
+      - run: npm run test
 
 workflows:
   version: 2
   default:
     jobs:
+      - tests
       - github-release:
           context: github
           filters:
