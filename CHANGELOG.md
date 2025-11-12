@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## v2.0.8 - 2025-11-12
+- make token verification failure a decoding error so that we send a 4xx instead of 5xx
+
 ## v2.0.7 - 2025-11-12
 - do not require to be owner or to be able to watch to get messages
 - improve token verification (check expiration)
