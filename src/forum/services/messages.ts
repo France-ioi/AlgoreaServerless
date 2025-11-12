@@ -43,8 +43,6 @@ const maxLimit = 20;
 
 async function getAll(req: Request): Promise<{ time: number, text: string, authorId: string, uuid: string }[]> {
   const token = await extractTokenFromHttp(req.headers);
-  const { canWatch, isMine } = token;
-  if (!canWatch && !isMine) throw new Forbidden(`This operation required canWatch or isMine, got ${JSON.stringify(token)} `);
   const limit = z.number().positive().max(maxLimit).default(defaultLimit).parse(+(req.query['limit']||''));
 
   const messages = await threadEvents.getAllMessages(token, { limit });
