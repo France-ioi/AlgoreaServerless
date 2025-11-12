@@ -5,6 +5,7 @@ import { toUtf8 } from '@smithy/util-utf8';
 import * as z from 'zod';
 import { ServerError } from '../utils/errors';
 import { WsRequest } from '../utils/lambda-ws-server';
+import { epochDate } from '../utils/ts-decoder';
 
 const jwsPayloadSchema = z.object({
   item_id: z.string(),
@@ -13,6 +14,7 @@ const jwsPayloadSchema = z.object({
   is_mine: z.boolean(),
   can_watch: z.boolean(),
   can_write: z.boolean(),
+  exp: epochDate,
 });
 
 export interface ForumToken {
@@ -30,6 +32,7 @@ async function parseToken(token: string): Promise<ForumToken> {
   const { payload } = await compactVerify(token, publicKey);
   const verifiedPayload = JSON.parse(toUtf8(payload)) as unknown;
   const decodedPayload = jwsPayloadSchema.parse(verifiedPayload);
+  if (decodedPayload.exp.getTime() < Date.now()) throw new DecodingError('the token has expired');
   return {
     participantId: decodedPayload.participant_id,
     itemId: decodedPayload.item_id,
