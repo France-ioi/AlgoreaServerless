@@ -27,8 +27,8 @@ export interface ForumToken {
 async function parseToken(token: string): Promise<ForumToken> {
   if (!process.env.BACKEND_PUBLIC_KEY) throw new ServerError('no backend public key found to verify the token');
   const publicKey = await importSPKI(process.env.BACKEND_PUBLIC_KEY, 'ES256');
-  const res = await compactVerify(token, publicKey);
-  const verifiedPayload = JSON.parse(toUtf8(res.payload)) as unknown;
+  const { payload } = await compactVerify(token, publicKey);
+  const verifiedPayload = JSON.parse(toUtf8(payload)) as unknown;
   const decodedPayload = jwsPayloadSchema.parse(verifiedPayload);
   return {
     participantId: decodedPayload.participant_id,
