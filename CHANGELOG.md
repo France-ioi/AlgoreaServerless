@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## v2.0.7 - 2025-11-12
+- do not require to be owner or to be able to watch to get messages
+- improve token verification (check expiration)
+
 ## v2.0.6 - 2025-10-16
 - fix: do not create an parsing loop on parsing error. handle GoneException
 
