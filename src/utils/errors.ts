@@ -25,32 +25,46 @@ export function errorToString(err: unknown): string {
   return `An unexpected error occured (${JSON.stringify(err)})`;
 }
 
-export class DBError implements Error {
-  name = 'DBError';
-  constructor(public message: string /* error description */, public details: string /* statement details */) {}
+export class DBError extends Error {
+  details: string;
+  constructor(message: string /* error description */, details: string /* statement details */) {
+    super(message);
+    this.name = 'DBError';
+    this.details = details;
+  }
 }
 
-export class DecodingError implements Error {
-  name = 'DecodingError';
-  constructor(public message: string) {}
+export class DecodingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DecodingError';
+  }
 }
 
-export class RouteNotFound implements Error {
-  name = 'RouteNotFound';
-  constructor(public message: string) {}
+export class RouteNotFound extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RouteNotFound';
+  }
 }
 
-export class Forbidden implements Error {
-  name = 'Forbidden';
-  constructor(public message: string) {}
+export class Forbidden extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'Forbidden';
+  }
 }
 
-export class OperationSkipped implements Error { /* this is not an actual error, it has to be consired as a warning */
-  name = 'OperationSkipped';
-  constructor(public message: string) {}
+export class OperationSkipped extends Error { /* this is not an actual error, it has to be consired as a warning */
+  constructor(message: string) {
+    super(message);
+    this.name = 'OperationSkipped';
+  }
 }
 
-export class ServerError implements Error {
-  name = 'ServerError';
-  constructor(public message: string) {}
+export class ServerError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ServerError';
+  }
 }
