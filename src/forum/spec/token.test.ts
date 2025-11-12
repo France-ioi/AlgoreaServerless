@@ -68,7 +68,7 @@ describe('parseToken', () => {
 
     // Advance time by 2 seconds
     jest.advanceTimersByTime(2000);
-    await expect(parseToken(token, publicKeyPem)).rejects.toThrow('"exp" claim timestamp check failed');
+    await expect(parseToken(token, publicKeyPem)).rejects.toThrow('JWT verification failed: "exp" claim timestamp check failed');
   });
 
   it('should throw an error if the public key is not provided', async () => {

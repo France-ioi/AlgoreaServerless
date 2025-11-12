@@ -26,7 +26,11 @@ export interface ForumToken {
 export async function parseToken(token: string, publicKeyPem?: string): Promise<ForumToken> {
   if (!publicKeyPem) throw new ServerError('no backend public key found to verify the token');
   const publicKey = await importSPKI(publicKeyPem, 'ES256');
-  const { payload } = await jwtVerify(token, publicKey);
+  const { payload } = await jwtVerify(token, publicKey).catch(
+    err => {
+      throw new DecodingError(`JWT verification failed: ${(err as Error).message}`);
+    }
+  );
   const decodedPayload = jwsPayloadSchema.parse(payload);
   return {
     participantId: decodedPayload.participant_id,
