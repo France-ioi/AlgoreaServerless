@@ -64,6 +64,6 @@ functions:
 
 plugins:
   - serverless-plugin-typescript
-  - serverless-dynamodb-local
+#  - serverless-dynamodb-local
   - serverless-offline
   - serverless-prune-plugin
