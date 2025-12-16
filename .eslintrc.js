@@ -75,7 +75,7 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['*.spec.ts'],
+      files: ['*.spec.ts', '**/*.spec.ts', '**/testutils/*.ts'],
       rules: {
         '@typescript-eslint/no-floating-promises': 'off',
         '@typescript-eslint/unbound-method': 'off',
@@ -85,6 +85,9 @@ module.exports = {
         '@typescript-eslint/no-unsafe-argument': 'off',
         '@typescript-eslint/no-unsafe-return': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
+        '@typescript-eslint/no-explicit-any': 'off',
+        '@typescript-eslint/no-unused-vars': 'off',
+        'arrow-parens': 'off',
       }
     },
     {

@@ -1,4 +1,4 @@
-import { ForumToken } from '../handlers/forum-parse';
+import { ForumToken } from '../forum/token';
 
 export const mockTokenData = (suffix: number | string, rest?: Partial<ForumToken>): ForumToken => ({
   participantId: `openThreadParticipantId-${suffix}`,

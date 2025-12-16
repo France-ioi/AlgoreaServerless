@@ -37,8 +37,8 @@ export const toAttributeValue = (value: unknown): AttributeValue => {
   throw new Error(`unhandled value ${String(value)}`);
 };
 export const fromAttributeValue = (attr: AttributeValue): unknown => {
-  if (attr.S) return attr.S;
-  if (attr.N) return Number(attr.N);
+  if (attr.S !== undefined) return attr.S;
+  if (attr.N !== undefined) return Number(attr.N);
   if (typeof attr.BOOL === 'boolean') return attr.BOOL;
   if (attr.NULL) return null;
   if (attr.M) return Object.fromEntries(Object.entries(attr.M).map(([ k, v ]) => [ k, fromAttributeValue(v) ]));
