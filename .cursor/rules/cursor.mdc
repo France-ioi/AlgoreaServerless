@@ -1,0 +1,6 @@
+---
+context: true
+priority: high
+scope: project
+---
+Use what's written in @AGENTS.md

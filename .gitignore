@@ -11,3 +11,6 @@ jspm_packages
 .build
 
 .env.*
+
+# Local Cursor configuration (user-specific, not committed)
+.cursor/rules/local.mdc
