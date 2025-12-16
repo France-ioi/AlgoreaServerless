@@ -52,7 +52,7 @@ functions:
 
   server:
     handler: src/handlers.globalHandler
-    description: ${param:description}
+    description: ${param:description, 'Algorea Serverless Function'}
     # events: To be configured by hand to support using lambda aliases for ops
     #   - websocket:
     #       route: $connect
@@ -64,6 +64,6 @@ functions:
 
 plugins:
   - serverless-plugin-typescript
-#  - serverless-dynamodb-local
+  - serverless-dynamodb
   - serverless-offline
   - serverless-prune-plugin

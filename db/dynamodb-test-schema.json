@@ -1,0 +1,13 @@
+{
+  "algorea-forum-test": [
+    {
+      "AttributeName": "pk",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "sk",
+      "AttributeType": "N"
+    }
+  ]
+}
+

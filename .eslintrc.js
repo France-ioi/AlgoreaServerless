@@ -75,7 +75,7 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['*.spec.ts', '**/*.spec.ts', '**/testutils/*.ts'],
+      files: ['*.spec.ts', '**/*.spec.ts', '**/testutils/*.ts', 'jest.setup.ts', 'jest.teardown.ts'],
       rules: {
         '@typescript-eslint/no-floating-promises': 'off',
         '@typescript-eslint/unbound-method': 'off',
@@ -85,9 +85,12 @@ module.exports = {
         '@typescript-eslint/no-unsafe-argument': 'off',
         '@typescript-eslint/no-unsafe-return': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
+        '@typescript-eslint/no-unsafe-call': 'off',
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-unused-vars': 'off',
+        '@typescript-eslint/strict-boolean-expressions': 'off',
         'arrow-parens': 'off',
+        'no-console': 'off',
       }
     },
     {

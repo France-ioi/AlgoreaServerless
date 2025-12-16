@@ -5,6 +5,10 @@
  */
 
 export default {
+  // Global setup and teardown for DynamoDB Local
+  globalSetup: './jest.setup.ts',
+  globalTeardown: './jest.teardown.ts',
+
   // All imported modules in your tests should be mocked automatically
   // automock: false,
 

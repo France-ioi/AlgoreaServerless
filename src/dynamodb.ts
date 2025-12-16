@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { AttributeValue, DynamoDB } from '@aws-sdk/client-dynamodb';
 
-const dynamoOptions = (): ConstructorParameters<typeof DynamoDB>[0] => {
+const dynamoOptions = (): ConstructorParameters<typeof DynamoDB>[0] | undefined => {
   switch (process.env.STAGE) {
     case 'local':
       return {
@@ -21,11 +21,12 @@ const dynamoOptions = (): ConstructorParameters<typeof DynamoDB>[0] => {
     case 'dev':
     case 'production':
     default:
-      return {};
+      return undefined;
   }
 };
 
-export const dynamodb = new DynamoDB(dynamoOptions());
+const options = dynamoOptions();
+export const dynamodb = options ? new DynamoDB(options) : new DynamoDB();
 
 export const toAttributeValue = (value: unknown): AttributeValue => {
   if (typeof value === 'string') return { S: value };

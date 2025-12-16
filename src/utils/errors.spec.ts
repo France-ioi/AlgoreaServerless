@@ -71,9 +71,9 @@ describe('errorToString', () => {
 
   it('should format TransactionCanceledException with cancellation reasons', () => {
     const error = new TransactionCanceledException({
+      message: 'Transaction cancelled',
       $metadata: {},
     });
-    error.message = 'Transaction cancelled';
     error.CancellationReasons = [
       { Code: 'ConditionalCheckFailed' },
       { Code: 'ItemCollectionSizeLimitExceeded' },
