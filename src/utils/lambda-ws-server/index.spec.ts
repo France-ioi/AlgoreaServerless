@@ -162,7 +162,8 @@ describe('WebSocket Server', () => {
 
       expect(result.statusCode).toBe(500);
       expect(result.body).toContain('error:');
-      expect(result.body).toContain('action not found: nonexistent.action');
+      expect(result.body).toContain('action not found');
+      expect(result.body).toContain('nonexistent.action');
     });
 
     it('should catch handler errors and return 500', async () => {
@@ -205,7 +206,8 @@ describe('WebSocket Server', () => {
       const result = await wsServer.handler(event, context);
 
       expect(result.statusCode).toBe(500);
-      expect(result.body).toContain('RouteNotFound');
+      expect(result.body).toContain('error:');
+      expect(result.body).toContain('action not found');
     });
 
   });

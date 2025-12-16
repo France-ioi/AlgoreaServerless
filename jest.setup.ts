@@ -26,10 +26,7 @@ export default async (): Promise<void> => {
     detached: false,
   });
 
-  // Wait for DynamoDB to be ready
-  await new Promise(resolve => setTimeout(resolve, 5000));
-
-  // Create table
+  // Wait for DynamoDB to be ready with retries
   const dynamodb = new DynamoDB({
     endpoint: 'http://localhost:8000',
     region: 'local-env',
@@ -39,6 +36,24 @@ export default async (): Promise<void> => {
     },
   });
 
+  console.log('Waiting for DynamoDB Local to be ready...');
+  let retries = 30;
+  while (retries > 0) {
+    try {
+      await dynamodb.listTables({});
+      console.log('DynamoDB Local is ready!');
+      break;
+    } catch (error) {
+      retries--;
+      if (retries === 0) {
+        console.error('DynamoDB Local failed to start');
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+
+  // Create table
   try {
     await dynamodb.createTable({
       TableName: 'algorea-forum-test',
@@ -53,8 +68,13 @@ export default async (): Promise<void> => {
       ],
     });
     console.log('DynamoDB table created successfully');
-  } catch (error) {
-    console.log('Table may already exist or error creating:', error);
+  } catch (error: any) {
+    if (error.name === 'ResourceInUseException') {
+      console.log('Table already exists, continuing...');
+    } else {
+      console.error('Error creating table:', error.message);
+      throw error;
+    }
   }
 
   // Store process reference for teardown

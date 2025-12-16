@@ -1,8 +1,8 @@
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
 import { ThreadEventLabel, ThreadEvents } from '../../dbmodels/forum/thread-events';
 import { dynamodb } from '../../dynamodb';
-import { Forbidden } from '../../utils/errors';
-import { z } from 'zod';
+import { DecodingError, Forbidden } from '../../utils/errors';
+import { z, ZodError } from 'zod';
 import { ForumMessageAction, isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
 import { HandlerFunction, Request, Response } from 'lambda-api';
 import { extractTokenFromHttp } from '../token';
@@ -16,7 +16,13 @@ async function create(req: Request, resp: Response): Promise<ReturnType<typeof c
   if (!canWrite) throw new Forbidden('This operation required canWrite');
 
   const threadId = { participantId, itemId };
-  const { text, uuid } = z.object({ text: z.string(), uuid: z.string() }).parse(req.body);
+  let text: string, uuid: string;
+  try {
+    ({ text, uuid } = z.object({ text: z.string(), uuid: z.string() }).parse(req.body));
+  } catch (err) {
+    if (err instanceof ZodError) throw new DecodingError(JSON.stringify(err.issues));
+    throw err;
+  }
   const time = Date.now();
   const authorId = userId;
 
@@ -44,7 +50,13 @@ const maxLimit = 20;
 async function getAll(req: Request): Promise<{ time: number, text: string, authorId: string, uuid: string }[]> {
   const token = await extractTokenFromHttp(req.headers);
   const limitParam = req.query['limit'] ? +req.query['limit'] : undefined;
-  const limit = z.number().positive().max(maxLimit).default(defaultLimit).parse(limitParam);
+  let limit: number;
+  try {
+    limit = z.number().positive().max(maxLimit).default(defaultLimit).parse(limitParam);
+  } catch (err) {
+    if (err instanceof ZodError) throw new DecodingError(JSON.stringify(err.issues));
+    throw err;
+  }
 
   const messages = await threadEvents.getAllMessages(token, { limit });
   return messages.map(m => ({

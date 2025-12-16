@@ -57,6 +57,16 @@ class MockWSClient {
   }
 
   /**
+   * Simulate a gone connection (shorthand for setGoneConnections)
+   */
+  simulateGone(connectionId: ConnectionId): void {
+    if (!this.mockOptions.goneConnections) {
+      this.mockOptions.goneConnections = [];
+    }
+    this.mockOptions.goneConnections.push(connectionId);
+  }
+
+  /**
    * Configure which connections should fail with generic error
    */
   setErrorConnections(connectionIds: ConnectionId[]): void {

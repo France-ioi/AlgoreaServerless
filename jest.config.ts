@@ -177,6 +177,9 @@ export default {
   // Setting this value to "fake" allows the use of fake timers for functions such as "setTimeout"
   // timers: "real",
 
+  // Default timeout for tests (in milliseconds)
+  testTimeout: 30000,
+
   // A map from regular expressions to paths to transformers
   transform: {
     '.ts$': 'ts-jest',

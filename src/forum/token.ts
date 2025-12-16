@@ -1,4 +1,4 @@
-import { DecodingError } from '../utils/errors';
+import { AuthenticationError } from '../utils/errors';
 import { Request } from 'lambda-api';
 import { importSPKI, jwtVerify } from 'jose';
 import * as z from 'zod';
@@ -28,7 +28,7 @@ export async function parseToken(token: string, publicKeyPem?: string): Promise<
   const publicKey = await importSPKI(publicKeyPem, 'ES256');
   const { payload } = await jwtVerify(token, publicKey).catch(
     err => {
-      throw new DecodingError(`JWT verification failed: ${(err as Error).message}`);
+      throw new AuthenticationError(`JWT verification failed: ${(err as Error).message}`);
     }
   );
   const decodedPayload = jwsPayloadSchema.parse(payload);
@@ -44,14 +44,14 @@ export async function parseToken(token: string, publicKeyPem?: string): Promise<
 
 export async function extractTokenFromHttp(headers: Request['headers']): Promise<ForumToken> {
   const token = headers['authorization'];
-  if (!token) throw new DecodingError('no Authorization header found in the headers.');
-  if (!token.startsWith('Bearer ')) throw new DecodingError('the Authorization header is not a Bearer token');
+  if (!token) throw new AuthenticationError('no Authorization header found in the headers.');
+  if (!token.startsWith('Bearer ')) throw new AuthenticationError('the Authorization header is not a Bearer token');
   const jws = token.slice(7);
   return parseToken(jws, process.env.BACKEND_PUBLIC_KEY);
 }
 
 export async function extractTokenFromWs(body: WsRequest['body']): Promise<ForumToken> {
   const result = z.object({ token: z.string() }).safeParse(body);
-  if (!result.success) throw new DecodingError(`unable to fetch the token from the ws message: ${result.error.message}`);
+  if (!result.success) throw new AuthenticationError(`unable to fetch the token from the ws message: ${result.error.message}`);
   return parseToken(result.data.token, process.env.BACKEND_PUBLIC_KEY);
 }

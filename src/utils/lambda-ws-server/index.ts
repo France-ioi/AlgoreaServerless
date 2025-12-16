@@ -32,6 +32,9 @@ export class WsServer {
       if (!handler) throw new RouteNotFound(`action not found: ${request.action()}`);
       await handler(request);
     } catch (e) {
+      // WebSocket MESSAGE responses don't support meaningful status codes like REST endpoints do.
+      // The connection is already established, so we return 500 with the error message in the body.
+      // To be improved for a better error handling on the client side.
       return { statusCode: 500, body: 'error: '+String(e) };
     }
     return { statusCode: 200, body: 'ok' };

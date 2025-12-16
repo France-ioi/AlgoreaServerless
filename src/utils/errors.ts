@@ -19,7 +19,7 @@ export function errorToString(err: unknown): string {
     return 'Connection closed';
   }
   if (err instanceof Error || err instanceof Forbidden || err instanceof ServerError ||
-    err instanceof DecodingError || err instanceof OperationSkipped) {
+    err instanceof DecodingError || err instanceof AuthenticationError || err instanceof OperationSkipped) {
     return `${err.name}: ${err.message}`;
   }
   return `An unexpected error occured (${JSON.stringify(err)})`;
@@ -38,6 +38,13 @@ export class DecodingError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'DecodingError';
+  }
+}
+
+export class AuthenticationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthenticationError';
   }
 }
 

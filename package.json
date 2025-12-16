@@ -8,7 +8,13 @@
     "prepare": "husky install",
     "front": "npx http-server ./public",
     "lint": "eslint --ext .ts src/",
-    "test": "NODE_ENV=test jest"
+    "test": "NODE_ENV=test jest",
+    "test:watch": "NODE_ENV=test jest --watch",
+    "test:coverage": "NODE_ENV=test jest --coverage",
+    "test:unit": "NODE_ENV=test jest --testPathIgnorePatterns=e2e",
+    "test:e2e": "NODE_ENV=test jest e2e",
+    "test:db": "NODE_ENV=test jest dbmodels",
+    "dynamodb:start": "sls dynamodb start"
   },
   "repository": {
     "type": "git",

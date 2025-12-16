@@ -3,6 +3,10 @@ frameworkVersion: '3'
 useDotenv: true
 
 custom:
+  serverless-dynamodb:
+    start:
+      port: 8000
+      docker: false
   dynamodb:
     stages:
       - local

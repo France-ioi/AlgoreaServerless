@@ -11,11 +11,12 @@ export const mockALBEvent = (overrides?: Partial<ALBEvent>): ALBEvent => ({
     },
   },
   httpMethod: 'GET',
-  path: '/sls/forum/message',
-  queryStringParameters: { limit: '10' },
+  path: '/test',
+  queryStringParameters: undefined,
   headers: {
     accept: 'application/json, text/plain, */*',
     'accept-encoding': 'gzip, deflate, br, zstd',
+    'content-type': 'application/json',
     host: 'test.example.com',
     'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) Firefox/146.0',
   },
@@ -155,32 +156,39 @@ export const mockWebSocketDisconnectEvent = (overrides?: Partial<APIGatewayProxy
  * Based on actual AWS API Gateway WebSocket MESSAGE event structure
  */
 export const mockWebSocketMessageEvent = (
-  body: Record<string, unknown>,
-  overrides?: Partial<APIGatewayProxyEvent>
-): APIGatewayProxyEvent => ({
-  requestContext: {
-    routeKey: '$default',
-    messageId: 'test-message-id',
-    eventType: 'MESSAGE',
-    extendedRequestId: 'test-extended-id',
-    requestTime: '16/Dec/2025:09:51:47 +0000',
-    messageDirection: 'IN',
-    stage: 'test',
-    connectedAt: Date.now() - 60000,
-    requestTimeEpoch: Date.now(),
-    identity: {
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Firefox/146.0',
-      sourceIp: '127.0.0.1',
-    },
-    requestId: 'test-request-id',
-    domainName: 'test-api-id.execute-api.eu-west-3.amazonaws.com',
-    connectionId: 'test-connection-id',
-    apiId: 'test-api-id',
-  } as APIGatewayProxyEvent['requestContext'],
-  body: JSON.stringify(body),
-  isBase64Encoded: false,
-  ...overrides,
-} as APIGatewayProxyEvent);
+  bodyOrOptions: Record<string, unknown> | {
+    connectionId?: string,
+    body?: string,
+  }
+): APIGatewayProxyEvent => {
+  const isOptions = 'connectionId' in bodyOrOptions || 'body' in bodyOrOptions;
+  const connectionId = isOptions && 'connectionId' in bodyOrOptions ? bodyOrOptions.connectionId : 'test-connection-id';
+  const body = isOptions && 'body' in bodyOrOptions ? bodyOrOptions.body : JSON.stringify(bodyOrOptions);
+
+  return {
+    requestContext: {
+      routeKey: '$default',
+      messageId: 'test-message-id',
+      eventType: 'MESSAGE',
+      extendedRequestId: 'test-extended-id',
+      requestTime: '16/Dec/2025:09:51:47 +0000',
+      messageDirection: 'IN',
+      stage: 'test',
+      connectedAt: Date.now() - 60000,
+      requestTimeEpoch: Date.now(),
+      identity: {
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Firefox/146.0',
+        sourceIp: '127.0.0.1',
+      },
+      requestId: 'test-request-id',
+      domainName: 'test-api-id.execute-api.eu-west-3.amazonaws.com',
+      connectionId,
+      apiId: 'test-api-id',
+    } as APIGatewayProxyEvent['requestContext'],
+    body: body || '{}',
+    isBase64Encoded: false,
+  } as APIGatewayProxyEvent;
+};
 
 /**
  * Create a mock Lambda context object
