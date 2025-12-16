@@ -21,5 +21,10 @@ The archicture of the project is documented in `ARCHITECTURE.md`.
 
 # Documentation and architecture
 
-- each time you are done with an implemation which had a plan, write the plan in the `.cursor/plans` directory.
+- each time you are write a plan, save it in the `.cursor/plans` directory.
 - eacht time to do a change which affect the global app architecture, update the `.cursor/ARCHITECTURE.md` document while keeping it shorter than 1000 lines.
+
+# Interactions
+
+- as much as possible, when you are unsure about something, ask!
+- never use the "cd" command
