@@ -14,3 +14,4 @@ jspm_packages
 
 # Local Cursor configuration (user-specific, not committed)
 .cursor/rules/local.mdc
+.cursor/features/*
