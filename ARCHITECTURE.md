@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: December 16, 2024  
+**Last Updated**: December 17, 2025
 
 ## Overview
 
@@ -653,25 +653,32 @@ npm test -- --coverage
 
 #### DynamoDB Local PartiQL Limitations
 
-**Issue**: DynamoDB Local 1.25.1 does not support `LIMIT` clause in PartiQL queries when filtering by non-key attributes.
+**Issue**: DynamoDB Local 1.25.1 does not support `ORDER BY ... DESC` (descending order) in PartiQL queries.
 
 **Example Query**:
 ```sql
-SELECT sk FROM "table" WHERE pk = ? AND connectionId = ? LIMIT 1
+SELECT sk, label, data FROM "table" WHERE pk = ? AND label = ? ORDER BY sk DESC
 ```
 
-**Error**: `[ValidationException] Unsupported clause: LIMIT at 1:77:1`
+**Error**: `[InternalFailure] The request processing has failed because of an unknown error, exception or failure.`
+
+**Affected Code**: `ThreadEvents.getAllMessages()` method uses `ORDER BY sk DESC` to retrieve messages in reverse chronological order
+
+**Affected Tests**:
+- All tests in `thread-events.spec.ts` (7 tests)
+- Tests in `messages.spec.ts` that call `getAllMessages()` (4 tests)
+- E2E tests that use GET /forum/message endpoint (4 tests)
 
 **Production Status**: ✅ Works correctly in AWS DynamoDB
 
 **Test Workaround**: 
-- Production code preserved with `LIMIT` clause
+- Production code preserved as-is
 - Affected tests marked with `.skip()` and documented
-- Skipped tests (5 in `src/dbmodels/forum/thread-subscriptions.spec.ts`):
-  - `getSubscriber` method tests
-  - `unsubscribeConnectionId` method tests (depend on `getSubscriber`)
+- Total: 15 skipped tests due to this DynamoDB Local limitation
 
-**Rationale**: Maintaining production-accurate code is prioritized over 100% test coverage in local environment. The underlying database methods are still tested through other code paths and e2e tests.
+**Rationale**: Maintaining production-accurate code is prioritized over 100% test coverage in local environment. The underlying functionality is verified in production deployments.
+
+**Note**: The LIMIT clause issue that previously affected `ThreadSubscriptions.getSubscriber()` has been resolved by refactoring the code to avoid using LIMIT in queries with non-key attribute filters.
 
 ## Future Improvements
 

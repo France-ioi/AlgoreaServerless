@@ -30,7 +30,7 @@ async function create(req: Request, resp: Response): Promise<ReturnType<typeof c
     // create the entry
     threadEvents.insert([{ label: ThreadEventLabel.Message, sk: time, threadId, data: { authorId, text, uuid } }]),
     // notify all subscribers
-    subscriptions.getSubscribers(threadId).then(async subscribers => {
+    subscriptions.getSubscribers({ threadId }).then(async subscribers => {
       const wsMessage = { action: ForumMessageAction.NewMessage, participantId, itemId, authorId, time, text, uuid };
       const sendResults = await wsClient.send(subscribers.map(s => s.connectionId), wsMessage);
       logSendResults(sendResults);

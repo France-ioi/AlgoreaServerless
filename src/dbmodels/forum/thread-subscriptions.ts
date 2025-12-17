@@ -28,28 +28,20 @@ function pk(thread: ThreadId): string {
  */
 export class ThreadSubscriptions extends ForumTable {
 
-  async getSubscribers(thread: ThreadId): Promise<{ connectionId: ConnectionId, sk: number }[]> {
-    const results = await this.sqlRead({
-      query: `SELECT connectionId, sk FROM "${ this.tableName }" WHERE pk = ?;`,
-      params: [ pk(thread) ],
-    });
+  async getSubscribers(filter: { threadId: ThreadId, connectionId?: ConnectionId }): Promise<{ connectionId: ConnectionId, sk: number }[]> {
+    let query = `SELECT connectionId, sk FROM "${ this.tableName }" WHERE pk = ?`;
+    const params = [ pk(filter.threadId) ];
+    if (filter.connectionId) {
+      query += ' AND connectionId = ?';
+      params.push(filter.connectionId);
+    }
+    const results = await this.sqlRead({ query, params });
     // TODO filter those which cannot be parsed and log them in function that can be reused everywhere
     return z.array(
       z.object({
         connectionId: z.string(),
         sk: z.number(),
       })).parse(results);
-  }
-
-  async getSubscriber(thread: ThreadId, connectionId: ConnectionId): Promise<{ sk: number }|undefined> {
-    const results = await this.sqlRead({
-      query: `SELECT sk FROM "${ this.tableName }" WHERE pk = ? AND connectionId = ? LIMIT 1;`,
-      params: [ pk(thread), connectionId ],
-    });
-    return z.array(
-      z.object({
-        sk: z.number(),
-      })).parse(results)[0];
   }
 
   async subscribe(thread: ThreadId, connectionId: ConnectionId, userId: string): Promise<void> {
@@ -72,13 +64,13 @@ export class ThreadSubscriptions extends ForumTable {
     await this.delete(sks.map(sk => ({ pk: pk(thread), sk })));
   }
 
-  async unsubscribeConnectionId(thread: ThreadId, connectionId: ConnectionId): Promise<void> {
-    const entry = await this.getSubscriber(thread, connectionId);
-    if (!entry) {
+  async unsubscribeConnectionId(threadId: ThreadId, connectionId: ConnectionId): Promise<void> {
+    const entry = await this.getSubscribers({ threadId, connectionId });
+    if (!entry.length) {
       // eslint-disable-next-line no-console
-      console.warn('Unexpected: unsubscribing from a not existing connection.', JSON.stringify(thread), connectionId);
+      console.warn('Unexpected: unsubscribing from a not existing connection.', JSON.stringify(threadId), connectionId);
       return;
     }
-    await this.delete([{ pk: pk(thread), sk: entry.sk }]);
+    await this.unsubscribeSet(threadId, entry.map(e => e.sk));
   }
 }

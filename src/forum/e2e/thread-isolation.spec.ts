@@ -26,7 +26,7 @@ describe('E2E: Thread Isolation', () => {
       Promise.resolve(connectionIds.map((id: string) => ({ success: true, connectionId: id }))));
   });
 
-  // SKIP: These tests call getAllMessages via GET /forum/message which depends on a query not supported by DynamoDB Local
+  // SKIP: These tests call getAllMessages via GET /forum/message which uses ORDER BY DESC not supported by DynamoDB Local
   it.skip('should isolate messages between different threads', async () => {
     const thread1Token = await generateToken({ ...thread1, userId: 'user1', canWrite: true });
     const thread2Token = await generateToken({ ...thread2, userId: 'user2', canWrite: true });

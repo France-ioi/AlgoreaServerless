@@ -28,7 +28,7 @@ describe('Thread Subscription Service', () => {
 
       await subscribe(request);
 
-      const subscribers = await threadSubs.getSubscribers(threadId);
+      const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(1);
       expect(subscribers[0]?.connectionId).toBe('conn-123');
     });
@@ -50,7 +50,7 @@ describe('Thread Subscription Service', () => {
       await subscribe(request1);
       await subscribe(request2);
 
-      const subscribers = await threadSubs.getSubscribers(threadId);
+      const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(2);
       expect(subscribers.map(s => s.connectionId).sort()).toEqual([ 'conn-1', 'conn-2' ]);
     });
@@ -75,9 +75,7 @@ describe('Thread Subscription Service', () => {
   });
 
   describe('unsubscribe', () => {
-    // SKIP: These tests call unsubscribeConnectionId() which uses getSubscriber() with LIMIT clause
-    // DynamoDB Local doesn't support LIMIT with non-key attribute filters
-    it.skip('should unsubscribe a connection from a thread', async () => {
+    it('should unsubscribe a connection from a thread', async () => {
       const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
 
       // First subscribe
@@ -87,7 +85,7 @@ describe('Thread Subscription Service', () => {
       } as unknown as WsRequest;
       await subscribe(subscribeRequest);
 
-      let subscribers = await threadSubs.getSubscribers(threadId);
+      let subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(1);
 
       // Then unsubscribe
@@ -97,11 +95,11 @@ describe('Thread Subscription Service', () => {
       } as unknown as WsRequest;
       await unsubscribe(unsubscribeRequest);
 
-      subscribers = await threadSubs.getSubscribers(threadId);
+      subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(0);
     });
 
-    it.skip('should not affect other subscriptions when unsubscribing', async () => {
+    it('should not affect other subscriptions when unsubscribing', async () => {
       const token1 = await generateToken({ ...threadId, userId: 'user1', canWrite: false });
       const token2 = await generateToken({ ...threadId, userId: 'user2', canWrite: false });
       const token3 = await generateToken({ ...threadId, userId: 'user3', canWrite: false });
@@ -114,12 +112,12 @@ describe('Thread Subscription Service', () => {
       // Unsubscribe one
       await unsubscribe({ connectionId: () => 'conn-2', body: { token: token2 } } as unknown as WsRequest);
 
-      const subscribers = await threadSubs.getSubscribers(threadId);
+      const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(2);
       expect(subscribers.map(s => s.connectionId).sort()).toEqual([ 'conn-1', 'conn-3' ]);
     });
 
-    it.skip('should handle unsubscribing from non-existent subscription gracefully', async () => {
+    it('should handle unsubscribing from non-existent subscription gracefully', async () => {
       const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
       const request = {
         connectionId: () => 'non-existent-conn',

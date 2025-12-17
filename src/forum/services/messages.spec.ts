@@ -31,8 +31,8 @@ describe('Forum Messages Service', () => {
       Promise.resolve(connectionIds.map((id: string) => ({ success: true, connectionId: id }))));
   });
 
-  // SKIP: getAllMessages uses ThreadEvents.getAllMessages() which has "WHERE pk = ? AND label = ?" clause
-  // This query works in production AWS DynamoDB but fails in DynamoDB Local 1.25.1 with [InternalFailure]
+  // SKIP: getAllMessages uses ThreadEvents.getAllMessages() which has "ORDER BY sk DESC" clause
+  // DynamoDB Local does not support descending order, causing [InternalFailure]
   describe.skip('getAllMessages', () => {
     it('should return empty array when no messages exist', async () => {
       const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
@@ -169,7 +169,7 @@ describe('Forum Messages Service', () => {
   });
 
   describe('createMessage', () => {
-    // SKIP: This test verifies the message via getAllMessages() which uses a query not supported by DynamoDB Local
+    // SKIP: This test verifies the message via getAllMessages() which uses ORDER BY DESC not supported by DynamoDB Local
     it.skip('should create a message and return 201', async () => {
       const token = await generateToken({ ...threadId, userId: 'user123', canWrite: true });
       const req = {
@@ -269,7 +269,7 @@ describe('Forum Messages Service', () => {
       // Wait a bit for cleanup to complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const subscribers = await threadSubs.getSubscribers(threadId);
+      const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(2);
       expect(subscribers.map(s => s.connectionId)).not.toContain('conn-gone');
     });

@@ -3,9 +3,9 @@ import { dynamodb } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { ThreadId } from './thread';
 
-// SKIP: All tests in this file call getAllMessages() which uses "WHERE pk = ? AND label = ?" clause
+// SKIP: All tests in this file call getAllMessages() which uses "ORDER BY sk DESC" clause
 // This works in production AWS DynamoDB but fails in DynamoDB Local 1.25.1 with [InternalFailure]
-// Error: "The request processing has failed because of an unknown error, exception or failure"
+// DynamoDB Local does not support descending order in PartiQL queries
 describe.skip('ThreadEvents', () => {
   let threadEvents: ThreadEvents;
   const threadId: ThreadId = { participantId: 'user123', itemId: 'item456' };

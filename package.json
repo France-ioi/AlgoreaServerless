@@ -14,7 +14,8 @@
     "test:unit": "NODE_ENV=test jest --testPathIgnorePatterns=e2e",
     "test:e2e": "NODE_ENV=test jest e2e",
     "test:db": "NODE_ENV=test jest dbmodels",
-    "dynamodb:start": "sls dynamodb start"
+    "dynamodb:install": "serverless dynamodb install",
+    "dynamodb:start": "serverless dynamodb start"
   },
   "repository": {
     "type": "git",
