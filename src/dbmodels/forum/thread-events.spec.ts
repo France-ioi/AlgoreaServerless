@@ -3,10 +3,7 @@ import { dynamodb } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { ThreadId } from './thread';
 
-// SKIP: All tests in this file call getAllMessages() which uses "ORDER BY sk DESC" clause
-// This works in production AWS DynamoDB but fails in DynamoDB Local 1.25.1 with [InternalFailure]
-// DynamoDB Local does not support descending order in PartiQL queries
-describe.skip('ThreadEvents', () => {
+describe('ThreadEvents', () => {
   let threadEvents: ThreadEvents;
   const threadId: ThreadId = { participantId: 'user123', itemId: 'item456' };
 

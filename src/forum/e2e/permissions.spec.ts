@@ -44,8 +44,7 @@ describe('E2E: Permissions', () => {
       expect(result.body).toContain('canWrite');
     });
 
-    // SKIP: This test calls getAllMessages via GET /forum/message which uses ORDER BY DESC not supported by DynamoDB Local
-    it.skip('should allow message retrieval regardless of canWrite', async () => {
+    it('should allow message retrieval regardless of canWrite', async () => {
       // First create a message with canWrite=true
       const writerToken = await generateToken({ ...threadId, userId: 'writer', canWrite: true });
       await globalHandler(mockALBEvent({

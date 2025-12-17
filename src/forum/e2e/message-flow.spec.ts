@@ -25,8 +25,7 @@ describe('E2E: Message Flow', () => {
       Promise.resolve(connectionIds.map((id: string) => ({ success: true, connectionId: id }))));
   });
 
-  // SKIP: This test calls getAllMessages via GET /forum/message which uses ORDER BY DESC not supported by DynamoDB Local
-  it.skip('should handle complete message lifecycle: subscribe, post, receive, get', async () => {
+  it('should handle complete message lifecycle: subscribe, post, receive, get', async () => {
     const user1Token = await generateToken({ ...threadId, userId: 'user1', canWrite: true });
     const user2Token = await generateToken({ ...threadId, userId: 'user2', canWrite: false });
 
@@ -131,7 +130,7 @@ describe('E2E: Message Flow', () => {
     );
   });
 
-  it.skip('should handle posting multiple messages in sequence', async () => {
+  it('should handle posting multiple messages in sequence', async () => {
     const userToken = await generateToken({ ...threadId, userId: 'user1', canWrite: true });
 
     // Post three messages

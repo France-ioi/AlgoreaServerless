@@ -52,10 +52,16 @@ export class ThreadEvents extends ForumTable {
   }
 
   async getAllMessages(threadId: ThreadId, options: { limit: number }): Promise<ThreadMessage[]> {
-    const results = await this.sqlRead({
-      query: `SELECT sk, label, data FROM "${this.tableName}" WHERE pk = ? AND label = ? ORDER BY sk DESC`,
-      params: [ pk(threadId), ThreadEventLabel.Message ],
+    // Known limitation: DynamoDB applies limit BEFORE FilterExpression.
+    // If there are many non-message events, this may return fewer results than expected
+    // (or even zero results if the first 'limit' items are all non-messages).
+    // Workaround: Use a dedicated GSI with label as sort key, or accept this limitation.
+    const results = await this.query({
+      pk: pk(threadId),
+      filter: { attribute: 'label', value: ThreadEventLabel.Message },
+      projectionAttributes: [ 'sk', 'label', 'data' ],
       limit: options.limit,
+      scanIndexForward: false, // false = DESC order
     });
     return results
       .map(r => threadEventSchema.safeParse(r))

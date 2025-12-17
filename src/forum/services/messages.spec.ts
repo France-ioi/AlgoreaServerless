@@ -31,9 +31,7 @@ describe('Forum Messages Service', () => {
       Promise.resolve(connectionIds.map((id: string) => ({ success: true, connectionId: id }))));
   });
 
-  // SKIP: getAllMessages uses ThreadEvents.getAllMessages() which has "ORDER BY sk DESC" clause
-  // DynamoDB Local does not support descending order, causing [InternalFailure]
-  describe.skip('getAllMessages', () => {
+  describe('getAllMessages', () => {
     it('should return empty array when no messages exist', async () => {
       const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
       const req = {
@@ -169,8 +167,7 @@ describe('Forum Messages Service', () => {
   });
 
   describe('createMessage', () => {
-    // SKIP: This test verifies the message via getAllMessages() which uses ORDER BY DESC not supported by DynamoDB Local
-    it.skip('should create a message and return 201', async () => {
+    it('should create a message and return 201', async () => {
       const token = await generateToken({ ...threadId, userId: 'user123', canWrite: true });
       const req = {
         headers: { authorization: `Bearer ${token}` },

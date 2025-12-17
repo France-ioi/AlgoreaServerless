@@ -649,36 +649,22 @@ npm test -- --coverage
 - Use descriptive test names that explain the scenario
 - Test both happy paths and error conditions
 
-### Known Test Limitations
+### Test Coverage
 
-#### DynamoDB Local PartiQL Limitations
+The project maintains comprehensive test coverage across all layers:
+- Database models with DynamoDB Local
+- Service layer with mocked dependencies  
+- E2E tests verifying complete request flows
+- Authentication and authorization enforcement
+- WebSocket broadcasting and connection management
 
-**Issue**: DynamoDB Local 1.25.1 does not support `ORDER BY ... DESC` (descending order) in PartiQL queries.
+### Resolved DynamoDB Local Limitations
 
-**Example Query**:
-```sql
-SELECT sk, label, data FROM "table" WHERE pk = ? AND label = ? ORDER BY sk DESC
-```
+Two issues that previously prevented full test coverage in DynamoDB Local have been resolved:
 
-**Error**: `[InternalFailure] The request processing has failed because of an unknown error, exception or failure.`
+1. **LIMIT Clause Issue** - Resolved by refactoring `ThreadSubscriptions` to use `getSubscribers()` with optional filtering instead of `getSubscriber()` with LIMIT clause.
 
-**Affected Code**: `ThreadEvents.getAllMessages()` method uses `ORDER BY sk DESC` to retrieve messages in reverse chronological order
-
-**Affected Tests**:
-- All tests in `thread-events.spec.ts` (7 tests)
-- Tests in `messages.spec.ts` that call `getAllMessages()` (4 tests)
-- E2E tests that use GET /forum/message endpoint (4 tests)
-
-**Production Status**: ✅ Works correctly in AWS DynamoDB
-
-**Test Workaround**: 
-- Production code preserved as-is
-- Affected tests marked with `.skip()` and documented
-- Total: 15 skipped tests due to this DynamoDB Local limitation
-
-**Rationale**: Maintaining production-accurate code is prioritized over 100% test coverage in local environment. The underlying functionality is verified in production deployments.
-
-**Note**: The LIMIT clause issue that previously affected `ThreadSubscriptions.getSubscriber()` has been resolved by refactoring the code to avoid using LIMIT in queries with non-key attribute filters.
+2. **ORDER BY DESC Issue** - Resolved by migrating `ThreadEvents.getAllMessages()` from PartiQL queries to the standard DynamoDB Query API, which properly supports descending order via `ScanIndexForward: false`.
 
 ## Future Improvements
 

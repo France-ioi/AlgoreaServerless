@@ -26,8 +26,7 @@ describe('E2E: Thread Isolation', () => {
       Promise.resolve(connectionIds.map((id: string) => ({ success: true, connectionId: id }))));
   });
 
-  // SKIP: These tests call getAllMessages via GET /forum/message which uses ORDER BY DESC not supported by DynamoDB Local
-  it.skip('should isolate messages between different threads', async () => {
+  it('should isolate messages between different threads', async () => {
     const thread1Token = await generateToken({ ...thread1, userId: 'user1', canWrite: true });
     const thread2Token = await generateToken({ ...thread2, userId: 'user2', canWrite: true });
 
@@ -110,7 +109,7 @@ describe('E2E: Thread Isolation', () => {
     );
   });
 
-  it.skip('should allow same user to participate in multiple threads', async () => {
+  it('should allow same user to participate in multiple threads', async () => {
     const userId = 'multi-thread-user';
     const thread1Token = await generateToken({ ...thread1, userId, canWrite: true });
     const thread2Token = await generateToken({ ...thread2, userId, canWrite: true });
@@ -152,7 +151,7 @@ describe('E2E: Thread Isolation', () => {
     expect(thread2Messages[0].text).toBe('Message in thread2');
   });
 
-  it.skip('should handle unsubscribe from one thread without affecting other threads', async () => {
+  it('should handle unsubscribe from one thread without affecting other threads', async () => {
     const userId = 'multi-sub-user';
     const thread1Token = await generateToken({ ...thread1, userId, canWrite: false });
     const thread2Token = await generateToken({ ...thread2, userId, canWrite: false });

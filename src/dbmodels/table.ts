@@ -1,4 +1,4 @@
-import { DynamoDB, ExecuteStatementCommandOutput } from '@aws-sdk/client-dynamodb';
+import { AttributeValue, DynamoDB, ExecuteStatementCommandOutput, QueryCommandOutput } from '@aws-sdk/client-dynamodb';
 import { fromDBItem, toDBItem, toDBParameters } from '../dynamodb';
 import { DBError } from '../utils/errors';
 import { z } from 'zod';
@@ -43,6 +43,15 @@ export class ForumTable {
     }
   }
 
+  /**
+   * Execute a PartiQL read query.
+   *
+   * Known DynamoDB Local (used for testing) limitations:
+   * - Does not support ORDER BY ... DESC (returns InternalFailure)
+   * - Does not support LIMIT with non-key attribute filters (returns ValidationException)
+   *
+   * Workaround: Use the query() method directly instead of PartiQL for these cases.
+   */
   protected async sqlRead(statement: DBStatement): Promise<Record<string, unknown>[]> {
     let output: ExecuteStatementCommandOutput;
     try {
@@ -77,6 +86,69 @@ export class ForumTable {
       });
     }
 
+  }
+
+  protected async query(params: {
+    pk: string,
+    filter?: { attribute: string, value: unknown },
+    projectionAttributes?: string[],
+    limit?: number,
+    scanIndexForward?: boolean,
+  }): Promise<Record<string, unknown>[]> {
+    let output: QueryCommandOutput;
+    try {
+      /* eslint-disable @typescript-eslint/naming-convention */
+      const queryParams: {
+        TableName: string,
+        KeyConditionExpression: string,
+        ExpressionAttributeValues: Record<string, AttributeValue>,
+        ExpressionAttributeNames?: Record<string, string>,
+        FilterExpression?: string,
+        ProjectionExpression?: string,
+        Limit?: number,
+        ScanIndexForward?: boolean,
+      } = {
+        TableName: this.tableName,
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: toDBItem({ ':pk': params.pk }),
+        ScanIndexForward: params.scanIndexForward ?? true,
+      };
+
+      if (params.filter) {
+        queryParams.FilterExpression = `${params.filter.attribute} = :filterValue`;
+        queryParams.ExpressionAttributeValues = {
+          ...queryParams.ExpressionAttributeValues,
+          ...toDBItem({ ':filterValue': params.filter.value }),
+        } as Record<string, AttributeValue>;
+      }
+
+      if (params.projectionAttributes) {
+        // Handle reserved words like "data" by using ExpressionAttributeNames
+        queryParams.ExpressionAttributeNames = {};
+        queryParams.ProjectionExpression = params.projectionAttributes.map(attr => {
+          // Reserved words in DynamoDB need to be aliased
+          const reservedWords = [ 'data', 'name', 'type', 'status', 'timestamp' ];
+          if (reservedWords.includes(attr.toLowerCase())) {
+            queryParams.ExpressionAttributeNames![`#${attr}`] = attr;
+            return `#${attr}`;
+          }
+          return attr;
+        }).join(', ');
+      }
+
+      if (params.limit) {
+        queryParams.Limit = params.limit;
+      }
+
+      output = await this.db.query(queryParams);
+      /* eslint-enable @typescript-eslint/naming-convention */
+    } catch (err) {
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(params));
+      else throw err;
+    }
+
+    if (!output.Items) return [];
+    return output.Items.map(fromDBItem);
   }
 
 }
