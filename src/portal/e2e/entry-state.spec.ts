@@ -1,12 +1,18 @@
 import { mockALBEvent } from '../../testutils/event-mocks';
 import { globalHandler } from '../../handlers';
 import * as config from '../../config';
+import { generatePortalToken } from '../../testutils/portal-token-generator';
+import { initializeKeys } from '../../testutils/token-generator';
 
 jest.mock('../../config');
 
 const mockLoadConfig = config.loadConfig as jest.MockedFunction<typeof config.loadConfig>;
 
 describe('E2E: Portal Entry State', () => {
+  beforeAll(async () => {
+    await initializeKeys();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -16,10 +22,17 @@ describe('E2E: Portal Entry State', () => {
       portal: {},
     });
 
+    const token = await generatePortalToken({
+      itemId: 'item123',
+      userId: 'user456',
+    });
+
     const event = mockALBEvent({
       path: '/sls/portal/entry-state',
       httpMethod: 'GET',
-      headers: {},
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
       body: null,
     });
 
@@ -45,10 +58,17 @@ describe('E2E: Portal Entry State', () => {
       },
     });
 
+    const token = await generatePortalToken({
+      itemId: 'item123',
+      userId: 'user456',
+    });
+
     const event = mockALBEvent({
       path: '/sls/portal/entry-state',
       httpMethod: 'GET',
-      headers: {},
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
       body: null,
     });
 
@@ -61,6 +81,42 @@ describe('E2E: Portal Entry State', () => {
         state: 'unpaid',
       },
     });
+  });
+
+  it('should reject request without authorization header', async () => {
+    mockLoadConfig.mockReturnValue({
+      portal: {},
+    });
+
+    const event = mockALBEvent({
+      path: '/sls/portal/entry-state',
+      httpMethod: 'GET',
+      headers: {},
+      body: null,
+    });
+
+    const result = await globalHandler(event, {} as any) as any;
+
+    expect(result.statusCode).toBe(401);
+  });
+
+  it('should reject request with invalid token', async () => {
+    mockLoadConfig.mockReturnValue({
+      portal: {},
+    });
+
+    const event = mockALBEvent({
+      path: '/sls/portal/entry-state',
+      httpMethod: 'GET',
+      headers: {
+        authorization: 'Bearer invalid-token',
+      },
+      body: null,
+    });
+
+    const result = await globalHandler(event, {} as any) as any;
+
+    expect(result.statusCode).toBe(401);
   });
 
   it('should handle CORS preflight request', async () => {

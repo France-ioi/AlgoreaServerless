@@ -1,5 +1,6 @@
 import { generateKeyPair, exportSPKI, SignJWT, KeyLike } from 'jose';
 import { ForumToken } from '../forum/token';
+import { setPrivateKey } from './portal-token-generator';
 
 let privateKey: KeyLike;
 let publicKeyPem: string;
@@ -15,6 +16,9 @@ export const initializeKeys = async (): Promise<void> => {
 
   // Set the public key in environment for token verification
   process.env.BACKEND_PUBLIC_KEY = publicKeyPem;
+
+  // Share the private key with portal token generator
+  setPrivateKey(privateKey);
 };
 
 /**
