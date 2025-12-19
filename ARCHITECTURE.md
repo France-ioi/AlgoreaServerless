@@ -1,11 +1,11 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: December 17, 2025
+**Last Updated**: December 19, 2025
 
 ## Overview
 
-AlgoreaServerless is a serverless backend application designed to provide forum/messaging functionality for the Algorea platform. It's built on AWS serverless technologies, providing both REST API and WebSocket support for real-time communication.
+AlgoreaServerless is a serverless backend application designed to provide forum/messaging and portal functionality for the Algorea platform. It's built on AWS serverless technologies, providing REST API and WebSocket support for real-time communication, along with payment integration capabilities.
 
 ## Technology Stack
 
@@ -24,10 +24,11 @@ AlgoreaServerless is a serverless backend application designed to provide forum/
 
 ### Key Dependencies
 - **lambda-api**: Lightweight REST API framework for Lambda
-- **jose**: JWT token verification (ES256 algorithm)
+- **jose**: JWT token verification and decoding (ES256 algorithm)
 - **zod**: Runtime type validation and schema definition
 - **@aws-sdk/client-dynamodb**: DynamoDB client
 - **@aws-sdk/client-apigatewaymanagementapi**: WebSocket message delivery
+- **stripe**: Payment processing (planned for Part 6)
 
 ### Development Tools
 - **Jest**: Unit and e2e testing framework
@@ -111,6 +112,9 @@ AlgoreaServerless/
 ├── db/                     # Database configuration
 │   └── dynamodb.cloudformation.yaml
 ├── src/                    # Source code
+│   ├── auth/              # Shared authentication module
+│   │   ├── jwt.ts         # JWT verification and token extraction
+│   │   └── jwt.spec.ts    # Authentication tests
 │   ├── dbmodels/          # Database models and data access
 │   │   ├── forum/         # Forum-specific models
 │   │   │   ├── thread.ts
@@ -122,8 +126,17 @@ AlgoreaServerless/
 │   │   ├── services/      # Business logic layer
 │   │   │   ├── messages.ts
 │   │   │   └── thread-subscription.ts
-│   │   ├── spec/          # Tests
-│   │   └── token.ts       # JWT authentication
+│   │   ├── e2e/           # End-to-end tests
+│   │   ├── spec/          # Unit tests
+│   │   └── token.ts       # Forum JWT token parsing
+│   ├── portal/            # Portal feature module
+│   │   ├── routes.ts      # Route registration
+│   │   ├── services/      # Business logic layer
+│   │   │   ├── entry-state.ts
+│   │   │   └── entry-state.spec.ts
+│   │   ├── e2e/           # End-to-end tests
+│   │   ├── token.ts       # Portal JWT token parsing
+│   │   └── token.spec.ts  # Token tests
 │   ├── middlewares/       # Express-style middleware
 │   │   ├── cors.ts
 │   │   └── error-handling.ts
@@ -136,10 +149,15 @@ AlgoreaServerless/
 │   │   └── rest-responses.ts
 │   ├── testutils/         # Testing utilities
 │   │   ├── db.ts
-│   │   └── mocks.ts
+│   │   ├── mocks.ts
+│   │   ├── token-generator.ts        # Forum token generator
+│   │   └── portal-token-generator.ts # Portal token generator
+│   ├── config.ts          # Configuration file loader
+│   ├── config.spec.ts     # Configuration tests
 │   ├── dynamodb.ts        # DynamoDB client configuration
 │   ├── handlers.ts        # Lambda entry point
 │   └── websocket-client.ts # WebSocket message sender
+├── config.json            # Portal configuration (Stripe keys, etc.)
 ├── serverless.yml         # Serverless Framework configuration
 ├── tsconfig.json          # TypeScript configuration
 ├── jest.config.ts         # Jest testing configuration
@@ -161,9 +179,12 @@ The unified Lambda entry point that routes requests based on event type:
 Built on the `lambda-api` library with:
 - **Middleware Pipeline**: Error handling → CORS → Route handlers
 - **Route Registration**: Modular route registration with prefixes
-- **Forum Routes**:
-  - `GET /sls/forum/message` - Retrieve thread messages
-  - `POST /sls/forum/message` - Create new message
+- **Forum Routes** (`/sls/forum`):
+  - `GET /message` - Retrieve thread messages
+  - `POST /message` - Create new message
+- **Portal Routes** (`/sls/portal`):
+  - `GET /entry-state` - Get payment state for an item
+- **Common Routes**:
   - `OPTIONS /*` - CORS preflight handling
 
 ### 3. WebSocket Server (`src/utils/lambda-ws-server/`)
@@ -206,10 +227,26 @@ Custom implementation inspired by `lambda-api`:
 - Auto-cleanup of stale connections via DynamoDB TTL
 - Supports subscription management and connection cleanup
 
-### 5. Authentication (`src/forum/token.ts`)
+### 5. Authentication
 
-JWT-based authentication using JOSE library:
+JWT-based authentication using JOSE library with a shared verification layer:
+
+#### Shared Authentication Module (`src/auth/jwt.ts`)
+
+Core JWT verification functions used by both forum and portal:
 - **Algorithm**: ES256 (ECDSA with P-256 curve)
+- **Verification**: Public key from environment variable `BACKEND_PUBLIC_KEY`
+- **Functions**:
+  - `verifyJwt(token, publicKey)`: Verifies JWT signature and returns payload
+  - `extractBearerToken(authHeader)`: Extracts JWT from "Bearer {token}" format
+  - `shouldVerifySignature()`: Determines if verification should be skipped (dev mode)
+- **Development Mode**: `NO_SIG_CHECK=1` allows skipping signature verification in dev environment only
+  - Uses `decodeJwt()` instead of `jwtVerify()` when enabled
+  - Throws `ServerError` if `NO_SIG_CHECK=1` is set in non-dev stages
+
+#### Forum Token Module (`src/forum/token.ts`)
+
+Domain-specific token parsing for forum features:
 - **Token Sources**: HTTP Authorization header (Bearer) or WebSocket message body
 - **Token Payload**:
   - `participant_id`: Forum participant identifier
@@ -218,7 +255,25 @@ JWT-based authentication using JOSE library:
   - `can_watch`: Read permission
   - `can_write`: Write permission
   - `is_mine`: Ownership flag
-- **Verification**: Public key from environment variable `BACKEND_PUBLIC_KEY`
+- **Functions**:
+  - `parseToken(token, publicKey)`: Validates and transforms forum token
+  - `extractTokenFromHttp(headers)`: Extracts and parses from HTTP headers
+  - `extractTokenFromWs(body)`: Extracts and parses from WebSocket message
+
+#### Portal Token Module (`src/portal/token.ts`)
+
+Domain-specific token parsing for portal features:
+- **Token Sources**: HTTP Authorization header (Bearer) only
+- **Token Payload**:
+  - `item_id`: Item identifier
+  - `user_id`: User identifier
+  - `firstname`: User's first name
+  - `lastname`: User's last name
+  - `email`: User's email address
+- **Functions**:
+  - `parseToken(token, publicKey)`: Validates and transforms portal token
+  - `extractTokenFromHttp(headers)`: Extracts and parses from HTTP headers
+- **Usage**: Used for payment-related operations and Stripe customer management
 
 ### 6. WebSocket Client (`src/websocket-client.ts`)
 
@@ -244,13 +299,36 @@ Manages outbound WebSocket messages to connected clients:
 - Applies CORS headers to all responses
 - Supports OPTIONS preflight requests
 
-### 8. Custom Error Classes (`src/utils/errors.ts`)
+### 8. Configuration System (`src/config.ts`)
+
+Configuration file management for portal features:
+- **Config File**: `config.json` at project root
+- **Schema Validation**: Zod-based schema for type safety
+- **Structure**:
+  ```json
+  {
+    "portal": {
+      "payment": {
+        "stripe": {
+          "sk": "stripe_secret_key"
+        }
+      }
+    }
+  }
+  ```
+- **Functions**:
+  - `loadConfig()`: Loads and validates configuration from config.json
+  - Returns empty config `{}` if file doesn't exist or is invalid
+- **Usage**: Portal services use config to determine payment state (disabled/unpaid/paid)
+
+### 9. Custom Error Classes (`src/utils/errors.ts`)
 
 Typed error hierarchy for better error handling:
 - `DBError`: Database operation failures (includes statement details)
 - `DecodingError`: JWT or request parsing errors
 - `RouteNotFound`: Invalid routes/actions
 - `Forbidden`: Authorization failures
+- `AuthenticationError`: JWT verification or token extraction failures
 - `ServerError`: Configuration or unexpected errors
 - `OperationSkipped`: Non-error warnings
 
@@ -383,6 +461,7 @@ ttl: {timestamp + 7200} (2 hours)
 ### Environment Variables
 
 - `STAGE`: Deployment stage (local, test, dev, production)
+- `NO_SIG_CHECK`: Skip JWT signature verification (dev only, defaults to '0')
 - `TABLE_NAME`: DynamoDB table name
 - `BACKEND_PUBLIC_KEY`: JWT verification public key (PEM format)
 - `APIGW_ENDPOINT`: API Gateway endpoint for WebSocket messages
@@ -685,9 +764,146 @@ Two issues that previously prevented full test coverage in DynamoDB Local have b
 - **Error Recovery**: Handle edge cases in subscription cleanup
 - **DynamoDB Local**: Improve reliability of test database startup
 
+## Portal Feature (Parts 1-5)
+
+### Overview
+
+The portal module provides payment-related functionality for the Algorea platform. It follows the same architectural patterns as the forum module but focuses on payment state management and Stripe integration.
+
+### Portal Services
+
+#### Entry State Service (`src/portal/services/entry-state.ts`)
+
+- **Endpoint**: `GET /sls/portal/entry-state`
+- **Authentication**: Required (Bearer token in Authorization header)
+- **Purpose**: Returns payment state for an item
+- **Response**:
+  ```json
+  {
+    "payment": {
+      "state": "disabled" | "unpaid" | "paid"
+    }
+  }
+  ```
+- **Payment States**:
+  - `disabled`: Payment not configured (no `portal.payment` in config.json)
+  - `unpaid`: Payment configured but not paid (current state, Part 5)
+  - `paid`: Payment completed (Part 6 - Stripe integration)
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Shared Auth Layer                        │
+│  src/auth/jwt.ts (verifyJwt, extractBearerToken)           │
+│  - ES256 signature verification                             │
+│  - Bearer token extraction                                   │
+│  - NO_SIG_CHECK dev mode support                            │
+└─────────────┬───────────────────────────┬───────────────────┘
+              │                           │
+    ┌─────────▼──────────┐    ┌──────────▼─────────┐
+    │  Forum Token       │    │  Portal Token      │
+    │  src/forum/token.ts│    │  src/portal/token.ts│
+    │                    │    │                     │
+    │  Payload:          │    │  Payload:           │
+    │  - participant_id  │    │  - item_id          │
+    │  - item_id         │    │  - user_id          │
+    │  - user_id         │    │  - firstname        │
+    │  - can_watch       │    │  - lastname         │
+    │  - can_write       │    │  - email            │
+    │  - is_mine         │    │                     │
+    └─────────┬──────────┘    └──────────┬─────────┘
+              │                           │
+    ┌─────────▼──────────┐    ┌──────────▼─────────┐
+    │  Forum Services    │    │  Portal Services   │
+    │  - messages        │    │  - entry-state     │
+    │  - subscriptions   │    │  (+ checkout       │
+    └────────────────────┘    │   in Part 7)       │
+                              └────────────────────┘
+```
+
+### Configuration-Driven Behavior
+
+The portal uses a configuration file (`config.json`) to control payment features:
+
+1. **No config or empty portal config** → Payment state: "disabled"
+2. **portal.payment configured** → Payment state: "unpaid" (or "paid" after Stripe check in Part 6)
+
+This allows:
+- Easy feature toggles without code changes
+- Environment-specific payment configurations
+- Graceful degradation when Stripe is not configured
+
+### Authentication Flow
+
+#### Portal Request Flow
+
+1. Client sends HTTP request to `GET /sls/portal/entry-state`
+2. Request includes `Authorization: Bearer {JWT}` header
+3. Portal service calls `extractTokenFromHttp(headers)`
+4. Shared auth module:
+   - Extracts Bearer token from header
+   - Calls `shouldVerifySignature()` to check NO_SIG_CHECK
+   - Verifies JWT signature (or decodes without verification in dev mode)
+   - Returns raw JWT payload
+5. Portal token module:
+   - Validates payload against portal schema (Zod)
+   - Transforms to PortalToken interface
+   - Returns typed token with user info
+6. Service logic:
+   - Uses token data for business logic
+   - Returns payment state based on config
+
+### Testing Infrastructure
+
+Portal tests follow the same patterns as forum tests:
+
+- **Unit Tests** (`src/portal/token.spec.ts`, `src/portal/services/entry-state.spec.ts`):
+  - Test token parsing and validation
+  - Test service logic with mocked dependencies
+  - 27 tests for portal functionality
+
+- **E2E Tests** (`src/portal/e2e/entry-state.spec.ts`):
+  - Test complete request flows through global handler
+  - Verify authentication requirements
+  - Test configuration-driven behavior
+
+- **Test Utilities**:
+  - `portal-token-generator.ts`: Generates valid portal tokens for tests
+  - Shares key pair with forum token generator for consistency
+
+### Development Features
+
+#### NO_SIG_CHECK Environment Variable
+
+For local development without a valid backend public key:
+
+- **Purpose**: Skip JWT signature verification in dev environment
+- **Usage**: Set `NO_SIG_CHECK=1` in environment or .env file
+- **Safety**: Only works when `STAGE=dev`, throws `ServerError` in other environments
+- **Behavior**: Uses `decodeJwt()` instead of `jwtVerify()` to parse tokens without verification
+- **Benefits**:
+  - Simplified local development setup
+  - Test with mock tokens easily
+  - No need for valid signing keys in development
+
+### Future Implementation (Part 6 & 7)
+
+**Part 6 - Stripe Integration**:
+- Use portal token data (userId, firstname, lastname, email) for Stripe customer management
+- Query Stripe API to check payment status
+- Return "paid" state when valid payment found
+
+**Part 7 - Checkout Session**:
+- Create Stripe checkout sessions
+- Handle payment flow
+- Invoice creation with metadata
+
 ## Related Documentation
 
 - `README.md`: Installation and getting started
 - `CHANGELOG.md`: Version history and changes
 - `AGENTS.md`: AI assistant context and guidelines
 - `.cursor/rules/`: Coding standards and practices
+- `.cursor/features/251217-portal.md`: Portal feature specification
+- `.cursor/plans/`: Implementation plans for portal features
