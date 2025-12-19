@@ -1005,12 +1005,140 @@ Checks if a customer has paid for a specific item:
 
 **Note**: Secret key can be test or live key. For development, use Stripe test mode keys (`sk_test_*`).
 
-### Future Implementation (Part 7)
+### Checkout Session Service (Part 7)
 
-**Part 7 - Checkout Session**:
-- Create Stripe checkout sessions
-- Handle payment flow
-- Invoice creation with metadata
+#### Overview
+
+The checkout session service enables users to initiate payments through Stripe Checkout. It creates a custom UI checkout session with automatic tax calculation, billing address collection, and invoice generation.
+
+#### Endpoint
+
+**POST /sls/portal/checkout-session**
+
+- **Authentication**: Required (Bearer token in Authorization header)
+- **Request Body**:
+  ```json
+  {
+    "return_url": "https://example.com/return"
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "client_secret": "cs_test_..."
+  }
+  ```
+
+#### Architecture Components
+
+**Price Search Service** (`src/portal/services/stripe-price.ts`)
+- **Function**: `findPriceByItemId(stripe, itemId): Promise<string>`
+- **Purpose**: Locate Stripe price by item_id metadata
+- **Behavior**:
+  - Uses Stripe search API with query: `active:'true' AND metadata['item_id']:'{itemId}'`
+  - Search API is safe to use here since prices are created in advance (no indexing delay issues)
+  - Throws `DecodingError` if no price found (returns 400 to client)
+  - Logs warning if multiple prices found, returns first
+
+**Checkout Session Service** (`src/portal/services/checkout-session.ts`)
+- **Function**: `createCheckoutSession(stripe, customerId, priceId, itemId, returnUrl): Promise<string>`
+- **Purpose**: Create Stripe checkout session with payment configuration
+- **Configuration**:
+  - `automatic_tax.enabled: true` - Automatic tax calculation
+  - `customer_update.address: 'auto'` - Save billing address to customer
+  - `customer_update.name: 'auto'` - Save business name to customer (required for tax ID collection)
+  - `ui_mode: embedded` - Embedded UI integration in custom frontend
+  - `billing_address_collection: required` - Collect billing address
+  - `invoice_creation.enabled: true` - Generate invoice on payment
+  - `invoice_creation.invoice_data.metadata.item_id` - Link invoice to item
+  - `tax_id_collection.enabled: true, required: 'if_supported'` - Enable optional tax ID collection
+  - `allow_promotion_codes: false` - No promo codes
+  - `mode: payment` - One-time payment
+
+**Checkout Session Handler** (`src/portal/services/checkout-session-handler.ts`)
+- Orchestrates the checkout session creation flow
+- Validates request body with Zod schema
+- Reuses existing customer management service
+- Error handling:
+  - `DecodingError` for missing price → 400 Bad Request
+  - `ServerError` for configuration/Stripe errors → 500 Internal Server Error
+  - Token errors → 401 Unauthorized
+
+#### Request Flow
+
+```
+1. Client sends POST /portal/checkout-session with token and return_url
+2. Extract and validate JWT token (item_id, user_id, name, email)
+3. Validate request body contains return_url
+4. Check payment configuration exists
+5. Get Stripe client instance
+6. Find or create customer (reuse existing service)
+7. Find price by item_id metadata
+8. Create checkout session with configuration
+9. Return client_secret to client
+10. Client uses client_secret to render Stripe Checkout UI
+```
+
+#### Invoice Creation
+
+When payment completes, Stripe automatically creates an invoice with:
+- `metadata.item_id` - Links invoice to the Algorea item
+- `status: paid` - Payment confirmation
+- Customer ID - Links to Algorea user
+
+This invoice is then detected by the entry-state service, which returns `"paid"` status.
+
+#### Error Responses
+
+**400 Bad Request** - Missing return_url:
+```json
+{
+  "error": "Missing or invalid return_url in request body"
+}
+```
+
+**400 Bad Request** - Price not found:
+```json
+{
+  "error": "No price found for item"
+}
+```
+
+**500 Internal Server Error** - Stripe errors:
+```json
+{
+  "error": "Failed to create checkout session"
+}
+```
+
+#### Testing
+
+**Unit Tests**:
+- `stripe-price.spec.ts` (5 tests) - Price lookup logic
+- `checkout-session.spec.ts` (5 tests) - Session creation parameters
+- `checkout-session-handler.spec.ts` (8 tests) - Handler orchestration and error cases
+
+**E2E Tests** (`checkout-session.spec.ts`, 8 tests):
+- Successful checkout session creation flow
+- Missing return_url validation
+- Price not found error handling
+- Authentication requirements
+- Configuration validation
+- CORS preflight support
+
+**Test Data**: Uses static product+price with `item_id: "test-premium-access-001"`
+
+#### Integration with Entry State
+
+The checkout session and entry-state services work together:
+
+1. **Entry State Check**: Client calls `GET /entry-state` → returns `"unpaid"`
+2. **Payment Flow**: Client calls `POST /checkout-session` → receives `client_secret`
+3. **Stripe Checkout**: Client renders Stripe UI with `client_secret`
+4. **Payment Complete**: Stripe creates invoice with `item_id` metadata
+5. **Verification**: Client calls `GET /entry-state` → returns `"paid"`
+
+This creates a complete payment verification cycle.
 
 ## Related Documentation
 
