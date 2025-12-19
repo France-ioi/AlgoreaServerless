@@ -6,7 +6,7 @@ import { loadConfig } from '../../config';
 // eslint-disable-next-line @typescript-eslint/naming-convention
 import Stripe from 'stripe';
 
-// NOTE: This test file does NOT mock config - it uses real config.json with actual Stripe API
+// NOTE: This test file requires STAGE=e2e-test to load config.e2e-test.json with actual Stripe API key
 
 describe('E2E: Portal Entry State with Real Stripe API', () => {
   let stripe: Stripe;
@@ -14,7 +14,10 @@ describe('E2E: Portal Entry State with Real Stripe API', () => {
   beforeAll(async () => {
     await initializeKeys();
 
-    // Load Stripe key from config.json
+    // Set STAGE to e2e-test to load config.e2e-test.json
+    process.env.STAGE = 'e2e-test';
+
+    // Load Stripe key from config (will load config.e2e-test.json due to STAGE env var)
     const config = loadConfig();
     const stripeKey = config.portal?.payment?.stripe?.sk;
 

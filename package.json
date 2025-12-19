@@ -13,6 +13,7 @@
     "test:coverage": "NODE_ENV=test jest --coverage",
     "test:unit": "NODE_ENV=test jest --testPathIgnorePatterns=e2e",
     "test:e2e": "NODE_ENV=test jest e2e",
+    "test:e2e-stripe": "NODE_ENV=test STAGE=e2e-test jest entry-state-stripe.spec.ts",
     "test:db": "NODE_ENV=test jest dbmodels",
     "dynamodb:install": "serverless dynamodb install",
     "dynamodb:start": "serverless dynamodb start"

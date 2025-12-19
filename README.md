@@ -14,10 +14,73 @@ npm start
 ```
 
 
+## Configuration
+
+The project uses a stage-based configuration system:
+
+- **`config.json`**: Base configuration file (committed to git, should not contain sensitive data)
+- **`config.<stage>.json`**: Stage-specific configuration files (ignored by git, can contain sensitive data like API keys)
+
+When the application loads, it:
+1. Loads the base `config.json`
+2. If the `STAGE` environment variable is set, loads `config.<STAGE>.json` and deep-merges it over the base config
+
+### Example
+
+To use a stage-specific configuration:
+
+```sh
+STAGE=e2e-test npm test  # Loads config.e2e-test.json
+STAGE=production npm start  # Loads config.production.json
+```
+
+See `config.example.json` for the configuration structure.
+
+### Stage-specific config for E2E tests
+
+The Stripe E2E tests require a Stripe test API key. You can provide it in two ways:
+
+**Option 1: Using a config file** (recommended for local development)
+
+Create a `config.e2e-test.json` file:
+
+```json
+{
+  "portal": {
+    "payment": {
+      "stripe": {
+        "sk": "sk_test_your_stripe_test_key"
+      }
+    }
+  }
+}
+```
+
+Then run:
+
+```sh
+npm run test:e2e-stripe
+```
+
+**Option 2: Using an environment variable** (recommended for CI/CD)
+
+Set the `STRIPE_SECRET_KEY` environment variable:
+
+```sh
+STRIPE_SECRET_KEY=sk_test_your_stripe_test_key npm run test:e2e-stripe
+```
+
+This is particularly useful for CI/CD environments like CircleCI where you can store the key in a secure context.
+
+> **Note**: The environment variable takes precedence over config files.
+
 ## Test
 
 ```sh
-npm test
+npm test                  # Run all tests
+npm run test:unit         # Run unit tests only (no E2E)
+npm run test:e2e          # Run E2E tests only
+npm run test:e2e-stripe   # Run Stripe E2E tests (requires config.e2e-test.json)
 ```
 
 ## Deploy code on AWS

@@ -1,6 +1,27 @@
 version: 2.1
 jobs:
 
+  setup:
+    docker:
+    - image: node:20
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - npm-deps-v2-{{ checksum "package-lock.json" }}
+            - npm-deps-v2-
+      - run:
+          name: Install dependencies
+          command: npm install
+      - save_cache:
+          key: npm-deps-v2-{{ checksum "package-lock.json" }}
+          paths:
+            - node_modules
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
   github-release:
     docker:
     - image: cibuilds/github:0.10
@@ -11,11 +32,12 @@ jobs:
           command: |
             ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -b "`awk '/##.*/{n++;next};n==1;n==2{exit}' CHANGELOG.md`" -delete ${CIRCLE_TAG} ./CHANGELOG.md
 
-  tests:
+  tests-unit:
     docker:
     - image: node:20
     steps:
-      - checkout
+      - attach_workspace:
+          at: .
       - run:
           name: Install OpenJDK 17 for DynamoDB Local
           command: |
@@ -24,41 +46,65 @@ jobs:
             java -version
       - restore_cache:
           keys:
-            - npm-deps-v1-{{ checksum "package-lock.json" }}
-            - npm-deps-v1-
-      - run: npm install
+            - dynamodb-v1-{{ checksum "package-lock.json" }}
+            - dynamodb-v1-
       - run:
           name: Install DynamoDB Local
           command: npm run dynamodb:install
       - save_cache:
-          key: npm-deps-v1-{{ checksum "package-lock.json" }}
+          key: dynamodb-v1-{{ checksum "package-lock.json" }}
           paths:
-            - node_modules
             - .dynamodb
-      - run: npm run test
+      - run: npm run test:unit
+
+  tests-e2e:
+    docker:
+    - image: node:20
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install OpenJDK 17 for DynamoDB Local
+          command: |
+            apt-get update
+            apt-get install -y openjdk-17-jre-headless
+            java -version
+      - restore_cache:
+          keys:
+            - dynamodb-v1-{{ checksum "package-lock.json" }}
+            - dynamodb-v1-
+      - run:
+          name: Install DynamoDB Local
+          command: npm run dynamodb:install
+      - save_cache:
+          key: dynamodb-v1-{{ checksum "package-lock.json" }}
+          paths:
+            - .dynamodb
+      - run: npm run test:e2e
 
   lint:
     docker:
     - image: node:20-alpine
     steps:
-      - checkout
-      - restore_cache:
-          keys:
-            - npm-deps-v1-{{ checksum "package-lock.json" }}
-            - npm-deps-v1-
-      - run: npm install
-      - save_cache:
-          key: npm-deps-v1-{{ checksum "package-lock.json" }}
-          paths:
-            - node_modules
+      - attach_workspace:
+          at: .
       - run: npm run lint
 
 workflows:
   version: 2
   default:
     jobs:
-      - tests
-      - lint
+      - setup
+      - tests-unit:
+          requires:
+            - setup
+      - tests-e2e:
+          requires:
+            - setup
+          context: stripe-tests
+      - lint:
+          requires:
+            - setup
       - github-release:
           context: github
           filters:
