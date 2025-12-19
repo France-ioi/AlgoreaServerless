@@ -25,6 +25,7 @@ provider:
   name: aws
   environment:
     STAGE: ${opt:stage, 'dev'}
+    NO_SIG_CHECK: ${env:NO_SIG_CHECK, '0'}
     BACKEND_PUBLIC_KEY: ${env:BACKEND_PUBLIC_KEY}
     TABLE_NAME: ${env:TABLE_NAME}
     APIGW_ENDPOINT: ${env:APIGW_ENDPOINT}

@@ -81,6 +81,172 @@ describe('JWT Module', () => {
     });
   });
 
+  describe('verifyJwt with NO_SIG_CHECK', () => {
+    const originalNoSigCheck = process.env.NO_SIG_CHECK;
+    const originalStage = process.env.STAGE;
+
+    afterEach(() => {
+      process.env.NO_SIG_CHECK = originalNoSigCheck;
+      process.env.STAGE = originalStage;
+    });
+
+    describe('when NO_SIG_CHECK=1 and STAGE=dev', () => {
+      beforeEach(() => {
+        process.env.NO_SIG_CHECK = '1';
+        process.env.STAGE = 'dev';
+      });
+
+      it('should decode valid token without verification', async () => {
+        const payload = { user_id: 'user123', item_id: 'item456' };
+        const token = await new SignJWT(payload)
+          .setProtectedHeader({ alg: 'ES256' })
+          .setExpirationTime('1h')
+          .sign(privateKey);
+
+        const result = await verifyJwt(token, publicKeyPem);
+
+        expect(result.user_id).toBe('user123');
+        expect(result.item_id).toBe('item456');
+      });
+
+      it('should decode token with invalid signature', async () => {
+        const payload = { user_id: 'user123' };
+        const token = await new SignJWT(payload)
+          .setProtectedHeader({ alg: 'ES256' })
+          .setExpirationTime('1h')
+          .sign(privateKey);
+
+        // Should decode even with wrong public key (signature not checked)
+        const result = await verifyJwt(token, otherPublicKeyPem);
+
+        expect(result.user_id).toBe('user123');
+      });
+
+      it('should decode expired token without checking expiry', async () => {
+        const payload = { user_id: 'user123' };
+        const token = await new SignJWT(payload)
+          .setProtectedHeader({ alg: 'ES256' })
+          .setExpirationTime('1s')
+          .sign(privateKey);
+
+        // Wait for token to expire
+        await new Promise(resolve => setTimeout(resolve, 1100));
+
+        // Should decode even when expired
+        const result = await verifyJwt(token, publicKeyPem);
+
+        expect(result.user_id).toBe('user123');
+      });
+
+      it('should throw error for malformed JWT', async () => {
+        await expect(verifyJwt('invalid-token', publicKeyPem))
+          .rejects.toThrow();
+      });
+
+      it('should not require public key when skipping verification', async () => {
+        const payload = { user_id: 'user123' };
+        const token = await new SignJWT(payload)
+          .setProtectedHeader({ alg: 'ES256' })
+          .setExpirationTime('1h')
+          .sign(privateKey);
+
+        // Should work without public key
+        const result = await verifyJwt(token, undefined);
+
+        expect(result.user_id).toBe('user123');
+      });
+    });
+
+    describe('when NO_SIG_CHECK=1 and STAGE=prod', () => {
+      beforeEach(() => {
+        process.env.NO_SIG_CHECK = '1';
+        process.env.STAGE = 'prod';
+      });
+
+      it('should throw ServerError about misconfiguration', async () => {
+        const payload = { user_id: 'user123' };
+        const token = await new SignJWT(payload)
+          .setProtectedHeader({ alg: 'ES256' })
+          .setExpirationTime('1h')
+          .sign(privateKey);
+
+        await expect(verifyJwt(token, publicKeyPem))
+          .rejects.toThrow(ServerError);
+        await expect(verifyJwt(token, publicKeyPem))
+          .rejects.toThrow('NO_SIG_CHECK=1 can only be used in dev environment. Current stage: prod');
+      });
+    });
+
+    describe('when NO_SIG_CHECK=1 and STAGE=test', () => {
+      beforeEach(() => {
+        process.env.NO_SIG_CHECK = '1';
+        process.env.STAGE = 'test';
+      });
+
+      it('should throw ServerError about misconfiguration', async () => {
+        const payload = { user_id: 'user123' };
+        const token = await new SignJWT(payload)
+          .setProtectedHeader({ alg: 'ES256' })
+          .setExpirationTime('1h')
+          .sign(privateKey);
+
+        await expect(verifyJwt(token, publicKeyPem))
+          .rejects.toThrow(ServerError);
+        await expect(verifyJwt(token, publicKeyPem))
+          .rejects.toThrow('NO_SIG_CHECK=1 can only be used in dev environment. Current stage: test');
+      });
+    });
+
+    describe('when NO_SIG_CHECK=0', () => {
+      beforeEach(() => {
+        process.env.NO_SIG_CHECK = '0';
+        process.env.STAGE = 'dev';
+      });
+
+      it('should perform normal verification', async () => {
+        const payload = { user_id: 'user123' };
+        const token = await new SignJWT(payload)
+          .setProtectedHeader({ alg: 'ES256' })
+          .setExpirationTime('1h')
+          .sign(privateKey);
+
+        const result = await verifyJwt(token, publicKeyPem);
+
+        expect(result.user_id).toBe('user123');
+      });
+
+      it('should reject token with invalid signature', async () => {
+        const payload = { user_id: 'user123' };
+        const token = await new SignJWT(payload)
+          .setProtectedHeader({ alg: 'ES256' })
+          .setExpirationTime('1h')
+          .sign(privateKey);
+
+        await expect(verifyJwt(token, otherPublicKeyPem))
+          .rejects.toThrow(AuthenticationError);
+      });
+    });
+
+    describe('when NO_SIG_CHECK is not set', () => {
+      beforeEach(() => {
+        delete process.env.NO_SIG_CHECK;
+        process.env.STAGE = 'prod';
+      });
+
+      it('should perform normal verification', async () => {
+        const payload = { user_id: 'user123' };
+        const token = await new SignJWT(payload)
+          .setProtectedHeader({ alg: 'ES256' })
+          .setExpirationTime('1h')
+          .sign(privateKey);
+
+        const result = await verifyJwt(token, publicKeyPem);
+
+        expect(result.user_id).toBe('user123');
+      });
+    });
+  });
+
   describe('extractBearerToken', () => {
     it('should extract token from valid Bearer header', () => {
       const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.token';
