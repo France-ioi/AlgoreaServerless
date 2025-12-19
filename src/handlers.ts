@@ -2,6 +2,7 @@ import { ALBEvent, APIGatewayProxyEvent, Context } from 'aws-lambda';
 import createAPI from 'lambda-api';
 import createWsServer from './utils/lambda-ws-server';
 import { forumRoutes, forumWsActions } from './forum/routes';
+import { portalRoutes } from './portal/routes';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
 
@@ -23,6 +24,7 @@ api.options('/*', () => ({}));
 
 // routes registration
 api.register(forumRoutes, { prefix: '/forum' });
+api.register(portalRoutes, { prefix: '/portal' });
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////
