@@ -1,9 +1,8 @@
 import { AuthenticationError } from '../utils/errors';
 import { Request } from 'lambda-api';
-import { importSPKI, jwtVerify } from 'jose';
 import * as z from 'zod';
-import { ServerError } from '../utils/errors';
 import { WsRequest } from '../utils/lambda-ws-server';
+import { verifyJwt, extractBearerToken } from '../auth/jwt';
 
 const jwsPayloadSchema = z.object({
   item_id: z.string(),
@@ -24,13 +23,7 @@ export interface ForumToken {
 }
 
 export async function parseToken(token: string, publicKeyPem?: string): Promise<ForumToken> {
-  if (!publicKeyPem) throw new ServerError('no backend public key found to verify the token');
-  const publicKey = await importSPKI(publicKeyPem, 'ES256');
-  const { payload } = await jwtVerify(token, publicKey).catch(
-    err => {
-      throw new AuthenticationError(`JWT verification failed: ${(err as Error).message}`);
-    }
-  );
+  const payload = await verifyJwt(token, publicKeyPem);
   const decodedPayload = jwsPayloadSchema.parse(payload);
   return {
     participantId: decodedPayload.participant_id,
@@ -43,10 +36,7 @@ export async function parseToken(token: string, publicKeyPem?: string): Promise<
 }
 
 export async function extractTokenFromHttp(headers: Request['headers']): Promise<ForumToken> {
-  const token = headers['authorization'];
-  if (!token) throw new AuthenticationError('no Authorization header found in the headers.');
-  if (!token.startsWith('Bearer ')) throw new AuthenticationError('the Authorization header is not a Bearer token');
-  const jws = token.slice(7);
+  const jws = extractBearerToken(headers['authorization']);
   return parseToken(jws, process.env.BACKEND_PUBLIC_KEY);
 }
 
