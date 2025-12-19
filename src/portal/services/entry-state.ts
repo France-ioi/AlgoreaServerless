@@ -1,20 +1,61 @@
 import { HandlerFunction, Request } from 'lambda-api';
 import { loadConfig } from '../../config';
 import { extractTokenFromHttp } from '../token';
+import { getStripeClient } from '../../stripe';
+import { findOrCreateCustomer } from './stripe-customer';
+import { hasPaidInvoice } from './stripe-invoice';
 
 async function get(req: Request): Promise<{ payment: { state: string } }> {
   // Extract and validate token
-  await extractTokenFromHttp(req.headers);
+  const token = await extractTokenFromHttp(req.headers);
 
-  // Token is now validated (will be used in Part 6 for Stripe)
+  // Check if payment is configured
   const config = loadConfig();
-  const paymentState = config.portal?.payment ? 'unpaid' : 'disabled';
+  if (!config.portal?.payment) {
+    return {
+      payment: {
+        state: 'disabled',
+      },
+    };
+  }
 
-  return {
-    payment: {
-      state: paymentState,
-    },
-  };
+  // Get Stripe client
+  const stripe = getStripeClient();
+  if (!stripe) {
+    return {
+      payment: {
+        state: 'disabled',
+      },
+    };
+  }
+
+  try {
+    // Find or create customer
+    const customerId = await findOrCreateCustomer(
+      stripe,
+      token.userId,
+      `${token.firstname} ${token.lastname}`,
+      token.email
+    );
+
+    // Check if customer has paid invoice for this item
+    const isPaid = await hasPaidInvoice(stripe, customerId, token.itemId);
+
+    return {
+      payment: {
+        state: isPaid ? 'paid' : 'unpaid',
+      },
+    };
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('Error checking payment status with Stripe:', error);
+    // Return unpaid on error to be safe
+    return {
+      payment: {
+        state: 'unpaid',
+      },
+    };
+  }
 }
 
 export const getEntryState: HandlerFunction = get;

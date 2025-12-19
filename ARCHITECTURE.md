@@ -28,7 +28,7 @@ AlgoreaServerless is a serverless backend application designed to provide forum/
 - **zod**: Runtime type validation and schema definition
 - **@aws-sdk/client-dynamodb**: DynamoDB client
 - **@aws-sdk/client-apigatewaymanagementapi**: WebSocket message delivery
-- **stripe**: Payment processing (planned for Part 6)
+- **stripe**: Payment processing and invoice management (API version 2025-12-15.clover)
 
 ### Development Tools
 - **Jest**: Unit and e2e testing framework
@@ -786,9 +786,9 @@ The portal module provides payment-related functionality for the Algorea platfor
   }
   ```
 - **Payment States**:
-  - `disabled`: Payment not configured (no `portal.payment` in config.json)
-  - `unpaid`: Payment configured but not paid (current state, Part 5)
-  - `paid`: Payment completed (Part 6 - Stripe integration)
+  - `disabled`: Payment not configured (no `portal.payment` in config.json or Stripe client unavailable)
+  - `unpaid`: Payment configured but no paid invoice found in Stripe
+  - `paid`: Payment completed (paid invoice exists in Stripe)
 
 ### Architecture Diagram
 
@@ -814,12 +814,13 @@ The portal module provides payment-related functionality for the Algorea platfor
     │  - is_mine         │    │                     │
     └─────────┬──────────┘    └──────────┬─────────┘
               │                           │
-    ┌─────────▼──────────┐    ┌──────────▼─────────┐
-    │  Forum Services    │    │  Portal Services   │
-    │  - messages        │    │  - entry-state     │
-    │  - subscriptions   │    │  (+ checkout       │
-    └────────────────────┘    │   in Part 7)       │
-                              └────────────────────┘
+    ┌─────────▼──────────┐    ┌──────────▼─────────────┐
+    │  Forum Services    │    │  Portal Services       │
+    │  - messages        │    │  - entry-state         │
+    │  - subscriptions   │    │  - stripe-customer     │
+    └────────────────────┘    │  - stripe-invoice      │
+                              │  (+ checkout Part 7)   │
+                              └────────────────────────┘
 ```
 
 ### Configuration-Driven Behavior
@@ -827,11 +828,11 @@ The portal module provides payment-related functionality for the Algorea platfor
 The portal uses a configuration file (`config.json`) to control payment features:
 
 1. **No config or empty portal config** → Payment state: "disabled"
-2. **portal.payment configured** → Payment state: "unpaid" (or "paid" after Stripe check in Part 6)
+2. **portal.payment configured** → Query Stripe API to determine "paid" or "unpaid"
 
 This allows:
 - Easy feature toggles without code changes
-- Environment-specific payment configurations
+- Environment-specific payment configurations (test vs live Stripe keys)
 - Graceful degradation when Stripe is not configured
 
 ### Authentication Flow
@@ -851,17 +852,21 @@ This allows:
    - Transforms to PortalToken interface
    - Returns typed token with user info
 6. Service logic:
-   - Uses token data for business logic
-   - Returns payment state based on config
+   - Uses token data (userId, name, email) for Stripe customer management
+   - Queries Stripe API to check payment status
+   - Returns payment state: "disabled", "unpaid", or "paid"
 
 ### Testing Infrastructure
 
 Portal tests follow the same patterns as forum tests:
 
-- **Unit Tests** (`src/portal/token.spec.ts`, `src/portal/services/entry-state.spec.ts`):
-  - Test token parsing and validation
-  - Test service logic with mocked dependencies
-  - 27 tests for portal functionality
+- **Unit Tests**:
+  - `src/portal/token.spec.ts`: Token parsing and validation
+  - `src/portal/services/entry-state.spec.ts`: Entry state service with Stripe integration (16 tests)
+  - `src/portal/services/stripe-customer.spec.ts`: Customer management (4 tests)
+  - `src/portal/services/stripe-invoice.spec.ts`: Invoice checking (4 tests)
+  - `src/stripe.spec.ts`: Stripe client initialization (4 tests)
+  - Total: 40+ tests for portal functionality
 
 - **E2E Tests** (`src/portal/e2e/entry-state.spec.ts`):
   - Test complete request flows through global handler
@@ -887,12 +892,120 @@ For local development without a valid backend public key:
   - Test with mock tokens easily
   - No need for valid signing keys in development
 
-### Future Implementation (Part 6 & 7)
+### Stripe Integration (Part 6)
 
-**Part 6 - Stripe Integration**:
-- Use portal token data (userId, firstname, lastname, email) for Stripe customer management
-- Query Stripe API to check payment status
-- Return "paid" state when valid payment found
+#### Overview
+
+The portal integrates with Stripe to check payment status for items. The entry-state service queries Stripe to determine if a user has paid for a specific item.
+
+#### Stripe Client (`src/stripe.ts`)
+
+- **Purpose**: Initialize and provide Stripe client instance
+- **Function**: `getStripeClient(): Stripe | null`
+  - Loads config from `config.json`
+  - Returns Stripe client if valid secret key exists
+  - Returns `null` if no config (graceful degradation)
+- **API Version**: `2025-12-15.clover`
+- **Configuration**: Secret key from `config.portal.payment.stripe.sk`
+
+#### Customer Management Service (`src/portal/services/stripe-customer.ts`)
+
+Manages Stripe customers linked to Algorea users via metadata:
+
+- **Function**: `findOrCreateCustomer(stripe, userId, name, email): Promise<string>`
+- **Behavior**:
+  1. Search for customer by `metadata['user_id']` using Stripe search API
+  2. If 0 results: Create new customer with name, email, and `user_id` in metadata
+  3. If 1 result: Return customer ID
+  4. If >1 results: Log warning and return first customer ID
+- **Customer Fields**:
+  - `name`: Concatenation of `firstname` and `lastname` from token
+  - `email`: Email from token
+  - `metadata.user_id`: User ID from token (for linking)
+
+#### Invoice Checking Service (`src/portal/services/stripe-invoice.ts`)
+
+Checks if a customer has paid for a specific item:
+
+- **Function**: `hasPaidInvoice(stripe, customerId, itemId): Promise<boolean>`
+- **Behavior**:
+  1. Search invoices using Stripe search API with query:
+     - `customer:'${customerId}'`
+     - `metadata['item_id']:'${itemId}'`
+     - `status:'paid'`
+  2. If 0 results: Return `false`
+  3. If >=1 results: Return `true` (log warning if >1)
+- **Returns**: Boolean indicating payment status
+
+#### Entry State Service Flow
+
+```
+1. Extract and validate JWT token
+2. Check if payment is configured in config.json
+   → If not: return "disabled"
+3. Get Stripe client
+   → If null: return "disabled"
+4. Find or create customer using token data
+   → userId, firstname + lastname, email
+5. Check if customer has paid invoice for item
+   → Query by customerId and itemId
+6. Return payment state:
+   → "paid" if invoice found
+   → "unpaid" if no invoice found
+   → "unpaid" on Stripe API error (with error logging)
+```
+
+#### Error Handling
+
+- **Stripe API Errors**: Caught and logged, service returns "unpaid" state
+- **Network Errors**: Same behavior as API errors
+- **Invalid API Key**: Returns "disabled" if Stripe client cannot be created
+- **Missing Config**: Returns "disabled" gracefully
+
+#### Data Model
+
+**Customer Metadata**:
+```json
+{
+  "user_id": "string" // Links Stripe customer to Algorea user
+}
+```
+
+**Invoice Metadata** (expected):
+```json
+{
+  "item_id": "string" // Links invoice to Algorea item
+}
+```
+
+#### Testing
+
+- **Unit Tests**:
+  - `src/stripe.spec.ts`: Stripe client initialization
+  - `src/portal/services/stripe-customer.spec.ts`: Customer management (12 tests)
+  - `src/portal/services/stripe-invoice.spec.ts`: Invoice checking (4 tests)
+  - `src/portal/services/entry-state.spec.ts`: Updated with paid state tests (16 tests)
+- **Mocking**: Stripe SDK methods mocked for unit tests
+- **E2E Tests**: Full request flow with actual Stripe API calls (optional)
+
+#### Configuration
+
+**File**: `config.json`
+```json
+{
+  "portal": {
+    "payment": {
+      "stripe": {
+        "sk": "sk_test_YOUR_STRIPE_SECRET_KEY"
+      }
+    }
+  }
+}
+```
+
+**Note**: Secret key can be test or live key. For development, use Stripe test mode keys (`sk_test_*`).
+
+### Future Implementation (Part 7)
 
 **Part 7 - Checkout Session**:
 - Create Stripe checkout sessions

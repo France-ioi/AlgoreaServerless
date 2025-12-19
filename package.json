@@ -34,6 +34,7 @@
     "@types/aws-lambda": "^8.10.95",
     "jose": "^4.14.4",
     "lambda-api": "^1.2.0",
+    "stripe": "^20.1.0",
     "zod": "^4.1.11"
   },
   "devDependencies": {
