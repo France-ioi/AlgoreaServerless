@@ -45,4 +45,3 @@ export async function createCheckoutSession(
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return session.client_secret!;
 }
-

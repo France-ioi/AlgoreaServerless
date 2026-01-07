@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { hasPaidInvoice } from './stripe-invoice';
+import { hasPaidInvoice } from './invoice';
 
 describe('Stripe Invoice Service', () => {
   let mockStripe: jest.Mocked<Stripe>;

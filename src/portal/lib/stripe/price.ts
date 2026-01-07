@@ -1,6 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/naming-convention
 import Stripe from 'stripe';
-import { DecodingError } from '../../utils/errors';
+import { DecodingError } from '../../../utils/errors';
 
 export async function findPriceByItemId(
   stripe: Stripe,
@@ -25,4 +25,3 @@ export async function findPriceByItemId(
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return searchResults.data[0]!.id;
 }
-

@@ -1,6 +1,6 @@
 import { API } from 'lambda-api';
-import { getEntryState } from './services/entry-state';
-import { createCheckoutSession } from './services/checkout-session-handler';
+import { getEntryState } from './handlers/entry-state';
+import { createCheckoutSession } from './handlers/checkout-session';
 
 const restRoutes = (api: API): void => {
   api.get('/entry-state', getEntryState);

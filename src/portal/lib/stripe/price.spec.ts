@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
-import { findPriceByItemId } from './stripe-price';
-import { DecodingError } from '../../utils/errors';
+import { findPriceByItemId } from './price';
+import { DecodingError } from '../../../utils/errors';
 
 describe('Stripe Price Service', () => {
   let mockStripe: jest.Mocked<Stripe>;

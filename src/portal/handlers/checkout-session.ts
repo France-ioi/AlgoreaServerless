@@ -3,9 +3,9 @@ import { z } from 'zod';
 import { loadConfig } from '../../config';
 import { extractTokenFromHttp } from '../token';
 import { getStripeClient } from '../../stripe';
-import { findOrCreateCustomer } from './stripe-customer';
-import { findPriceByItemId } from './stripe-price';
-import { createCheckoutSession as createStripeCheckoutSession } from './checkout-session';
+import { findOrCreateCustomer } from '../lib/stripe/customer';
+import { findPriceByItemId } from '../lib/stripe/price';
+import { createCheckoutSession as createStripeCheckoutSession } from '../lib/stripe/checkout-session';
 import { DecodingError, ServerError } from '../../utils/errors';
 
 const requestBodySchema = z.object({
@@ -73,4 +73,3 @@ async function post(req: Request): Promise<{ client_secret: string }> {
 }
 
 export const createCheckoutSession: HandlerFunction = post;
-

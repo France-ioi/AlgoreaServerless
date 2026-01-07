@@ -1,18 +1,18 @@
 import { Request } from 'lambda-api';
-import { createCheckoutSession } from './checkout-session-handler';
+import { createCheckoutSession } from './checkout-session';
 import * as config from '../../config';
 import * as stripe from '../../stripe';
-import * as stripeCustomer from './stripe-customer';
-import * as stripePrice from './stripe-price';
-import * as checkoutSession from './checkout-session';
+import * as stripeCustomer from '../lib/stripe/customer';
+import * as stripePrice from '../lib/stripe/price';
+import * as checkoutSession from '../lib/stripe/checkout-session';
 import * as token from '../token';
 import { DecodingError, ServerError } from '../../utils/errors';
 
 jest.mock('../../config');
 jest.mock('../../stripe');
-jest.mock('./stripe-customer');
-jest.mock('./stripe-price');
-jest.mock('./checkout-session');
+jest.mock('../lib/stripe/customer');
+jest.mock('../lib/stripe/price');
+jest.mock('../lib/stripe/checkout-session');
 jest.mock('../token');
 
 const mockLoadConfig = config.loadConfig as jest.MockedFunction<typeof config.loadConfig>;

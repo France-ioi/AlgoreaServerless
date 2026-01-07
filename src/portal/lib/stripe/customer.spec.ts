@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { findOrCreateCustomer } from './stripe-customer';
+import { findOrCreateCustomer } from './customer';
 
 describe('Stripe Customer Service', () => {
   let mockStripe: jest.Mocked<Stripe>;

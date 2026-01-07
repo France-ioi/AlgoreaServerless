@@ -1,15 +1,15 @@
 import { getEntryState } from './entry-state';
 import * as config from '../../config';
 import * as stripe from '../../stripe';
-import * as stripeCustomer from './stripe-customer';
-import * as stripeInvoice from './stripe-invoice';
+import * as stripeCustomer from '../lib/stripe/customer';
+import * as stripeInvoice from '../lib/stripe/invoice';
 import { generatePortalToken } from '../../testutils/portal-token-generator';
 import { initializeKeys } from '../../testutils/token-generator';
 
 jest.mock('../../config');
 jest.mock('../../stripe');
-jest.mock('./stripe-customer');
-jest.mock('./stripe-invoice');
+jest.mock('../lib/stripe/customer');
+jest.mock('../lib/stripe/invoice');
 
 const mockLoadConfig = config.loadConfig as jest.MockedFunction<typeof config.loadConfig>;
 const mockGetStripeClient = stripe.getStripeClient as jest.MockedFunction<typeof stripe.getStripeClient>;

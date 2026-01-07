@@ -2,8 +2,8 @@ import { HandlerFunction, Request } from 'lambda-api';
 import { loadConfig } from '../../config';
 import { extractTokenFromHttp } from '../token';
 import { getStripeClient } from '../../stripe';
-import { findOrCreateCustomer } from './stripe-customer';
-import { hasPaidInvoice } from './stripe-invoice';
+import { findOrCreateCustomer } from '../lib/stripe/customer';
+import { hasPaidInvoice } from '../lib/stripe/invoice';
 
 async function get(req: Request): Promise<{ payment: { state: string } }> {
   // Extract and validate token

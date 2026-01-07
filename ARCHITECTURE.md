@@ -123,7 +123,7 @@ AlgoreaServerless/
 │   │   └── table.ts       # Base table class
 │   ├── forum/             # Forum feature module
 │   │   ├── routes.ts      # Route and action registration
-│   │   ├── services/      # Business logic layer
+│   │   ├── handlers/      # HTTP/WebSocket request handlers
 │   │   │   ├── messages.ts
 │   │   │   └── thread-subscription.ts
 │   │   ├── e2e/           # End-to-end tests
@@ -131,9 +131,15 @@ AlgoreaServerless/
 │   │   └── token.ts       # Forum JWT token parsing
 │   ├── portal/            # Portal feature module
 │   │   ├── routes.ts      # Route registration
-│   │   ├── services/      # Business logic layer
-│   │   │   ├── entry-state.ts
-│   │   │   └── entry-state.spec.ts
+│   │   ├── handlers/      # HTTP request handlers
+│   │   │   ├── checkout-session.ts
+│   │   │   └── entry-state.ts
+│   │   ├── lib/
+│   │   │   └── stripe/    # Stripe API wrapper utilities
+│   │   │       ├── checkout-session.ts
+│   │   │       ├── customer.ts
+│   │   │       ├── invoice.ts
+│   │   │       └── price.ts
 │   │   ├── e2e/           # End-to-end tests
 │   │   ├── token.ts       # Portal JWT token parsing
 │   │   └── token.spec.ts  # Token tests
@@ -535,7 +541,8 @@ Manual API Gateway configuration required:
 - **Modular Structure**: Feature-based organization (forum/)
 - **Separation of Concerns**:
   - Routes: API endpoint registration
-  - Services: Business logic implementation
+  - Handlers: HTTP/WebSocket request handlers
+  - lib/: Utility modules (e.g., Stripe API wrappers)
   - Models: Data access layer
   - Utils: Reusable utilities
 
@@ -573,7 +580,7 @@ Manual API Gateway configuration required:
   - Comma delimiters for type members
   - Explicit function return types
 - **Pre-commit Hooks**: Husky + lint-staged
-- **No Console**: Console statements trigger errors (except in services)
+- **No Console**: Console statements trigger errors (except in handlers and lib/)
 
 ### Documentation
 
@@ -673,7 +680,7 @@ Tests are organized by type:
    - Verify CRUD operations and queries
    - Test data isolation between threads
 
-3. **Service Tests** (`src/forum/services/**/*.spec.ts`):
+3. **Handler Tests** (`src/forum/handlers/**/*.spec.ts`):
    - Test business logic with mocked dependencies
    - Verify WebSocket broadcasting behavior
    - Test permission enforcement
@@ -770,9 +777,9 @@ Two issues that previously prevented full test coverage in DynamoDB Local have b
 
 The portal module provides payment-related functionality for the Algorea platform. It follows the same architectural patterns as the forum module but focuses on payment state management and Stripe integration.
 
-### Portal Services
+### Portal Handlers
 
-#### Entry State Service (`src/portal/services/entry-state.ts`)
+#### Entry State Handler (`src/portal/handlers/entry-state.ts`)
 
 - **Endpoint**: `GET /sls/portal/entry-state`
 - **Authentication**: Required (Bearer token in Authorization header)
@@ -815,7 +822,7 @@ The portal module provides payment-related functionality for the Algorea platfor
     └─────────┬──────────┘    └──────────┬─────────┘
               │                           │
     ┌─────────▼──────────┐    ┌──────────▼─────────────┐
-    │  Forum Services    │    │  Portal Services       │
+    │  Forum Handlers    │    │  Portal Handlers       │
     │  - messages        │    │  - entry-state         │
     │  - subscriptions   │    │  - stripe-customer     │
     └────────────────────┘    │  - stripe-invoice      │
@@ -862,9 +869,9 @@ Portal tests follow the same patterns as forum tests:
 
 - **Unit Tests**:
   - `src/portal/token.spec.ts`: Token parsing and validation
-  - `src/portal/services/entry-state.spec.ts`: Entry state service with Stripe integration (16 tests)
-  - `src/portal/services/stripe-customer.spec.ts`: Customer management (4 tests)
-  - `src/portal/services/stripe-invoice.spec.ts`: Invoice checking (4 tests)
+  - `src/portal/handlers/entry-state.spec.ts`: Entry state handler with Stripe integration (16 tests)
+  - `src/portal/lib/stripe/customer.spec.ts`: Customer management (4 tests)
+  - `src/portal/lib/stripe/invoice.spec.ts`: Invoice checking (4 tests)
   - `src/stripe.spec.ts`: Stripe client initialization (4 tests)
   - Total: 40+ tests for portal functionality
 
@@ -908,7 +915,7 @@ The portal integrates with Stripe to check payment status for items. The entry-s
 - **API Version**: `2025-12-15.clover`
 - **Configuration**: Secret key from `config.portal.payment.stripe.sk`
 
-#### Customer Management Service (`src/portal/services/stripe-customer.ts`)
+#### Customer Management (`src/portal/lib/stripe/customer.ts`)
 
 Manages Stripe customers linked to Algorea users via metadata:
 
@@ -923,7 +930,7 @@ Manages Stripe customers linked to Algorea users via metadata:
   - `email`: Email from token
   - `metadata.user_id`: User ID from token (for linking)
 
-#### Invoice Checking Service (`src/portal/services/stripe-invoice.ts`)
+#### Invoice Checking (`src/portal/lib/stripe/invoice.ts`)
 
 Checks if a customer has paid for a specific item:
 
@@ -982,9 +989,9 @@ Checks if a customer has paid for a specific item:
 
 - **Unit Tests**:
   - `src/stripe.spec.ts`: Stripe client initialization
-  - `src/portal/services/stripe-customer.spec.ts`: Customer management (12 tests)
-  - `src/portal/services/stripe-invoice.spec.ts`: Invoice checking (4 tests)
-  - `src/portal/services/entry-state.spec.ts`: Updated with paid state tests (16 tests)
+  - `src/portal/lib/stripe/customer.spec.ts`: Customer management (12 tests)
+  - `src/portal/lib/stripe/invoice.spec.ts`: Invoice checking (4 tests)
+  - `src/portal/handlers/entry-state.spec.ts`: Updated with paid state tests (16 tests)
 - **Mocking**: Stripe SDK methods mocked for unit tests
 - **E2E Tests**: Full request flow with actual Stripe API calls (optional)
 
@@ -1031,7 +1038,7 @@ The checkout session service enables users to initiate payments through Stripe C
 
 #### Architecture Components
 
-**Price Search Service** (`src/portal/services/stripe-price.ts`)
+**Price Search** (`src/portal/lib/stripe/price.ts`)
 - **Function**: `findPriceByItemId(stripe, itemId): Promise<string>`
 - **Purpose**: Locate Stripe price by item_id metadata
 - **Behavior**:
@@ -1040,7 +1047,7 @@ The checkout session service enables users to initiate payments through Stripe C
   - Throws `DecodingError` if no price found (returns 400 to client)
   - Logs warning if multiple prices found, returns first
 
-**Checkout Session Service** (`src/portal/services/checkout-session.ts`)
+**Checkout Session** (`src/portal/lib/stripe/checkout-session.ts`)
 - **Function**: `createCheckoutSession(stripe, customerId, priceId, itemId, returnUrl): Promise<string>`
 - **Purpose**: Create Stripe checkout session with payment configuration
 - **Configuration**:
@@ -1055,7 +1062,7 @@ The checkout session service enables users to initiate payments through Stripe C
   - `allow_promotion_codes: false` - No promo codes
   - `mode: payment` - One-time payment
 
-**Checkout Session Handler** (`src/portal/services/checkout-session-handler.ts`)
+**Checkout Session Handler** (`src/portal/handlers/checkout-session.ts`)
 - Orchestrates the checkout session creation flow
 - Validates request body with Zod schema
 - Reuses existing customer management service
