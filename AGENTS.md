@@ -22,7 +22,8 @@ The archicture of the project is documented in `ARCHITECTURE.md`.
 # Documentation and architecture
 
 - each time you are write a plan, save it in the `.cursor/plans` directory.
-- eacht time to do a change which affect the global app architecture, update the `.cursor/ARCHITECTURE.md` document while keeping it shorter than 1000 lines.
+- each time to do a change which affect the global app architecture, update the `.cursor/ARCHITECTURE.md` document while keeping it shorter than 1000 lines.
+- each time you update the rest API of the portal service, update the `src/portal/openapi.yaml` file
 
 # Interactions
 

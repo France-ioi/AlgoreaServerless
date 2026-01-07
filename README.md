@@ -74,6 +74,16 @@ This is particularly useful for CI/CD environments like CircleCI where you can s
 
 > **Note**: The environment variable takes precedence over config files.
 
+## API Documentation
+
+The Portal API is documented using OpenAPI 3.0 specification. To view the interactive documentation:
+
+```sh
+npx swagger-ui-watcher src/portal/openapi.yaml
+```
+
+This will open an interactive Swagger UI in your browser where you can explore the API endpoints, request/response schemas, and authentication requirements.
+
 ## Test
 
 ```sh

@@ -1,0 +1,282 @@
+openapi: 3.0.3
+info:
+  title: Algorea Portal API
+  description: |
+    Portal API for Algorea platform, providing payment state management and Stripe checkout integration.
+    
+    ## Authentication
+    All endpoints require a valid JWT token in the Authorization header with Bearer scheme.
+    
+    The JWT token must contain:
+    - `item_id`: Item identifier
+    - `user_id`: User identifier  
+    - `firstname`: User's first name
+    - `lastname`: User's last name
+    - `email`: User's email address
+    
+    ## Base URL
+    The API is deployed at `/sls/portal` prefix on the Lambda ALB endpoint.
+  version: 2.0.0
+  contact:
+    name: France IOI
+    url: https://github.com/France-ioi/AlgoreaServerless
+  license:
+    name: MIT
+    url: https://github.com/France-ioi/AlgoreaServerless/blob/master/LICENSE
+
+servers:
+  - url: https://{environment}/sls/portal
+    description: Portal API endpoints
+    variables:
+      environment:
+        default: api.example.com
+        description: API environment (production/staging/dev)
+
+tags:
+  - name: payment
+    description: Payment state and checkout operations
+
+security:
+  - bearerAuth: []
+
+paths:
+  /entry-state:
+    get:
+      tags:
+        - payment
+      summary: Get payment state for an item
+      description: |
+        Returns the current payment state for the item specified in the JWT token.
+        
+        **Payment States:**
+        - `disabled`: Payment is not configured (no Stripe integration)
+        - `unpaid`: Payment is configured but user has not paid for this item
+        - `paid`: User has a paid invoice for this item in Stripe
+        
+        The service checks Stripe for a paid invoice linked to the user (via customer metadata)
+        and the item (via invoice metadata).
+      operationId: getEntryState
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Payment state retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryStateResponse'
+              examples:
+                disabled:
+                  summary: Payment not configured
+                  value:
+                    payment:
+                      state: disabled
+                unpaid:
+                  summary: Payment required
+                  value:
+                    payment:
+                      state: unpaid
+                paid:
+                  summary: Payment completed
+                  value:
+                    payment:
+                      state: paid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /checkout-session:
+    post:
+      tags:
+        - payment
+      summary: Create Stripe checkout session
+      description: |
+        Creates a Stripe Checkout session for the item specified in the JWT token.
+        
+        The checkout session is configured with:
+        - Automatic tax calculation
+        - Billing address collection
+        - Tax ID collection (optional, if supported by country)
+        - Invoice generation on successful payment
+        - Embedded UI mode for custom frontend integration
+        
+        **Workflow:**
+        1. Find or create Stripe customer (linked to user via metadata)
+        2. Find price for item (via price metadata)
+        3. Create checkout session with return URL
+        4. Return client_secret for frontend to render Stripe UI
+        
+        **Prerequisites:**
+        - Payment must be configured in `config.json`
+        - Stripe must have an active price with `metadata.item_id` matching the token's item_id
+      operationId: createCheckoutSession
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutSessionRequest'
+            examples:
+              basic:
+                summary: Create checkout session
+                value:
+                  return_url: https://example.com/payment/complete
+      responses:
+        '200':
+          description: Checkout session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSessionResponse'
+              examples:
+                success:
+                  summary: Session created
+                  value:
+                    client_secret: cs_test_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token signed with ES256 algorithm. 
+        
+        Token payload must include:
+        - `item_id`: Item identifier (string)
+        - `user_id`: User identifier (string)
+        - `firstname`: User's first name (string)
+        - `lastname`: User's last name (string)
+        - `email`: User's email address (string)
+
+  schemas:
+    EntryStateResponse:
+      type: object
+      required:
+        - payment
+      properties:
+        payment:
+          type: object
+          required:
+            - state
+          properties:
+            state:
+              type: string
+              enum:
+                - disabled
+                - unpaid
+                - paid
+              description: |
+                Current payment state:
+                - `disabled`: Payment not configured
+                - `unpaid`: Payment configured but not completed
+                - `paid`: Payment completed
+              example: unpaid
+
+    CheckoutSessionRequest:
+      type: object
+      required:
+        - return_url
+      properties:
+        return_url:
+          type: string
+          format: uri
+          minLength: 1
+          description: |
+            URL where user will be redirected after completing or canceling the checkout.
+            Must be a valid URL (HTTPS recommended for production).
+          example: https://example.com/payment/complete
+
+    CheckoutSessionResponse:
+      type: object
+      required:
+        - client_secret
+      properties:
+        client_secret:
+          type: string
+          description: |
+            Stripe checkout session client secret. 
+            Use this with Stripe.js to render the embedded checkout UI.
+            
+            The secret is prefixed with `cs_test_` (test mode) or `cs_live_` (production).
+          example: cs_test_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Human-readable error category
+          example: authentication error
+        details:
+          description: Additional error details (format varies by error type)
+          oneOf:
+            - type: string
+            - type: object
+
+  responses:
+    BadRequest:
+      description: Invalid request data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingReturnUrl:
+              summary: Missing return_url
+              value:
+                message: decoding error
+                details: Missing or invalid return_url in request body
+            priceNotFound:
+              summary: Price not found
+              value:
+                message: decoding error
+                details: No price found for item
+
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missingToken:
+              summary: Missing authorization header
+              value:
+                message: authentication error
+                details: Missing authorization header
+            invalidToken:
+              summary: Invalid JWT
+              value:
+                message: authentication error
+                details: JWT verification failed
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            paymentNotConfigured:
+              summary: Payment not configured
+              value:
+                message: internal server error
+                details: Payment is not configured
+            stripeError:
+              summary: Stripe API error
+              value:
+                message: internal server error
+                details: Failed to create checkout session
