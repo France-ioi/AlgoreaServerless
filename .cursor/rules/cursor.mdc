@@ -1,6 +1,4 @@
 ---
-context: true
-priority: high
-scope: project
+alwaysApply: true
 ---
 Use what's written in @AGENTS.md and what's in @.cursor/rules/local.mdc if present.
