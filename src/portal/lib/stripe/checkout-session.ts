@@ -38,7 +38,7 @@ export async function createCheckoutSession(
     },
     tax_id_collection: {
       enabled: true,
-      required: 'if_supported',
+      required: 'never',
     },
   });
 
