@@ -67,6 +67,10 @@ functions:
     #       route: $default
     #   - ALB
 
+package:
+  patterns:
+    - 'config.json'
+
 plugins:
   - serverless-plugin-typescript
   - serverless-dynamodb
