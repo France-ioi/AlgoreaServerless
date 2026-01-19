@@ -1,27 +1,38 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { parseWsToken } from './token';
 
 /**
  * Handles websocket connection events.
  * Called when a client establishes a websocket connection.
  */
-export function handleConnect(event: APIGatewayProxyEvent): APIGatewayProxyResult {
+export async function handleConnect(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const connectionId = event.requestContext.connectionId;
   const sourceIp = event.requestContext.identity?.sourceIp;
   const connectedAt = event.requestContext.connectedAt;
   const token = event.queryStringParameters?.token;
+
+  if (!token) {
+    return { statusCode: 401, body: 'Unauthorized: missing token' };
+  }
+
+  let userId: string;
+  try {
+    const wsToken = await parseWsToken(token, process.env.BACKEND_PUBLIC_KEY);
+    userId = wsToken.userId;
+  } catch (err) {
+    return { statusCode: 401, body: `Unauthorized: ${String(err)}` };
+  }
 
   // eslint-disable-next-line no-console
   console.log('WebSocket connection established', {
     connectionId,
     sourceIp,
     connectedAt,
-    hasToken: !!token,
+    userId,
   });
 
   // TODO: Implement connection storage (e.g., DynamoDB)
-  // - Store connection metadata (connectionId, userId from token, connectedAt, etc.)
-  // - Validate token if present
-  // - Associate connection with user identity
+  // - Store connection metadata (connectionId, userId, connectedAt, etc.)
 
   return { statusCode: 200, body: 'Connected' };
 }
