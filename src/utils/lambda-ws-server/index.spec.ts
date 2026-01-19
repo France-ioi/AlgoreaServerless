@@ -72,7 +72,7 @@ describe('WebSocket Server', () => {
 
   describe('Event Handling', () => {
 
-    it('should return 200 OK for CONNECT events', async () => {
+    it('should return 200 Connected for CONNECT events', async () => {
       const wsServer = new WsServer();
       const event = mockWebSocketConnectEvent();
       const context = mockContext();
@@ -81,11 +81,11 @@ describe('WebSocket Server', () => {
 
       expect(result).toEqual({
         statusCode: 200,
-        body: 'ok',
+        body: 'Connected',
       });
     });
 
-    it('should return 200 OK for DISCONNECT events', async () => {
+    it('should return 200 Disconnected for DISCONNECT events', async () => {
       const wsServer = new WsServer();
       const event = mockWebSocketDisconnectEvent();
       const context = mockContext();
@@ -94,7 +94,47 @@ describe('WebSocket Server', () => {
 
       expect(result).toEqual({
         statusCode: 200,
-        body: 'ok',
+        body: 'Disconnected',
+      });
+    });
+
+    it('should call custom connect handler when registered', async () => {
+      const wsServer = new WsServer();
+      const connectHandler = jest.fn().mockResolvedValue({
+        statusCode: 200,
+        body: 'Custom connected',
+      });
+      wsServer.onConnect(connectHandler);
+
+      const event = mockWebSocketConnectEvent();
+      const context = mockContext();
+
+      const result = await wsServer.handler(event, context);
+
+      expect(connectHandler).toHaveBeenCalledWith(event);
+      expect(result).toEqual({
+        statusCode: 200,
+        body: 'Custom connected',
+      });
+    });
+
+    it('should call custom disconnect handler when registered', async () => {
+      const wsServer = new WsServer();
+      const disconnectHandler = jest.fn().mockResolvedValue({
+        statusCode: 200,
+        body: 'Custom disconnected',
+      });
+      wsServer.onDisconnect(disconnectHandler);
+
+      const event = mockWebSocketDisconnectEvent();
+      const context = mockContext();
+
+      const result = await wsServer.handler(event, context);
+
+      expect(disconnectHandler).toHaveBeenCalledWith(event);
+      expect(result).toEqual({
+        statusCode: 200,
+        body: 'Custom disconnected',
       });
     });
 

@@ -4,12 +4,16 @@ import { RouteNotFound } from '../errors';
 
 interface RegisterOptions { prefix?: string }
 type HandlerFunction = (req: Request) => void | Promise<void>;
+type ConnectHandler = (event: APIGatewayProxyEvent) => APIGatewayProxyResult | Promise<APIGatewayProxyResult>;
+type DisconnectHandler = (event: APIGatewayProxyEvent) => APIGatewayProxyResult | Promise<APIGatewayProxyResult>;
 
 /**
  * A minimal websocket "server" responding to the API GW websocket requests. Inspired by `lambda-api`.
  */
 export class WsServer {
   actions: Record<string, HandlerFunction> = {};
+  private connectHandler?: ConnectHandler;
+  private disconnectHandler?: DisconnectHandler;
 
   register(subActions: (api: WsServer) => void, options?: RegisterOptions): void {
     const subServer = new WsServer();
@@ -23,6 +27,14 @@ export class WsServer {
 
   on(action: string, handler: HandlerFunction): void {
     this.actions[action] = handler;
+  }
+
+  onConnect(handler: ConnectHandler): void {
+    this.connectHandler = handler;
+  }
+
+  onDisconnect(handler: DisconnectHandler): void {
+    this.disconnectHandler = handler;
   }
 
   private async handleMessage(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -41,13 +53,19 @@ export class WsServer {
   }
 
   async handler(event: APIGatewayProxyEvent, _context: Context): Promise<APIGatewayProxyResult> {
-    const okResult = { statusCode: 200, body: 'ok' };
-
     switch (event.requestContext.eventType) {
-      case 'CONNECT': return okResult;
-      case 'DISCONNECT': return okResult;
-      case 'MESSAGE': return this.handleMessage(event);
-      default: return { statusCode: 500, body: `event type non supported: ${event.requestContext.eventType}` };
+      case 'CONNECT':
+        return this.connectHandler
+          ? this.connectHandler(event)
+          : { statusCode: 200, body: 'Connected' };
+      case 'DISCONNECT':
+        return this.disconnectHandler
+          ? this.disconnectHandler(event)
+          : { statusCode: 200, body: 'Disconnected' };
+      case 'MESSAGE':
+        return this.handleMessage(event);
+      default:
+        return { statusCode: 500, body: `event type non supported: ${event.requestContext.eventType}` };
     }
   }
 }

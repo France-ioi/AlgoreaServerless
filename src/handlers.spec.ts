@@ -29,14 +29,23 @@ jest.mock('./utils/lambda-ws-server', () => {
   const mockWsServer = {
     register: jest.fn(),
     on: jest.fn(),
+    onConnect: jest.fn(),
+    onDisconnect: jest.fn(),
     handler: jest.fn().mockResolvedValue({ statusCode: 200, body: 'WS response' }),
   };
   return jest.fn(() => mockWsServer);
 });
 
+// Mock the websocket handlers
+jest.mock('./websocket/handlers', () => ({
+  handleConnect: jest.fn(),
+  handleDisconnect: jest.fn(),
+}));
+
 // Import mocked modules
 import createAPI from 'lambda-api';
 import createWsServer from './utils/lambda-ws-server';
+import { handleConnect, handleDisconnect } from './websocket/handlers';
 
 describe('Global Handler', () => {
 
@@ -205,4 +214,5 @@ describe('Global Handler', () => {
   });
 
 });
+
 

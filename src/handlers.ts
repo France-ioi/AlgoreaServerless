@@ -5,6 +5,7 @@ import { forumRoutes, forumWsActions } from './forum/routes';
 import { portalRoutes } from './portal/routes';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
+import { handleConnect, handleDisconnect } from './websocket/handlers';
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 // HTTP REST handlers
@@ -33,6 +34,11 @@ api.register(portalRoutes, { prefix: '/portal' });
 
 const wsServer = createWsServer();
 
+// Common websocket lifecycle handlers
+wsServer.onConnect(handleConnect);
+wsServer.onDisconnect(handleDisconnect);
+
+// Action handlers
 wsServer.register(forumWsActions, { prefix: 'forum' });
 wsServer.on('heartbeat', () => {});
 
