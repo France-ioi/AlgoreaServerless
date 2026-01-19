@@ -11,7 +11,7 @@ import corsMiddleware from './middlewares/cors';
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 const api = createAPI({
-  base: 'sls',
+  base: process.env.API_BASE,
   logger: true,
 });
 
