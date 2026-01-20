@@ -79,6 +79,21 @@ describe('JWT Module', () => {
       await expect(verifyJwt('any-token', ''))
         .rejects.toThrow(ServerError);
     });
+
+    it('should verify JWT with PEM key missing newlines', async () => {
+      // Simulate a PEM key that's been stored without newlines (common in env vars)
+      const pemWithoutNewlines = publicKeyPem.replace(/\n/g, '');
+
+      const payload = { user_id: 'user123' };
+      const token = await new SignJWT(payload)
+        .setProtectedHeader({ alg: 'ES256' })
+        .setExpirationTime('1h')
+        .sign(privateKey);
+
+      const result = await verifyJwt(token, pemWithoutNewlines);
+
+      expect(result.user_id).toBe('user123');
+    });
   });
 
   describe('verifyJwt with NO_SIG_CHECK', () => {

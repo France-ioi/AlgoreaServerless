@@ -2,6 +2,38 @@ import { importSPKI, jwtVerify, decodeJwt, JWTPayload } from 'jose';
 import { AuthenticationError, ServerError } from '../utils/errors';
 
 /**
+ * Normalize a PEM-formatted key to ensure proper line breaks.
+ * Some environments strip newlines from PEM keys, which breaks parsing.
+ */
+function normalizePem(pem: string): string {
+  // If it already has proper newlines, return as-is
+  if (pem.includes('\n')) {
+    return pem;
+  }
+
+  // Extract the type (e.g., "PUBLIC KEY", "RSA PUBLIC KEY")
+  const headerMatch = pem.match(/-----BEGIN ([^-]+)-----/);
+  const footerMatch = pem.match(/-----END ([^-]+)-----/);
+
+  if (!headerMatch || !footerMatch) {
+    return pem; // Not a valid PEM format, return as-is
+  }
+
+  const type = headerMatch[1];
+  const header = `-----BEGIN ${type}-----`;
+  const footer = `-----END ${type}-----`;
+
+  // Extract the base64 content between header and footer
+  const base64Content = pem
+    .replace(header, '')
+    .replace(footer, '')
+    .trim();
+
+  // Reconstruct with proper newlines
+  return `${header}\n${base64Content}\n${footer}`;
+}
+
+/**
  * Determine if JWT signature verification should be performed
  * @returns true if signature should be verified, false to skip verification
  * @throws ServerError if NO_SIG_CHECK=1 in non-dev environment
@@ -44,7 +76,8 @@ export async function verifyJwt(token: string, publicKeyPem?: string): Promise<J
     throw new ServerError('no backend public key found to verify the token');
   }
 
-  const publicKey = await importSPKI(publicKeyPem, 'ES256');
+  const normalizedPem = normalizePem(publicKeyPem);
+  const publicKey = await importSPKI(normalizedPem, 'ES256');
   const { payload } = await jwtVerify(token, publicKey).catch(
     err => {
       throw new AuthenticationError(`JWT verification failed: ${(err as Error).message}`);
