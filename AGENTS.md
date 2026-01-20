@@ -1,31 +1,61 @@
-
 You are an expert in TypeScript and backend development. You write functional, maintainable, performant, and accessible code following TypeScript best practices.
 
-The archicture of the project is documented in `ARCHITECTURE.md`.
+The architecture of the project is documented in `ARCHITECTURE.md`.
+
+# Project overview
+
+This is an AWS Serverless application using:
+- **Serverless Framework** for deployment
+- **AWS Lambda** for compute
+- **DynamoDB** for storage (single-table design with pk/sk keys)
+- **API Gateway** for HTTP REST and WebSocket APIs
 
 # Code quality
 
-- files should not be longer than 300 lines.
-- the length of the `try` blocks should be as short as possible so that they only catch a specific error.
+## General guidelines
+- Files should not be longer than 300 lines
+- Keep `try` blocks as short as possible to catch only specific errors
+- Use Zod for runtime validation of external data (API inputs, DB results, tokens)
 
-## TypeScript Best Practices
-
+## TypeScript best practices
 - Use strict type checking
 - Prefer type inference when the type is obvious
 - Avoid the `any` type; use `unknown` when type is uncertain
+- Use interfaces for object shapes, types for unions/intersections
 
+## Error handling
+- Use custom error classes from `src/utils/errors.ts` (AuthenticationError, DecodingError, ServerError, etc.)
+- Errors are handled by the error-handling middleware for HTTP, or caught in WsServer for WebSocket
 
 ## Linting
-- Linting rules are defined in the `.eslintrc.js` file
-- Use `.editorconfig` file for basic editor config
+- Linting rules are defined in `.eslintrc.js`
+- Use `.editorconfig` for basic editor config
+- Always run `npm run lint` after changes
+
+# Testing
+
+- Run tests with `npm test`
+- Tests use Jest with DynamoDB Local for integration tests
+- Test files are colocated with source files using `.spec.ts` suffix
+- E2E tests are in `e2e/` subdirectories
+- Mock external dependencies (Stripe, etc.) in tests
+- **Mocks must match actual API calls** - verify mocked methods/properties match what the code actually uses
+- **E2E tests with external services** should skip gracefully when the service isn't configured (e.g., missing Stripe product)
+
+# Database patterns
+
+- Single-table design: all entities share the same table with `pk` (string) and `sk` (number) keys
+- Use `Table` base class from `src/dbmodels/table.ts` for DB operations
+- Use PartiQL for queries via `sqlRead()` and `sqlWrite()` methods
+- TTL is used for auto-expiring records (e.g., WebSocket connections)
 
 # Documentation and architecture
 
-- each time you are write a plan, save it in the `.cursor/plans` directory.
-- each time to do a change which affect the global app architecture, update the `.cursor/ARCHITECTURE.md` document while keeping it shorter than 1000 lines.
-- each time you update the rest API of the portal service, update the `src/portal/openapi.yaml` file
+- Save plans in the `.cursor/plans` directory
+- Update `ARCHITECTURE.md` when making architectural changes (keep under 1000 lines)
+- Update `src/portal/openapi.yaml` when modifying the portal REST API
 
 # Interactions
 
-- as much as possible, when you are unsure about something, ask!
-- never use the "cd" command
+- When unsure about something, ask!
+- Never use the `cd` command in terminal
