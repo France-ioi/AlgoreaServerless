@@ -1,11 +1,18 @@
 import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
 import { Request } from './request';
 import { RouteNotFound } from '../errors';
+import { wslog, WsLogContext } from './logger';
 
 interface RegisterOptions { prefix?: string }
 type HandlerFunction = (req: Request) => void | Promise<void>;
-type ConnectHandler = (event: APIGatewayProxyEvent) => APIGatewayProxyResult | Promise<APIGatewayProxyResult>;
-type DisconnectHandler = (event: APIGatewayProxyEvent) => APIGatewayProxyResult | Promise<APIGatewayProxyResult>;
+
+/** Extended result type that allows handlers to return userId for logging */
+export interface WsHandlerResult extends APIGatewayProxyResult {
+  userId?: string,
+}
+
+type ConnectHandler = (event: APIGatewayProxyEvent) => WsHandlerResult | Promise<WsHandlerResult>;
+type DisconnectHandler = (event: APIGatewayProxyEvent) => WsHandlerResult | Promise<WsHandlerResult>;
 
 /**
  * A minimal websocket "server" responding to the API GW websocket requests. Inspired by `lambda-api`.
@@ -53,20 +60,47 @@ export class WsServer {
   }
 
   async handler(event: APIGatewayProxyEvent, _context: Context): Promise<APIGatewayProxyResult> {
+    const logCtx: WsLogContext = { event };
+    const startTime = Date.now();
+
+    wslog(logCtx, 'request started');
+
+    let result: WsHandlerResult;
+
     switch (event.requestContext.eventType) {
       case 'CONNECT':
-        return this.connectHandler
-          ? this.connectHandler(event)
+        result = this.connectHandler
+          ? await this.connectHandler(event)
           : { statusCode: 200, body: 'Connected' };
+        break;
       case 'DISCONNECT':
-        return this.disconnectHandler
-          ? this.disconnectHandler(event)
+        result = this.disconnectHandler
+          ? await this.disconnectHandler(event)
           : { statusCode: 200, body: 'Disconnected' };
+        break;
       case 'MESSAGE':
-        return this.handleMessage(event);
+        result = await this.handleMessage(event);
+        break;
       default:
-        return { statusCode: 500, body: `event type non supported: ${event.requestContext.eventType}` };
+        result = { statusCode: 500, body: `event type non supported: ${event.requestContext.eventType}` };
     }
+
+    const elapsedMs = Date.now() - startTime;
+    const isError = result.statusCode >= 400;
+
+    wslog(logCtx, 'request complete', {
+      resp_status: result.statusCode,
+      resp_elapsed_ms: elapsedMs,
+      resp_bytes_length: result.body?.length ?? 0,
+      user_id: result.userId,
+      resp_error_msg: isError ? result.body : undefined,
+    });
+
+    // Return standard APIGatewayProxyResult (without userId)
+    return {
+      statusCode: result.statusCode,
+      body: result.body,
+    };
   }
 }
 

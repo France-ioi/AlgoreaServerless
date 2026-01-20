@@ -21,18 +21,14 @@ const MockUserConnections = UserConnections as jest.MockedClass<typeof UserConne
 
 describe('WebSocket Handlers', () => {
 
-  // Spy on console.log to verify logging behavior
-  let consoleLogSpy: jest.SpyInstance;
   const originalEnv = process.env;
 
   beforeEach(() => {
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
     jest.clearAllMocks();
     process.env = { ...originalEnv, BACKEND_PUBLIC_KEY: 'test-public-key' };
   });
 
   afterEach(() => {
-    consoleLogSpy.mockRestore();
     process.env = originalEnv;
   });
 
@@ -63,7 +59,7 @@ describe('WebSocket Handlers', () => {
       expect(result.body).toContain('JWT verification failed');
     });
 
-    it('should return 200 Connected when token is valid', async () => {
+    it('should return 200 Connected with userId when token is valid', async () => {
       const event = mockWebSocketConnectEvent();
       event.queryStringParameters = { token: 'valid-token' };
       mockParseWsToken.mockResolvedValue({ userId: 'user-123', exp: 9999999999 });
@@ -73,6 +69,7 @@ describe('WebSocket Handlers', () => {
       expect(result).toEqual({
         statusCode: 200,
         body: 'Connected',
+        userId: 'user-123',
       });
     });
 
@@ -110,39 +107,6 @@ describe('WebSocket Handlers', () => {
       expect(mockParseWsToken).toHaveBeenCalledWith('my-token', 'test-public-key');
     });
 
-    it('should log connection details with userId', async () => {
-      const event = mockWebSocketConnectEvent();
-      event.requestContext.connectionId = 'test-connection-123';
-      event.requestContext.identity = { ...event.requestContext.identity, sourceIp: '192.168.1.1' };
-      event.requestContext.connectedAt = 1234567890;
-      event.queryStringParameters = { token: 'valid-token' };
-      mockParseWsToken.mockResolvedValue({ userId: 'user-789', exp: 9999999999 });
-
-      await handleConnect(event);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        'WebSocket connection established',
-        expect.objectContaining({
-          connectionId: 'test-connection-123',
-          sourceIp: '192.168.1.1',
-          connectedAt: 1234567890,
-          userId: 'user-789',
-        })
-      );
-    });
-
-    it('should handle missing identity', async () => {
-      const event = mockWebSocketConnectEvent();
-      event.queryStringParameters = { token: 'valid-token' };
-      event.requestContext.identity = undefined as any;
-      mockParseWsToken.mockResolvedValue({ userId: 'user-123', exp: 9999999999 });
-
-      const result = await handleConnect(event);
-
-      expect(result.statusCode).toBe(200);
-      expect(consoleLogSpy).toHaveBeenCalled();
-    });
-
   });
 
   describe('handleDisconnect', () => {
@@ -166,20 +130,6 @@ describe('WebSocket Handlers', () => {
 
       const mockInstance = MockUserConnections.mock.results[0]?.value;
       expect(mockInstance.delete).toHaveBeenCalledWith('test-connection-del');
-    });
-
-    it('should log disconnection details', async () => {
-      const event = mockWebSocketDisconnectEvent();
-      event.requestContext.connectionId = 'test-connection-789';
-
-      await handleDisconnect(event);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        'WebSocket connection closed',
-        expect.objectContaining({
-          connectionId: 'test-connection-789',
-        })
-      );
     });
 
     it('should return 500 when connectionId is missing', async () => {
