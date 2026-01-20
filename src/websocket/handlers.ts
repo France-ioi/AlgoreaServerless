@@ -1,5 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { parseWsToken } from './token';
+import { UserConnections } from '../dbmodels/user-connections';
+import { dynamodb } from '../dynamodb';
 
 /**
  * Handles websocket connection events.
@@ -15,6 +17,10 @@ export async function handleConnect(event: APIGatewayProxyEvent): Promise<APIGat
     return { statusCode: 401, body: 'Unauthorized: missing token' };
   }
 
+  if (!connectionId) {
+    return { statusCode: 500, body: 'Internal error: missing connectionId' };
+  }
+
   let userId: string;
   try {
     const wsToken = await parseWsToken(token, process.env.BACKEND_PUBLIC_KEY);
@@ -22,6 +28,10 @@ export async function handleConnect(event: APIGatewayProxyEvent): Promise<APIGat
   } catch (err) {
     return { statusCode: 401, body: `Unauthorized: ${String(err)}` };
   }
+
+  // Store connection in database
+  const userConnections = new UserConnections(dynamodb);
+  await userConnections.insert(connectionId, userId);
 
   // eslint-disable-next-line no-console
   console.log('WebSocket connection established', {
@@ -31,9 +41,6 @@ export async function handleConnect(event: APIGatewayProxyEvent): Promise<APIGat
     userId,
   });
 
-  // TODO: Implement connection storage (e.g., DynamoDB)
-  // - Store connection metadata (connectionId, userId, connectedAt, etc.)
-
   return { statusCode: 200, body: 'Connected' };
 }
 
@@ -41,18 +48,23 @@ export async function handleConnect(event: APIGatewayProxyEvent): Promise<APIGat
  * Handles websocket disconnection events.
  * Called when a client closes the websocket connection.
  */
-export function handleDisconnect(event: APIGatewayProxyEvent): APIGatewayProxyResult {
+export async function handleDisconnect(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const connectionId = event.requestContext.connectionId;
+
+  if (!connectionId) {
+    return { statusCode: 500, body: 'Internal error: missing connectionId' };
+  }
+
+  // Remove connection from database
+  const userConnections = new UserConnections(dynamodb);
+  await userConnections.delete(connectionId);
 
   // eslint-disable-next-line no-console
   console.log('WebSocket connection closed', {
     connectionId,
   });
 
-  // TODO: Implement connection cleanup
-  // - Remove connection from storage
-  // - Clean up any subscriptions associated with this connection
-  // - Handle any pending operations
+  // TODO: Clean up any subscriptions associated with this connection
 
   return { statusCode: 200, body: 'Disconnected' };
 }

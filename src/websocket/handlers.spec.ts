@@ -6,8 +6,18 @@ jest.mock('./token', () => ({
   parseWsToken: jest.fn(),
 }));
 
+// Mock the UserConnections module
+jest.mock('../dbmodels/user-connections', () => ({
+  UserConnections: jest.fn().mockImplementation(() => ({
+    insert: jest.fn().mockResolvedValue(undefined),
+    delete: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
 import { parseWsToken } from './token';
+import { UserConnections } from '../dbmodels/user-connections';
 const mockParseWsToken = parseWsToken as jest.MockedFunction<typeof parseWsToken>;
+const MockUserConnections = UserConnections as jest.MockedClass<typeof UserConnections>;
 
 describe('WebSocket Handlers', () => {
 
@@ -66,6 +76,30 @@ describe('WebSocket Handlers', () => {
       });
     });
 
+    it('should call UserConnections.insert with connectionId and userId', async () => {
+      const event = mockWebSocketConnectEvent();
+      event.requestContext.connectionId = 'conn-insert-test';
+      event.queryStringParameters = { token: 'valid-token' };
+      mockParseWsToken.mockResolvedValue({ userId: 'user-insert-test', exp: 9999999999 });
+
+      await handleConnect(event);
+
+      const mockInstance = MockUserConnections.mock.results[0]?.value;
+      expect(mockInstance.insert).toHaveBeenCalledWith('conn-insert-test', 'user-insert-test');
+    });
+
+    it('should return 500 when connectionId is missing', async () => {
+      const event = mockWebSocketConnectEvent();
+      event.requestContext.connectionId = undefined;
+      event.queryStringParameters = { token: 'valid-token' };
+      mockParseWsToken.mockResolvedValue({ userId: 'user-123', exp: 9999999999 });
+
+      const result = await handleConnect(event);
+
+      expect(result.statusCode).toBe(500);
+      expect(result.body).toContain('missing connectionId');
+    });
+
     it('should pass token and public key to parseWsToken', async () => {
       const event = mockWebSocketConnectEvent();
       event.queryStringParameters = { token: 'my-token' };
@@ -113,10 +147,10 @@ describe('WebSocket Handlers', () => {
 
   describe('handleDisconnect', () => {
 
-    it('should return 200 Disconnected response', () => {
+    it('should return 200 Disconnected response', async () => {
       const event = mockWebSocketDisconnectEvent();
 
-      const result = handleDisconnect(event);
+      const result = await handleDisconnect(event);
 
       expect(result).toEqual({
         statusCode: 200,
@@ -124,11 +158,21 @@ describe('WebSocket Handlers', () => {
       });
     });
 
-    it('should log disconnection details', () => {
+    it('should call UserConnections.delete with connectionId', async () => {
+      const event = mockWebSocketDisconnectEvent();
+      event.requestContext.connectionId = 'test-connection-del';
+
+      await handleDisconnect(event);
+
+      const mockInstance = MockUserConnections.mock.results[0]?.value;
+      expect(mockInstance.delete).toHaveBeenCalledWith('test-connection-del');
+    });
+
+    it('should log disconnection details', async () => {
       const event = mockWebSocketDisconnectEvent();
       event.requestContext.connectionId = 'test-connection-789';
 
-      handleDisconnect(event);
+      await handleDisconnect(event);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
         'WebSocket connection closed',
@@ -138,24 +182,14 @@ describe('WebSocket Handlers', () => {
       );
     });
 
-    it('should handle disconnection with various connection IDs', () => {
-      const connectionIds = [ 'conn-1', 'conn-2', 'conn-3' ];
+    it('should return 500 when connectionId is missing', async () => {
+      const event = mockWebSocketDisconnectEvent();
+      event.requestContext.connectionId = undefined;
 
-      for (const connectionId of connectionIds) {
-        consoleLogSpy.mockClear();
-        const event = mockWebSocketDisconnectEvent();
-        event.requestContext.connectionId = connectionId;
+      const result = await handleDisconnect(event);
 
-        const result = handleDisconnect(event);
-
-        expect(result.statusCode).toBe(200);
-        expect(consoleLogSpy).toHaveBeenCalledWith(
-          'WebSocket connection closed',
-          expect.objectContaining({
-            connectionId,
-          })
-        );
-      }
+      expect(result.statusCode).toBe(500);
+      expect(result.body).toContain('missing connectionId');
     });
 
   });
