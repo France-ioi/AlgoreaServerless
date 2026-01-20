@@ -169,4 +169,78 @@ describe('UserConnections', () => {
 
   });
 
+  describe('updateConnectionInfo', () => {
+
+    it('should set subscribedThreadId on a connection', async () => {
+      await userConnections.insert('conn-info', 'user-info');
+
+      await userConnections.updateConnectionInfo('conn-info', {
+        subscribedThreadId: 'participant123#item456',
+      });
+
+      // Verify the field was set
+      const result = await dynamodb.executeStatement({
+        Statement: `SELECT subscribedThreadId FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
+        Parameters: [
+          { S: `${process.env.STAGE}#CONN#conn-info#USER` },
+          { N: '0' },
+        ],
+      });
+      expect(result.Items?.[0]?.subscribedThreadId?.S).toBe('participant123#item456');
+    });
+
+    it('should remove subscribedThreadId when not provided', async () => {
+      await userConnections.insert('conn-remove', 'user-remove');
+      await userConnections.updateConnectionInfo('conn-remove', {
+        subscribedThreadId: 'participant#item',
+      });
+
+      // Now remove it by passing empty info
+      await userConnections.updateConnectionInfo('conn-remove', {});
+
+      const result = await dynamodb.executeStatement({
+        Statement: `SELECT subscribedThreadId FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
+        Parameters: [
+          { S: `${process.env.STAGE}#CONN#conn-remove#USER` },
+          { N: '0' },
+        ],
+      });
+      expect(result.Items?.[0]?.subscribedThreadId).toBeUndefined();
+    });
+
+    it('should not throw when connection does not exist', async () => {
+      await expect(
+        userConnections.updateConnectionInfo('non-existent-conn', {
+          subscribedThreadId: 'participant#item',
+        })
+      ).resolves.not.toThrow();
+    });
+
+  });
+
+  describe('delete with subscribedThreadId', () => {
+
+    it('should return subscribedThreadId when present', async () => {
+      await userConnections.insert('conn-sub', 'user-sub');
+      await userConnections.updateConnectionInfo('conn-sub', {
+        subscribedThreadId: 'part123#item456',
+      });
+
+      const result = await userConnections.delete('conn-sub');
+
+      expect(result).not.toBeNull();
+      expect(result?.subscribedThreadId).toBe('part123#item456');
+    });
+
+    it('should return undefined subscribedThreadId when not set', async () => {
+      await userConnections.insert('conn-nosub', 'user-nosub');
+
+      const result = await userConnections.delete('conn-nosub');
+
+      expect(result).not.toBeNull();
+      expect(result?.subscribedThreadId).toBeUndefined();
+    });
+
+  });
+
 });

@@ -9,6 +9,25 @@ function pk(thread: ThreadId): string {
 }
 
 /**
+ * Serialize a ThreadId to a string for storage in connection info.
+ */
+export function serializeThreadId(thread: ThreadId): string {
+  return `${thread.participantId}#${thread.itemId}`;
+}
+
+/**
+ * Deserialize a ThreadId from its string representation.
+ * @throws Error if the serialized string is invalid
+ */
+export function deserializeThreadId(serialized: string): ThreadId {
+  const parts = serialized.split('#');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error(`Invalid serialized ThreadId: ${serialized}`);
+  }
+  return { participantId: parts[0], itemId: parts[1] };
+}
+
+/**
  * Thread subscriptions are stored in the database with the following schema:
  * - pk: see above
  * - sk: insertion time

@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent } from 'aws-lambda';
 import { parseWsToken } from './token';
 import { UserConnections } from '../dbmodels/user-connections';
+import { ThreadSubscriptions, deserializeThreadId } from '../dbmodels/forum/thread-subscriptions';
 import { dynamodb } from '../dynamodb';
 import { WsHandlerResult } from '../utils/lambda-ws-server';
 
@@ -55,7 +56,12 @@ export async function handleDisconnect(event: APIGatewayProxyEvent): Promise<WsH
     console.warn(`Disconnect: connection ${connectionId} was not found in database (already deleted or TTL expired?)`);
   }
 
-  // TODO: Clean up any subscriptions associated with this connection
+  // Clean up thread subscription if the connection was subscribed to a thread
+  if (deleted?.subscribedThreadId) {
+    const threadSubscriptions = new ThreadSubscriptions(dynamodb);
+    const threadId = deserializeThreadId(deleted.subscribedThreadId);
+    await threadSubscriptions.unsubscribeConnectionId(threadId, connectionId);
+  }
 
   return { statusCode: 200, body: 'Disconnected', userId: deleted?.userId };
 }
