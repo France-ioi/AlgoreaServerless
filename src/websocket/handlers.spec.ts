@@ -10,7 +10,7 @@ jest.mock('./token', () => ({
 jest.mock('../dbmodels/user-connections', () => ({
   UserConnections: jest.fn().mockImplementation(() => ({
     insert: jest.fn().mockResolvedValue(undefined),
-    delete: jest.fn().mockResolvedValue(undefined),
+    delete: jest.fn().mockResolvedValue({ userId: 'deleted-user', creationTime: 1234567890 }),
   })),
 }));
 
@@ -111,7 +111,7 @@ describe('WebSocket Handlers', () => {
 
   describe('handleDisconnect', () => {
 
-    it('should return 200 Disconnected response', async () => {
+    it('should return 200 Disconnected response with userId', async () => {
       const event = mockWebSocketDisconnectEvent();
 
       const result = await handleDisconnect(event);
@@ -119,6 +119,7 @@ describe('WebSocket Handlers', () => {
       expect(result).toEqual({
         statusCode: 200,
         body: 'Disconnected',
+        userId: 'deleted-user',
       });
     });
 
@@ -140,6 +141,23 @@ describe('WebSocket Handlers', () => {
 
       expect(result.statusCode).toBe(500);
       expect(result.body).toContain('missing connectionId');
+    });
+
+    it('should return undefined userId when connection was not found', async () => {
+      // Override the mock to return null for this test
+      MockUserConnections.mockImplementationOnce(() => ({
+        insert: jest.fn().mockResolvedValue(undefined),
+        delete: jest.fn().mockResolvedValue(null),
+      }) as unknown as UserConnections);
+
+      const event = mockWebSocketDisconnectEvent();
+      const result = await handleDisconnect(event);
+
+      expect(result).toEqual({
+        statusCode: 200,
+        body: 'Disconnected',
+        userId: undefined,
+      });
     });
 
   });

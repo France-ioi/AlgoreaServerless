@@ -48,9 +48,14 @@ export async function handleDisconnect(event: APIGatewayProxyEvent): Promise<WsH
 
   // Remove connection from database
   const userConnections = new UserConnections(dynamodb);
-  await userConnections.delete(connectionId);
+  const deleted = await userConnections.delete(connectionId);
+
+  if (!deleted) {
+    // eslint-disable-next-line no-console
+    console.warn(`Disconnect: connection ${connectionId} was not found in database (already deleted or TTL expired?)`);
+  }
 
   // TODO: Clean up any subscriptions associated with this connection
 
-  return { statusCode: 200, body: 'Disconnected' };
+  return { statusCode: 200, body: 'Disconnected', userId: deleted?.userId };
 }

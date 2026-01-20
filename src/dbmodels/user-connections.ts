@@ -57,8 +57,9 @@ export class UserConnections extends Table {
   /**
    * Delete a user connection by connectionId.
    * Removes both c2u and u2c entries.
+   * @returns The deleted connection info, or null if the connection was not found
    */
-  async delete(connectionId: ConnectionId): Promise<void> {
+  async delete(connectionId: ConnectionId): Promise<{ userId: UserId, creationTime: number } | null> {
     // 1) Get c2u entry to find userId and creationTime
     const c2uResults = await this.sqlRead({
       query: `SELECT userId, creationTime FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
@@ -67,7 +68,7 @@ export class UserConnections extends Table {
 
     if (c2uResults.length === 0) {
       // Connection not found, nothing to delete
-      return;
+      return null;
     }
 
     const { userId, creationTime } = c2uEntrySchema.parse(c2uResults[0]);
@@ -83,6 +84,8 @@ export class UserConnections extends Table {
         params: [ u2cPk(userId), creationTime ],
       },
     ]);
+
+    return { userId, creationTime };
   }
 
   /**

@@ -106,8 +106,19 @@ describe('UserConnections', () => {
       expect(u2cResult.Items).toHaveLength(0);
     });
 
-    it('should not throw when connection does not exist', async () => {
-      await expect(userConnections.delete('non-existent-conn')).resolves.not.toThrow();
+    it('should return null when connection does not exist', async () => {
+      const result = await userConnections.delete('non-existent-conn');
+      expect(result).toBeNull();
+    });
+
+    it('should return the deleted userId and creationTime', async () => {
+      await userConnections.insert('conn-return', 'user-return');
+
+      const result = await userConnections.delete('conn-return');
+
+      expect(result).not.toBeNull();
+      expect(result?.userId).toBe('user-return');
+      expect(result?.creationTime).toBeGreaterThan(0);
     });
 
     it('should only delete the specified connection for a user with multiple connections', async () => {
