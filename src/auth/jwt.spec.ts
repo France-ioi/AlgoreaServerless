@@ -9,12 +9,12 @@ describe('JWT Module', () => {
 
   beforeAll(async () => {
     // Generate a key pair for testing
-    const { privateKey: generatedPrivateKey, publicKey } = await generateKeyPair('ES256');
+    const { privateKey: generatedPrivateKey, publicKey } = await generateKeyPair('RS512');
     privateKey = generatedPrivateKey;
     publicKeyPem = await exportSPKI(publicKey);
 
     // Generate another key pair for testing wrong signature
-    const { publicKey: otherPublicKey } = await generateKeyPair('ES256');
+    const { publicKey: otherPublicKey } = await generateKeyPair('RS512');
     otherPublicKeyPem = await exportSPKI(otherPublicKey);
   });
 
@@ -22,7 +22,7 @@ describe('JWT Module', () => {
     it('should verify and return payload for valid JWT', async () => {
       const payload = { user_id: 'user123', item_id: 'item456' };
       const token = await new SignJWT(payload)
-        .setProtectedHeader({ alg: 'ES256' })
+        .setProtectedHeader({ alg: 'RS512' })
         .setExpirationTime('1h')
         .sign(privateKey);
 
@@ -35,7 +35,7 @@ describe('JWT Module', () => {
     it('should throw AuthenticationError for JWT with wrong signature', async () => {
       const payload = { user_id: 'user123' };
       const token = await new SignJWT(payload)
-        .setProtectedHeader({ alg: 'ES256' })
+        .setProtectedHeader({ alg: 'RS512' })
         .setExpirationTime('1h')
         .sign(privateKey);
 
@@ -55,7 +55,7 @@ describe('JWT Module', () => {
     it('should throw AuthenticationError for expired JWT', async () => {
       const payload = { user_id: 'user123' };
       const token = await new SignJWT(payload)
-        .setProtectedHeader({ alg: 'ES256' })
+        .setProtectedHeader({ alg: 'RS512' })
         .setExpirationTime('1s')
         .sign(privateKey);
 
@@ -86,7 +86,7 @@ describe('JWT Module', () => {
 
       const payload = { user_id: 'user123' };
       const token = await new SignJWT(payload)
-        .setProtectedHeader({ alg: 'ES256' })
+        .setProtectedHeader({ alg: 'RS512' })
         .setExpirationTime('1h')
         .sign(privateKey);
 
@@ -114,7 +114,7 @@ describe('JWT Module', () => {
       it('should decode valid token without verification', async () => {
         const payload = { user_id: 'user123', item_id: 'item456' };
         const token = await new SignJWT(payload)
-          .setProtectedHeader({ alg: 'ES256' })
+          .setProtectedHeader({ alg: 'RS512' })
           .setExpirationTime('1h')
           .sign(privateKey);
 
@@ -127,7 +127,7 @@ describe('JWT Module', () => {
       it('should decode token with invalid signature', async () => {
         const payload = { user_id: 'user123' };
         const token = await new SignJWT(payload)
-          .setProtectedHeader({ alg: 'ES256' })
+          .setProtectedHeader({ alg: 'RS512' })
           .setExpirationTime('1h')
           .sign(privateKey);
 
@@ -140,7 +140,7 @@ describe('JWT Module', () => {
       it('should decode expired token without checking expiry', async () => {
         const payload = { user_id: 'user123' };
         const token = await new SignJWT(payload)
-          .setProtectedHeader({ alg: 'ES256' })
+          .setProtectedHeader({ alg: 'RS512' })
           .setExpirationTime('1s')
           .sign(privateKey);
 
@@ -161,7 +161,7 @@ describe('JWT Module', () => {
       it('should not require public key when skipping verification', async () => {
         const payload = { user_id: 'user123' };
         const token = await new SignJWT(payload)
-          .setProtectedHeader({ alg: 'ES256' })
+          .setProtectedHeader({ alg: 'RS512' })
           .setExpirationTime('1h')
           .sign(privateKey);
 
@@ -181,7 +181,7 @@ describe('JWT Module', () => {
       it('should throw ServerError about misconfiguration', async () => {
         const payload = { user_id: 'user123' };
         const token = await new SignJWT(payload)
-          .setProtectedHeader({ alg: 'ES256' })
+          .setProtectedHeader({ alg: 'RS512' })
           .setExpirationTime('1h')
           .sign(privateKey);
 
@@ -201,7 +201,7 @@ describe('JWT Module', () => {
       it('should throw ServerError about misconfiguration', async () => {
         const payload = { user_id: 'user123' };
         const token = await new SignJWT(payload)
-          .setProtectedHeader({ alg: 'ES256' })
+          .setProtectedHeader({ alg: 'RS512' })
           .setExpirationTime('1h')
           .sign(privateKey);
 
@@ -221,7 +221,7 @@ describe('JWT Module', () => {
       it('should perform normal verification', async () => {
         const payload = { user_id: 'user123' };
         const token = await new SignJWT(payload)
-          .setProtectedHeader({ alg: 'ES256' })
+          .setProtectedHeader({ alg: 'RS512' })
           .setExpirationTime('1h')
           .sign(privateKey);
 
@@ -233,7 +233,7 @@ describe('JWT Module', () => {
       it('should reject token with invalid signature', async () => {
         const payload = { user_id: 'user123' };
         const token = await new SignJWT(payload)
-          .setProtectedHeader({ alg: 'ES256' })
+          .setProtectedHeader({ alg: 'RS512' })
           .setExpirationTime('1h')
           .sign(privateKey);
 
@@ -251,7 +251,7 @@ describe('JWT Module', () => {
       it('should perform normal verification', async () => {
         const payload = { user_id: 'user123' };
         const token = await new SignJWT(payload)
-          .setProtectedHeader({ alg: 'ES256' })
+          .setProtectedHeader({ alg: 'RS512' })
           .setExpirationTime('1h')
           .sign(privateKey);
 
