@@ -93,7 +93,7 @@ describe('E2E: Portal Checkout Session', () => {
 
     // Verify Stripe calls
     expect(mockStripeClient.customers.list).toHaveBeenCalled();
-    expect(mockStripeClient.prices.search).toHaveBeenCalledWith({
+    expect(mockStripeClient.products.search).toHaveBeenCalledWith({
       query: "active:'true' AND metadata['item_id']:'test-premium-access-001'",
     });
     expect(mockStripeClient.checkout.sessions.create).toHaveBeenCalledWith(
@@ -139,8 +139,8 @@ describe('E2E: Portal Checkout Session', () => {
   });
 
   it('should return 400 when no price found for item_id', async () => {
-    // Mock prices search to return empty for nonexistent item
-    mockStripeClient.prices.search.mockResolvedValue({
+    // Mock products search to return empty for nonexistent item
+    mockStripeClient.products.search.mockResolvedValue({
       data: [],
     });
 
@@ -164,7 +164,7 @@ describe('E2E: Portal Checkout Session', () => {
 
     expect(result.statusCode).toBe(400);
     const body = JSON.parse(result.body);
-    expect(body.details).toContain('price');
+    expect(body.details).toContain('product');
   });
 
   it('should return 401 when authorization header is missing', async () => {
