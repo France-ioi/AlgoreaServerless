@@ -1,17 +1,7 @@
 import { ConnectionId } from '../../websocket-client';
-import { Table, TableKey } from '../table';
+import { Table, TableKey, wsConnectionTtl } from '../table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
-
-function ttl(): number {
-  /**
-   * ttl is the TimeToLive value of the db entry expressed in *seconds*.
-   * It is contrained by the connection duration for WebSocket API on API Gateway, which is 2h.
-   * https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html
-   */
-  const subscribeTtl = 7_200; // 2 hours
-  return Date.now()/1000 + subscribeTtl;
-}
 
 function pk(thread: ThreadId): string {
   const stage = process.env.STAGE || 'dev';
@@ -48,7 +38,7 @@ export class ThreadSubscriptions extends Table {
     // TODO: we should check what error we get if we resubscribe while we didn't unsubscribe properly before .. and do something
     await this.sqlWrite({
       query: `INSERT INTO "${ this.tableName }" VALUE { 'pk': ?, 'sk': ?, 'connectionId': ?, 'ttl': ?, 'userId': ? }`,
-      params: [ pk(thread), Date.now(), connectionId, ttl(), userId ]
+      params: [ pk(thread), Date.now(), connectionId, wsConnectionTtl(), userId ]
     });
   }
 

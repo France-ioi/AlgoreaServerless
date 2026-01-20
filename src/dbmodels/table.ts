@@ -16,6 +16,21 @@ export interface DBStatement {
   limit?: number,
 }
 
+/**
+ * WebSocket connection TTL in seconds.
+ * Constrained by the connection duration limit for WebSocket API on API Gateway, which is 2 hours.
+ * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html
+ */
+export const WS_CONNECTION_TTL_SECONDS = 7_200; // 2 hours
+
+/**
+ * Calculates the TTL value for a database entry in seconds since epoch.
+ * Used for entries that should expire when the WebSocket connection times out.
+ */
+export function wsConnectionTtl(): number {
+  return Math.floor(Date.now() / 1000) + WS_CONNECTION_TTL_SECONDS;
+}
+
 export class Table {
   protected tableName: string;
 
