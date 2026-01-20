@@ -1,12 +1,12 @@
-import { ForumTable } from './table';
+import { Table } from './table';
 import { dynamodb } from '../dynamodb';
 import { clearTable } from '../testutils/db';
 
-describe('ForumTable', () => {
-  let table: ForumTable;
+describe('Table', () => {
+  let table: Table;
 
   beforeEach(async () => {
-    table = new ForumTable(dynamodb);
+    table = new Table(dynamodb);
     await clearTable();
   });
 
@@ -15,7 +15,7 @@ describe('ForumTable', () => {
       const originalTableName = process.env.TABLE_NAME;
       delete process.env.TABLE_NAME;
 
-      expect(() => new ForumTable(dynamodb)).toThrow('env variable "TABLE_NAME" not set!');
+      expect(() => new Table(dynamodb)).toThrow('env variable "TABLE_NAME" not set!');
 
       process.env.TABLE_NAME = originalTableName;
     });

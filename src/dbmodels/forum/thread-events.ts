@@ -1,4 +1,4 @@
-import { ForumTable } from '../table';
+import { Table } from '../table';
 import { ThreadId } from './thread';
 import { literal, z } from 'zod';
 
@@ -41,7 +41,7 @@ function pk(threadId: ThreadId): string {
  * - createdBy: the user id of the creator
  * - data: the event data
  */
-export class ThreadEvents extends ForumTable {
+export class ThreadEvents extends Table {
 
   /**
    * Insert multiple thread events

@@ -16,7 +16,7 @@ export interface DBStatement {
   limit?: number,
 }
 
-export class ForumTable {
+export class Table {
   protected tableName: string;
 
   constructor(protected db: DynamoDB) {

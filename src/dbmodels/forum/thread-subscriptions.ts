@@ -1,5 +1,5 @@
 import { ConnectionId } from '../../websocket-client';
-import { ForumTable, TableKey } from '../table';
+import { Table, TableKey } from '../table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
 
@@ -26,7 +26,7 @@ function pk(thread: ThreadId): string {
  * - ttl: auto-deletion time
  * - userId: the user id of the subscriber
  */
-export class ThreadSubscriptions extends ForumTable {
+export class ThreadSubscriptions extends Table {
 
   async getSubscribers(filter: { threadId: ThreadId, connectionId?: ConnectionId }): Promise<{ connectionId: ConnectionId, sk: number }[]> {
     let query = `SELECT connectionId, sk FROM "${ this.tableName }" WHERE pk = ?`;

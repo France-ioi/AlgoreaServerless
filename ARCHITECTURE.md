@@ -212,7 +212,7 @@ Custom implementation inspired by `lambda-api`:
 - Support for PartiQL queries
 
 #### Base Table Class (`src/dbmodels/table.ts`)
-- **ForumTable**: Abstract base class for all models
+- **Table**: Abstract base class for all models
 - **Query Methods**:
   - `sqlWrite()`: Execute write operations (single or transaction)
   - `sqlRead()`: Execute read queries with pagination
