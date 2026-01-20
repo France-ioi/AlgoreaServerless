@@ -77,7 +77,7 @@ export async function verifyJwt(token: string, publicKeyPem?: string): Promise<J
   }
 
   const normalizedPem = normalizePem(publicKeyPem);
-  const publicKey = await importSPKI(normalizedPem, 'ES256');
+  const publicKey = await importSPKI(normalizedPem, 'RS512');
   const { payload } = await jwtVerify(token, publicKey).catch(
     err => {
       throw new AuthenticationError(`JWT verification failed: ${(err as Error).message}`);
