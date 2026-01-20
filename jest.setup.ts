@@ -9,6 +9,7 @@ export default async (): Promise<void> => {
   process.env.STAGE = 'test';
   process.env.APIGW_ENDPOINT = 'http://localhost:3001';
   process.env.BACKEND_PUBLIC_KEY = ''; // Will be set by token generator in tests
+  process.env.API_BASE = 'sls';
 
   // Start DynamoDB Local
   console.log('Starting DynamoDB Local...');

@@ -31,11 +31,12 @@ describe('E2E: Portal Checkout Session', () => {
           id: 'cus_test123',
         }),
       },
-      prices: {
+      products: {
         search: jest.fn().mockResolvedValue({
           data: [
             {
-              id: 'price_test456',
+              id: 'prod_test789',
+              default_price: 'price_test456',
               metadata: { item_id: 'test-premium-access-001' },
             },
           ],

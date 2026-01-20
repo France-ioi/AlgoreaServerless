@@ -45,7 +45,7 @@ describe('Checkout Session Service', () => {
             metadata: { item_id: 'item_789' },
           },
         },
-        tax_id_collection: { enabled: true, required: 'if_supported' },
+        tax_id_collection: { enabled: true, required: 'never' },
       });
     });
 
@@ -83,7 +83,7 @@ describe('Checkout Session Service', () => {
       const createCall = (mockStripe.checkout.sessions.create as jest.Mock).mock.calls[0][0];
       expect(createCall.automatic_tax.enabled).toBe(true);
       expect(createCall.tax_id_collection.enabled).toBe(true);
-      expect(createCall.tax_id_collection.required).toBe('if_supported');
+      expect(createCall.tax_id_collection.required).toBe('never');
     });
 
     it('should configure invoice creation with item metadata', async () => {
