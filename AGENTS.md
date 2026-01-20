@@ -41,6 +41,7 @@ This is an AWS Serverless application using:
 - Mock external dependencies (Stripe, etc.) in tests
 - **Mocks must match actual API calls** - verify mocked methods/properties match what the code actually uses
 - **E2E tests with external services** should skip gracefully when the service isn't configured (e.g., missing Stripe product)
+- **Always add or update tests** when implementing new features or modifying existing functionality - check existing `.spec.ts` files for the modules you modify
 
 # Database patterns
 
