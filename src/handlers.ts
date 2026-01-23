@@ -61,6 +61,8 @@ export async function globalHandler(event: APIGatewayProxyEvent|ALBEvent, contex
     return wsServer.handler(event as APIGatewayProxyEvent, context);
 
   } else {
+    // eslint-disable-next-line no-console
+    console.error('Unsupported event type received:', JSON.stringify(event, null, 2));
     throw new Error('event not supported');
   }
 }
