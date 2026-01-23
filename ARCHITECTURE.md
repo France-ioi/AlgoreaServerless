@@ -249,7 +249,9 @@ eb.on('submission_created', handleSubmissionCreated, { supportedMajorVersion: 1 
 ```
 
 #### Forum Event Handlers
-- `submission_created` - Logs submission events (for future processing)
+- `submission_created` - Triggered when a new submission is created
+- `thread_status_changed` - Triggered when a thread's status changes (e.g., waiting_for_trainer)
+- `grade_saved` - Triggered when a grade is saved for an answer
 
 ### 5. Database Layer
 
