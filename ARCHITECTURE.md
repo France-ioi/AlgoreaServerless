@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: December 19, 2025
+**Last Updated**: January 23, 2026
 
 ## Overview
 
@@ -19,6 +19,7 @@ AlgoreaServerless is a serverless backend application designed to provide forum/
 - **AWS Lambda**: Serverless compute for handling requests
 - **API Gateway**: WebSocket connections management
 - **Application Load Balancer (ALB)**: HTTP/REST API traffic routing
+- **EventBridge**: Event-driven communication from backend services
 - **DynamoDB**: NoSQL database for data persistence
 - **IAM**: Role-based access control
 
@@ -49,13 +50,13 @@ AlgoreaServerless is a serverless backend application designed to provide forum/
          │
     ┌────┴────┐
     │         │
-┌───▼───┐ ┌──▼──────┐
-│  ALB  │ │   API   │
-│(REST) │ │ Gateway │
-└───┬───┘ │  (WS)   │
-    │     └────┬────┘
-    │          │
-    └────┬─────┘
+┌───▼───┐ ┌──▼──────┐  ┌───────────┐
+│  ALB  │ │   API   │  │ EventBridge│
+│(REST) │ │ Gateway │  │  (Events) │
+└───┬───┘ │  (WS)   │  └─────┬─────┘
+    │     └────┬────┘        │
+    │          │             │
+    └────┬─────┴─────────────┘
          │
     ┌────▼────────┐
     │   Lambda    │
@@ -63,19 +64,19 @@ AlgoreaServerless is a serverless backend application designed to provide forum/
     │(globalHandler)
     └──────┬──────┘
            │
-    ┌──────┴───────┐
-    │              │
-┌───▼───┐    ┌────▼──────┐
-│  REST │    │ WebSocket │
-│  API  │    │  Server   │
-└───┬───┘    └────┬──────┘
-    │             │
-    └──────┬──────┘
-           │
-    ┌──────▼──────┐
-    │  DynamoDB   │
-    │    Table    │
-    └─────────────┘
+    ┌──────┼───────────────┐
+    │      │               │
+┌───▼───┐ ┌▼──────────┐ ┌──▼───────┐
+│  REST │ │ WebSocket │ │ EventBus │
+│  API  │ │  Server   │ │  Server  │
+└───┬───┘ └────┬──────┘ └────┬─────┘
+    │          │             │
+    └──────────┴─────────────┘
+               │
+        ┌──────▼──────┐
+        │  DynamoDB   │
+        │    Table    │
+        └─────────────┘
 ```
 
 ### Request Flow
@@ -99,6 +100,15 @@ AlgoreaServerless is a serverless backend application designed to provide forum/
 6. For broadcasts, handler retrieves subscribers from DynamoDB
 7. Messages sent to connected clients via API Gateway Management API
 8. Stale connections (GoneException) are cleaned up from database
+
+#### EventBridge Flow
+1. Backend service publishes event to EventBridge
+2. EventBridge rule triggers Lambda function
+3. `globalHandler` detects `detail-type` field and routes to EventBus server
+4. EventBus server parses common envelope (version, type, payload, etc.)
+5. EventBus server validates event version against handler requirements
+6. Matching handlers receive the parsed envelope and process the event
+7. Multiple handlers can react to the same event type (run in parallel)
 
 ## Project Structure
 
@@ -150,6 +160,10 @@ AlgoreaServerless/
 │   │   ├── lambda-ws-server/  # WebSocket server implementation
 │   │   │   ├── index.ts
 │   │   │   └── request.ts
+│   │   ├── lambda-eventbus-server/  # EventBridge server implementation
+│   │   │   ├── index.ts
+│   │   │   ├── event-envelope.ts
+│   │   │   └── logger.ts
 │   │   ├── errors.ts      # Custom error classes
 │   │   ├── predicates.ts  # Type guards and validators
 │   │   └── rest-responses.ts
@@ -176,9 +190,10 @@ AlgoreaServerless/
 ### 1. Global Handler (`src/handlers.ts`)
 
 The unified Lambda entry point that routes requests based on event type:
-- **HTTP Requests**: Routes to `lambda-api` REST handler
-- **WebSocket Events**: Routes to custom WebSocket server
-- Handles both ALB and API Gateway events
+- **HTTP Requests**: Routes to `lambda-api` REST handler (detected by `httpMethod`)
+- **WebSocket Events**: Routes to custom WebSocket server (detected by `eventType` in requestContext)
+- **EventBridge Events**: Routes to EventBus server (detected by `detail-type`)
+- Handles ALB, API Gateway, and EventBridge events
 
 ### 2. REST API (`lambda-api`)
 
@@ -204,7 +219,39 @@ Custom implementation inspired by `lambda-api`:
   - `forum.unsubscribe` - Unsubscribe from thread
   - `heartbeat` - Connection keep-alive
 
-### 4. Database Layer
+### 4. EventBus Server (`src/utils/lambda-eventbus-server/`)
+
+Custom implementation for handling EventBridge events:
+- **Event Envelope Parsing**: Common envelope structure with Zod validation
+- **Version Validation**: Handlers specify supported major version; events with higher versions are skipped
+- **Multiple Handlers**: Unlike REST/WebSocket, multiple handlers can react to the same event type
+- **Parallel Execution**: Handlers run concurrently via `Promise.allSettled`
+- **Structured Logging**: JSON-formatted logs with event metadata
+
+#### Event Envelope Structure
+Events from the backend follow a common envelope format:
+```json
+{
+  "version": "1.0",
+  "type": "submission_created",
+  "source_app": "algoreabackend",
+  "instance": "dev",
+  "time": "2026-01-23T14:36:20Z",
+  "request_id": "unique-request-id",
+  "payload": { ... }
+}
+```
+
+#### Handler Registration
+Handlers register with a detail-type and supported version:
+```typescript
+eb.on('submission_created', handleSubmissionCreated, { supportedMajorVersion: 1 });
+```
+
+#### Forum Event Handlers
+- `submission_created` - Logs submission events (for future processing)
+
+### 5. Database Layer
 
 #### DynamoDB Configuration (`src/dynamodb.ts`)
 - Environment-aware client configuration (local, test, production)
@@ -233,7 +280,7 @@ Custom implementation inspired by `lambda-api`:
 - Auto-cleanup of stale connections via DynamoDB TTL
 - Supports subscription management and connection cleanup
 
-### 5. Authentication
+### 6. Authentication
 
 JWT-based authentication using JOSE library with a shared verification layer:
 
@@ -281,7 +328,7 @@ Domain-specific token parsing for portal features:
   - `extractTokenFromHttp(headers)`: Extracts and parses from HTTP headers
 - **Usage**: Used for payment-related operations and Stripe customer management
 
-### 6. WebSocket Client (`src/websocket-client.ts`)
+### 7. WebSocket Client (`src/websocket-client.ts`)
 
 Manages outbound WebSocket messages to connected clients:
 - **API Gateway Management**: Posts messages to connections
@@ -290,7 +337,7 @@ Manages outbound WebSocket messages to connected clients:
 - **Bulk Send**: Sends to multiple connections with deduplication
 - **Connection Cleanup**: Identifies stale connections for removal
 
-### 7. Middleware
+### 8. Middleware
 
 **Error Handling** (`src/middlewares/error-handling.ts`)
 - Catches and transforms errors to appropriate HTTP responses
@@ -305,7 +352,7 @@ Manages outbound WebSocket messages to connected clients:
 - Applies CORS headers to all responses
 - Supports OPTIONS preflight requests
 
-### 8. Configuration System (`src/config.ts`)
+### 9. Configuration System (`src/config.ts`)
 
 Configuration file management for portal features:
 - **Config File**: `config.json` at project root
@@ -327,7 +374,7 @@ Configuration file management for portal features:
   - Returns empty config `{}` if file doesn't exist or is invalid
 - **Usage**: Portal services use config to determine payment state (disabled/unpaid/paid)
 
-### 9. Custom Error Classes (`src/utils/errors.ts`)
+### 10. Custom Error Classes (`src/utils/errors.ts`)
 
 Typed error hierarchy for better error handling:
 - `DBError`: Database operation failures (includes statement details)
