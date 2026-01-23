@@ -16,7 +16,7 @@ const wsActions = (ws: WsServer): void => {
 };
 
 const eventHandlers = (eb: EventBusServer): void => {
-  eb.on('submission_created', handleSubmissionCreated);
+  eb.on('submission_created', handleSubmissionCreated, { supportedMajorVersion: 1 });
 };
 
 export { restRoutes as forumRoutes, wsActions as forumWsActions, eventHandlers as forumEventHandlers };
