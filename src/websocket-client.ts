@@ -9,6 +9,7 @@ export interface SendResult {
 
 export enum ForumMessageAction {
   NewMessage = 'forum.message.new',
+  NewSubmission = 'forum.submission.new',
 }
 
 interface ForumNewMessage {
@@ -21,7 +22,17 @@ interface ForumNewMessage {
   uuid: string,
 }
 
-type Message = ForumNewMessage; // will add new messages here
+interface ForumNewSubmission {
+  action: ForumMessageAction.NewSubmission,
+  answerId: string,
+  participantId: string,
+  itemId: string,
+  attemptId: string,
+  authorId: string,
+  time: number,
+}
+
+type Message = ForumNewMessage | ForumNewSubmission;
 
 /**
  * The websocket connection id. It is really a string!

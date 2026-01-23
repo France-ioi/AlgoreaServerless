@@ -1,5 +1,16 @@
+import { clearTable } from '../../testutils/db';
+
+const mockSend = jest.fn();
+
+jest.mock('../../websocket-client', () => ({
+  ...jest.requireActual('../../websocket-client'),
+  wsClient: { send: mockSend },
+}));
+
 import { handleSubmissionCreated, SubmissionPayload } from './submission-created';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
+import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
+import { dynamodb } from '../../dynamodb';
 
 function createMockPayload(overrides?: Partial<SubmissionPayload>): SubmissionPayload {
   return {
@@ -25,53 +36,90 @@ function createMockEnvelope(payload: unknown = createMockPayload()): EventEnvelo
 }
 
 describe('handleSubmissionCreated', () => {
-  let consoleLogSpy: jest.SpyInstance;
+  let threadSubs: ThreadSubscriptions;
   let consoleErrorSpy: jest.SpyInstance;
 
-  beforeEach(() => {
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+  const defaultPayload = createMockPayload();
+  const threadId = { participantId: defaultPayload.participant_id, itemId: defaultPayload.item_id };
+
+  beforeEach(async () => {
+    threadSubs = new ThreadSubscriptions(dynamodb);
+    await clearTable();
+    jest.clearAllMocks();
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    mockSend.mockImplementation((connectionIds) =>
+      Promise.resolve(connectionIds.map((id: string) => ({ success: true, connectionId: id }))));
   });
 
   afterEach(() => {
-    consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });
 
-  describe('successful parsing', () => {
-    it('should log the parsed payload fields', () => {
-      const envelope = createMockEnvelope();
+  describe('successful handling', () => {
+    it('should notify all subscribers when submission is created', async () => {
+      await threadSubs.subscribe(threadId, 'conn-1', 'user1');
+      await threadSubs.subscribe(threadId, 'conn-2', 'user2');
 
+      const envelope = createMockEnvelope();
       handleSubmissionCreated(envelope);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Submission created:', {
-        answerId: '2370069782874587543',
-        attemptId: '0',
-        authorId: '4830897401562438517',
-        itemId: '6379723280369399253',
-        participantId: '4830897401562438517',
-        instance: 'dev',
-        requestId: '169.254.80.227/DB0MBqcJM6-000006',
-      });
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(mockSend).toHaveBeenCalledWith(
+        expect.arrayContaining([ 'conn-1', 'conn-2' ]),
+        expect.objectContaining({
+          action: 'forum.submission.new',
+          answerId: defaultPayload.answer_id,
+          participantId: defaultPayload.participant_id,
+          itemId: defaultPayload.item_id,
+          attemptId: defaultPayload.attempt_id,
+          authorId: defaultPayload.author_id,
+          time: expect.any(Number),
+        })
+      );
+    });
+
+    it('should not call send when no subscribers exist', async () => {
+      const envelope = createMockEnvelope();
+      handleSubmissionCreated(envelope);
+
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(mockSend).toHaveBeenCalledWith([], expect.any(Object));
     });
 
     it('should handle events with all required fields without throwing', () => {
       const envelope = createMockEnvelope();
-
       expect(() => handleSubmissionCreated(envelope)).not.toThrow();
     });
+  });
 
-    it('should use envelope fields for instance and requestId', () => {
+  describe('cleanup of gone connections', () => {
+    it('should remove gone subscribers after sending message', async () => {
+      await threadSubs.subscribe(threadId, 'conn-1', 'user1');
+      await threadSubs.subscribe(threadId, 'conn-gone', 'user2');
+      await threadSubs.subscribe(threadId, 'conn-3', 'user3');
+
+      mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
+        if (id === 'conn-gone') {
+          const error = new Error('Gone');
+          error.name = 'GoneException';
+          return { success: false, connectionId: id, error };
+        }
+        return { success: true, connectionId: id };
+      })));
+
       const envelope = createMockEnvelope();
-      envelope.instance = 'production';
-      envelope.request_id = 'prod-request-456';
-
       handleSubmissionCreated(envelope);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Submission created:', expect.objectContaining({
-        instance: 'production',
-        requestId: 'prod-request-456',
-      }));
+      // Wait for async operations and cleanup
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      const subscribers = await threadSubs.getSubscribers({ threadId });
+      expect(subscribers).toHaveLength(2);
+      expect(subscribers.map(s => s.connectionId)).not.toContain('conn-gone');
     });
   });
 
@@ -88,7 +136,7 @@ describe('handleSubmissionCreated', () => {
         'Failed to parse submission_created payload:',
         expect.any(String)
       );
-      expect(consoleLogSpy).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     it('should log error for completely invalid payload', () => {
@@ -97,7 +145,7 @@ describe('handleSubmissionCreated', () => {
       handleSubmissionCreated(envelope);
 
       expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(consoleLogSpy).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     it('should log error for null payload', () => {
@@ -106,7 +154,7 @@ describe('handleSubmissionCreated', () => {
       handleSubmissionCreated(envelope);
 
       expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(consoleLogSpy).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
     });
   });
 });
