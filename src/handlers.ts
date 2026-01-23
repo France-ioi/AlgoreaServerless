@@ -1,7 +1,8 @@
-import { ALBEvent, APIGatewayProxyEvent, Context } from 'aws-lambda';
+import { ALBEvent, APIGatewayProxyEvent, Context, EventBridgeEvent } from 'aws-lambda';
 import createAPI from 'lambda-api';
 import createWsServer from './utils/lambda-ws-server';
-import { forumRoutes, forumWsActions } from './forum/routes';
+import createEventBusServer from './utils/lambda-eventbus-server';
+import { forumRoutes, forumWsActions, forumEventHandlers } from './forum/routes';
 import { portalRoutes } from './portal/routes';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
@@ -44,21 +45,51 @@ wsServer.on('heartbeat', () => {});
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////
+// EVENTBUS handlers
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+const ebServer = createEventBusServer();
+
+// Event handlers registration
+ebServer.register(forumEventHandlers);
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////
 // GLOBAL handler
 /////////////////////////////////////////////////////////////////////////////////////////////
 
+type GlobalEvent = APIGatewayProxyEvent | ALBEvent | EventBridgeEvent<string, unknown>;
+
+function isHttpEvent(event: GlobalEvent): event is APIGatewayProxyEvent | ALBEvent {
+  return 'httpMethod' in event;
+}
+
+function isWebSocketEvent(event: GlobalEvent): event is APIGatewayProxyEvent {
+  return 'requestContext' in event &&
+    typeof event.requestContext === 'object' &&
+    event.requestContext !== null &&
+    'eventType' in event.requestContext;
+}
+
+function isEventBridgeEvent(event: GlobalEvent): event is EventBridgeEvent<string, unknown> {
+  return 'detail-type' in event;
+}
+
 /**
- * Global handler for HTTP REST and WEBSOCKET requests.
+ * Global handler for HTTP REST, WEBSOCKET, and EVENTBUS requests.
  * `event` is of type `APIGatewayProxyHandler` while it may be an "ALBEvent" in practice... but the lamda-API
  * lib expects a `APIGatewayProxyHandler` even in this case.
  */
-export async function globalHandler(event: APIGatewayProxyEvent|ALBEvent, context: Context): Promise<unknown> {
-  if (event.httpMethod) {
+export async function globalHandler(event: GlobalEvent, context: Context): Promise<unknown> {
+  if (isHttpEvent(event)) {
     // event is a ALBEvent. But the lambda-API lib expects a `APIGatewayProxyHandler`
     return api.run(event as APIGatewayProxyEvent, context);
 
-  } else if ('eventType' in event.requestContext) {
-    return wsServer.handler(event as APIGatewayProxyEvent, context);
+  } else if (isWebSocketEvent(event)) {
+    return wsServer.handler(event, context);
+
+  } else if (isEventBridgeEvent(event)) {
+    return ebServer.handler(event, context);
 
   } else {
     // eslint-disable-next-line no-console

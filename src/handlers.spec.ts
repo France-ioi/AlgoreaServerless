@@ -10,6 +10,7 @@ import {
   mockWebSocketConnectEvent,
   mockWebSocketDisconnectEvent,
   mockWebSocketMessageEvent,
+  mockEventBridgeEvent,
   mockContext,
 } from './testutils/event-mocks';
 
@@ -36,6 +37,16 @@ jest.mock('./utils/lambda-ws-server', () => {
   return jest.fn(() => mockWsServer);
 });
 
+// Mock the EventBus server module
+jest.mock('./utils/lambda-eventbus-server', () => {
+  const mockEbServer = {
+    register: jest.fn(),
+    on: jest.fn(),
+    handler: jest.fn().mockResolvedValue(undefined),
+  };
+  return jest.fn(() => mockEbServer);
+});
+
 // Mock the websocket handlers
 jest.mock('./websocket/handlers', () => ({
   handleConnect: jest.fn(),
@@ -45,17 +56,20 @@ jest.mock('./websocket/handlers', () => ({
 // Import mocked modules
 import createAPI from 'lambda-api';
 import createWsServer from './utils/lambda-ws-server';
+import createEventBusServer from './utils/lambda-eventbus-server';
 import { handleConnect, handleDisconnect } from './websocket/handlers';
 
 describe('Global Handler', () => {
 
   let mockApi: any;
   let mockWsServer: any;
+  let mockEbServer: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockApi = (createAPI as jest.Mock)();
     mockWsServer = (createWsServer as jest.Mock)();
+    mockEbServer = (createEventBusServer as jest.Mock)();
   });
 
   describe('HTTP Request Routing', () => {
@@ -128,6 +142,31 @@ describe('Global Handler', () => {
 
   });
 
+  describe('EventBridge Request Routing', () => {
+
+    it('should route EventBridge events to EventBus server', async () => {
+      const event = mockEventBridgeEvent('submission_created', { submissionId: 'test-123' });
+      const context = mockContext();
+
+      const result = await globalHandler(event as any, context);
+
+      expect(mockEbServer.handler).toHaveBeenCalledWith(event, context);
+      expect(mockApi.run).not.toHaveBeenCalled();
+      expect(mockWsServer.handler).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
+    });
+
+    it('should route events with detail-type to EventBus server', async () => {
+      const event = mockEventBridgeEvent('custom_event', { foo: 'bar' });
+      const context = mockContext();
+
+      await globalHandler(event as any, context);
+
+      expect(mockEbServer.handler).toHaveBeenCalledWith(event, context);
+    });
+
+  });
+
   describe('Error Handling', () => {
 
     it('should throw error for unsupported event types', async () => {
@@ -183,6 +222,21 @@ describe('Global Handler', () => {
       expect(mockApi.run).not.toHaveBeenCalled();
     });
 
+    it('should detect EventBridge event by detail-type property', async () => {
+      const event = {
+        'detail-type': 'test_event',
+        'source': 'test.source',
+        'detail': {},
+      } as any;
+      const context = mockContext();
+
+      await globalHandler(event, context);
+
+      expect(mockEbServer.handler).toHaveBeenCalled();
+      expect(mockApi.run).not.toHaveBeenCalled();
+      expect(mockWsServer.handler).not.toHaveBeenCalled();
+    });
+
   });
 
   describe('Context Propagation', () => {
@@ -209,6 +263,18 @@ describe('Global Handler', () => {
       await globalHandler(event, context);
 
       expect(mockWsServer.handler).toHaveBeenCalledWith(event, context);
+    });
+
+    it('should pass context to EventBus handler', async () => {
+      const event = mockEventBridgeEvent('test_event', { data: 'test' });
+      const context = mockContext({
+        functionName: 'test-eb-function',
+        awsRequestId: 'eb-request-789',
+      });
+
+      await globalHandler(event as any, context);
+
+      expect(mockEbServer.handler).toHaveBeenCalledWith(event, context);
     });
 
   });

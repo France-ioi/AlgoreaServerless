@@ -1,4 +1,4 @@
-import { ALBEvent, APIGatewayProxyEvent, Context } from 'aws-lambda';
+import { ALBEvent, APIGatewayProxyEvent, Context, EventBridgeEvent } from 'aws-lambda';
 
 /**
  * Create a mock ALB event for REST API testing
@@ -208,4 +208,25 @@ export const mockContext = (overrides?: Partial<Context>): Context => ({
   succeed: () => {},
   ...overrides,
 });
+
+/**
+ * Create a mock EventBridge event for EventBus testing
+ * Based on actual AWS EventBridge event structure
+ */
+export const mockEventBridgeEvent = <T = unknown>(
+  detailType: string,
+  detail: T,
+  overrides?: Partial<EventBridgeEvent<string, T>>
+): EventBridgeEvent<string, T> => ({
+    'version': '0',
+    'id': 'test-event-id-' + Math.random().toString(36).substring(7),
+    'detail-type': detailType,
+    'source': 'algorea.backend',
+    'account': '123456789012',
+    'time': new Date().toISOString(),
+    'region': 'eu-west-3',
+    'resources': [],
+    'detail': detail,
+    ...overrides,
+  });
 

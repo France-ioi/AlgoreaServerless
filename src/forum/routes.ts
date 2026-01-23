@@ -1,7 +1,9 @@
 import { API } from 'lambda-api';
 import { createMessage, getAllMessages } from './handlers/messages';
 import { WsServer } from '../utils/lambda-ws-server';
+import { EventBusServer } from '../utils/lambda-eventbus-server';
 import { subscribe, unsubscribe } from './handlers/thread-subscription';
+import { handleSubmissionCreated } from './handlers/submission-created';
 
 const restRoutes = (api: API): void => {
   api.get('/message', getAllMessages);
@@ -13,4 +15,8 @@ const wsActions = (ws: WsServer): void => {
   ws.on('unsubscribe', unsubscribe);
 };
 
-export { restRoutes as forumRoutes, wsActions as forumWsActions };
+const eventHandlers = (eb: EventBusServer): void => {
+  eb.on('submission_created', handleSubmissionCreated);
+};
+
+export { restRoutes as forumRoutes, wsActions as forumWsActions, eventHandlers as forumEventHandlers };
