@@ -1,6 +1,6 @@
-import { ForumToken } from '../forum/token';
+import { ThreadToken } from '../forum/thread-token';
 
-export const mockTokenData = (suffix: number | string, rest?: Partial<ForumToken>): ForumToken => ({
+export const mockTokenData = (suffix: number | string, rest?: Partial<ThreadToken>): ThreadToken => ({
   participantId: `openThreadParticipantId-${suffix}`,
   itemId: `openThreadItemId-${suffix}`,
   userId: `openThreadUserId-${suffix}`,

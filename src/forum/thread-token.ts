@@ -13,7 +13,7 @@ const jwsPayloadSchema = z.object({
   can_write: z.boolean(),
 });
 
-export interface ForumToken {
+export interface ThreadToken {
   participantId: string,
   itemId: string,
   userId: string,
@@ -22,7 +22,7 @@ export interface ForumToken {
   canWrite: boolean,
 }
 
-export async function parseToken(token: string, publicKeyPem?: string): Promise<ForumToken> {
+export async function parseThreadToken(token: string, publicKeyPem?: string): Promise<ThreadToken> {
   const payload = await verifyJwt(token, publicKeyPem);
   const decodedPayload = jwsPayloadSchema.parse(payload);
   return {
@@ -35,13 +35,13 @@ export async function parseToken(token: string, publicKeyPem?: string): Promise<
   };
 }
 
-export async function extractTokenFromHttp(headers: Request['headers']): Promise<ForumToken> {
+export async function extractThreadTokenFromHttp(headers: Request['headers']): Promise<ThreadToken> {
   const jws = extractBearerToken(headers['authorization']);
-  return parseToken(jws, process.env.BACKEND_PUBLIC_KEY);
+  return parseThreadToken(jws, process.env.BACKEND_PUBLIC_KEY);
 }
 
-export async function extractTokenFromWs(body: WsRequest['body']): Promise<ForumToken> {
+export async function extractThreadTokenFromWs(body: WsRequest['body']): Promise<ThreadToken> {
   const result = z.object({ token: z.string() }).safeParse(body);
   if (!result.success) throw new AuthenticationError(`unable to fetch the token from the ws message: ${result.error.message}`);
-  return parseToken(result.data.token, process.env.BACKEND_PUBLIC_KEY);
+  return parseThreadToken(result.data.token, process.env.BACKEND_PUBLIC_KEY);
 }

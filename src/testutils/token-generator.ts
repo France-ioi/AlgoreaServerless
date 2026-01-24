@@ -1,5 +1,5 @@
 import { generateKeyPair, exportSPKI, SignJWT, KeyLike } from 'jose';
-import { ForumToken } from '../forum/token';
+import { ThreadToken } from '../forum/thread-token';
 import { setPrivateKey } from './portal-token-generator';
 
 let privateKey: KeyLike;
@@ -35,7 +35,7 @@ export const getPublicKeyPem = (): string => {
  * Generate a signed JWT token with custom payload
  */
 export const generateToken = async (
-  payload: Partial<ForumToken> & { participantId: string, itemId: string, userId: string }
+  payload: Partial<ThreadToken> & { participantId: string, itemId: string, userId: string }
 ): Promise<string> => {
   if (privateKey === undefined) {
     throw new Error('Keys not initialized. Call initializeKeys() first.');

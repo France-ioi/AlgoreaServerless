@@ -6,14 +6,14 @@ import { z, ZodError } from 'zod';
 import { isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
 import { ForumMessageAction } from '../ws-messages';
 import { HandlerFunction, Request, Response } from 'lambda-api';
-import { extractTokenFromHttp } from '../token';
+import { extractThreadTokenFromHttp } from '../thread-token';
 import { created } from '../../utils/rest-responses';
 
 const subscriptions = new ThreadSubscriptions(dynamodb);
 const threadEvents = new ThreadEvents(dynamodb);
 
 async function create(req: Request, resp: Response): Promise<ReturnType<typeof created>> {
-  const { participantId, itemId, userId, canWrite } = await extractTokenFromHttp(req.headers);
+  const { participantId, itemId, userId, canWrite } = await extractThreadTokenFromHttp(req.headers);
   if (!canWrite) throw new Forbidden('This operation required canWrite');
 
   const threadId = { participantId, itemId };
@@ -49,7 +49,7 @@ const defaultLimit = 10;
 const maxLimit = 20;
 
 async function getAll(req: Request): Promise<{ time: number, text: string, authorId: string, uuid: string }[]> {
-  const token = await extractTokenFromHttp(req.headers);
+  const token = await extractThreadTokenFromHttp(req.headers);
   const limitParam = req.query['limit'] ? +req.query['limit'] : undefined;
   let limit: number;
   try {

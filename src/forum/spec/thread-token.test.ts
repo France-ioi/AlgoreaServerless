@@ -1,8 +1,8 @@
-import { parseToken } from '../token';
+import { parseThreadToken } from '../thread-token';
 import { generateKeyPair, SignJWT, exportSPKI, KeyLike } from 'jose';
 import { ServerError } from '../../utils/errors';
 
-describe('parseToken', () => {
+describe('parseThreadToken', () => {
   let privateKey: KeyLike;
   let publicKeyPem: string;
 
@@ -26,7 +26,7 @@ describe('parseToken', () => {
       can_write: true,
     };
     const token = await new SignJWT(payload).setProtectedHeader({ alg: 'ES256' }).setExpirationTime('1h').sign(privateKey);
-    const parsedToken = await parseToken(token, publicKeyPem);
+    const parsedToken = await parseThreadToken(token, publicKeyPem);
     expect(parsedToken).toEqual({
       itemId: '1',
       participantId: '2',
@@ -41,16 +41,16 @@ describe('parseToken', () => {
     const { publicKey: otherPublicKey } = await generateKeyPair('ES256');
     const otherPublicKeyPem = await exportSPKI(otherPublicKey);
     const token = await new SignJWT({}).setProtectedHeader({ alg: 'ES256' }).sign(privateKey);
-    await expect(parseToken(token, otherPublicKeyPem)).rejects.toThrow('signature verification failed');
+    await expect(parseThreadToken(token, otherPublicKeyPem)).rejects.toThrow('signature verification failed');
   });
 
   it('should throw an error for an invalid token format', async () => {
-    await expect(parseToken('invalid-token', publicKeyPem)).rejects.toThrow('Invalid Compact JWS');
+    await expect(parseThreadToken('invalid-token', publicKeyPem)).rejects.toThrow('Invalid Compact JWS');
   });
 
   it('should throw an error if the payload is missing fields', async () => {
     const token = await new SignJWT({}).setProtectedHeader({ alg: 'ES256' }).setExpirationTime('1h').sign(privateKey);
-    await expect(parseToken(token, publicKeyPem)).rejects.toThrow(); // Zod will throw
+    await expect(parseThreadToken(token, publicKeyPem)).rejects.toThrow(); // Zod will throw
   });
 
   it('should throw an error for an expired token', async () => {
@@ -68,10 +68,10 @@ describe('parseToken', () => {
 
     // Advance time by 2 seconds
     jest.advanceTimersByTime(2000);
-    await expect(parseToken(token, publicKeyPem)).rejects.toThrow('JWT verification failed: "exp" claim timestamp check failed');
+    await expect(parseThreadToken(token, publicKeyPem)).rejects.toThrow('JWT verification failed: "exp" claim timestamp check failed');
   });
 
   it('should throw an error if the public key is not provided', async () => {
-    await expect(parseToken('any-token', undefined)).rejects.toThrow(ServerError);
+    await expect(parseThreadToken('any-token', undefined)).rejects.toThrow(ServerError);
   });
 });
