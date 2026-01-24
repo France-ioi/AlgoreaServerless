@@ -1,21 +1,21 @@
-import { parseWsToken } from './token';
+import { parseIdentityToken } from './identity-token';
 import { AuthenticationError } from '../utils/errors';
 
 // Mock the jwt module
-jest.mock('../auth/jwt', () => ({
+jest.mock('./jwt', () => ({
   verifyJwt: jest.fn(),
 }));
 
-import { verifyJwt } from '../auth/jwt';
+import { verifyJwt } from './jwt';
 const mockVerifyJwt = verifyJwt as jest.MockedFunction<typeof verifyJwt>;
 
-describe('WebSocket Token', () => {
+describe('IdentityToken', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('parseWsToken', () => {
+  describe('parseIdentityToken', () => {
 
     it('should parse a valid token with user_id and exp', async () => {
       mockVerifyJwt.mockResolvedValue({
@@ -23,7 +23,7 @@ describe('WebSocket Token', () => {
         exp: 1234567890,
       });
 
-      const result = await parseWsToken('valid-token', 'public-key');
+      const result = await parseIdentityToken('valid-token', 'public-key');
 
       expect(mockVerifyJwt).toHaveBeenCalledWith('valid-token', 'public-key');
       expect(result).toEqual({
@@ -35,7 +35,7 @@ describe('WebSocket Token', () => {
     it('should throw when token verification fails', async () => {
       mockVerifyJwt.mockRejectedValue(new AuthenticationError('JWT verification failed'));
 
-      await expect(parseWsToken('invalid-token', 'public-key'))
+      await expect(parseIdentityToken('invalid-token', 'public-key'))
         .rejects.toThrow('JWT verification failed');
     });
 
@@ -44,7 +44,7 @@ describe('WebSocket Token', () => {
         exp: 1234567890,
       });
 
-      await expect(parseWsToken('token-without-user', 'public-key'))
+      await expect(parseIdentityToken('token-without-user', 'public-key'))
         .rejects.toThrow();
     });
 
@@ -53,7 +53,7 @@ describe('WebSocket Token', () => {
         user_id: 'user-123',
       });
 
-      await expect(parseWsToken('token-without-exp', 'public-key'))
+      await expect(parseIdentityToken('token-without-exp', 'public-key'))
         .rejects.toThrow();
     });
 
@@ -63,7 +63,7 @@ describe('WebSocket Token', () => {
         exp: 9999999999,
       });
 
-      await parseWsToken('some-token', 'my-public-key-pem');
+      await parseIdentityToken('some-token', 'my-public-key-pem');
 
       expect(mockVerifyJwt).toHaveBeenCalledWith('some-token', 'my-public-key-pem');
     });

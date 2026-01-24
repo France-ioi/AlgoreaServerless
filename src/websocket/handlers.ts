@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent } from 'aws-lambda';
-import { parseWsToken } from './token';
+import { parseIdentityToken } from '../auth/identity-token';
 import { UserConnections } from '../dbmodels/user-connections';
 import { ThreadSubscriptions, deserializeThreadId } from '../dbmodels/forum/thread-subscriptions';
 import { dynamodb } from '../dynamodb';
@@ -23,8 +23,8 @@ export async function handleConnect(event: APIGatewayProxyEvent): Promise<WsHand
 
   let userId: string;
   try {
-    const wsToken = await parseWsToken(token, process.env.BACKEND_PUBLIC_KEY);
-    userId = wsToken.userId;
+    const identityToken = await parseIdentityToken(token, process.env.BACKEND_PUBLIC_KEY);
+    userId = identityToken.userId;
   } catch (err) {
     return { statusCode: 401, body: `Unauthorized: ${String(err)}` };
   }

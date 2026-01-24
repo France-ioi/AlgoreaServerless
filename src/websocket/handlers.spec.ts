@@ -1,9 +1,9 @@
 import { handleConnect, handleDisconnect } from './handlers';
 import { mockWebSocketConnectEvent, mockWebSocketDisconnectEvent } from '../testutils/event-mocks';
 
-// Mock the token module
-jest.mock('./token', () => ({
-  parseWsToken: jest.fn(),
+// Mock the identity token module
+jest.mock('../auth/identity-token', () => ({
+  parseIdentityToken: jest.fn(),
 }));
 
 // Mock the UserConnections module
@@ -25,10 +25,10 @@ jest.mock('../dbmodels/forum/thread-subscriptions', () => ({
   }),
 }));
 
-import { parseWsToken } from './token';
+import { parseIdentityToken } from '../auth/identity-token';
 import { UserConnections } from '../dbmodels/user-connections';
 import { ThreadSubscriptions } from '../dbmodels/forum/thread-subscriptions';
-const mockParseWsToken = parseWsToken as jest.MockedFunction<typeof parseWsToken>;
+const mockParseIdentityToken = parseIdentityToken as jest.MockedFunction<typeof parseIdentityToken>;
 const MockUserConnections = UserConnections as jest.MockedClass<typeof UserConnections>;
 const MockThreadSubscriptions = ThreadSubscriptions as jest.MockedClass<typeof ThreadSubscriptions>;
 
@@ -57,13 +57,13 @@ describe('WebSocket Handlers', () => {
         statusCode: 401,
         body: 'Unauthorized: missing token',
       });
-      expect(mockParseWsToken).not.toHaveBeenCalled();
+      expect(mockParseIdentityToken).not.toHaveBeenCalled();
     });
 
     it('should return 401 when token validation fails', async () => {
       const event = mockWebSocketConnectEvent();
       event.queryStringParameters = { token: 'invalid-token' };
-      mockParseWsToken.mockRejectedValue(new Error('JWT verification failed'));
+      mockParseIdentityToken.mockRejectedValue(new Error('JWT verification failed'));
 
       const result = await handleConnect(event);
 
@@ -75,7 +75,7 @@ describe('WebSocket Handlers', () => {
     it('should return 200 Connected with userId when token is valid', async () => {
       const event = mockWebSocketConnectEvent();
       event.queryStringParameters = { token: 'valid-token' };
-      mockParseWsToken.mockResolvedValue({ userId: 'user-123', exp: 9999999999 });
+      mockParseIdentityToken.mockResolvedValue({ userId: 'user-123', exp: 9999999999 });
 
       const result = await handleConnect(event);
 
@@ -90,7 +90,7 @@ describe('WebSocket Handlers', () => {
       const event = mockWebSocketConnectEvent();
       event.requestContext.connectionId = 'conn-insert-test';
       event.queryStringParameters = { token: 'valid-token' };
-      mockParseWsToken.mockResolvedValue({ userId: 'user-insert-test', exp: 9999999999 });
+      mockParseIdentityToken.mockResolvedValue({ userId: 'user-insert-test', exp: 9999999999 });
 
       await handleConnect(event);
 
@@ -102,7 +102,7 @@ describe('WebSocket Handlers', () => {
       const event = mockWebSocketConnectEvent();
       event.requestContext.connectionId = undefined;
       event.queryStringParameters = { token: 'valid-token' };
-      mockParseWsToken.mockResolvedValue({ userId: 'user-123', exp: 9999999999 });
+      mockParseIdentityToken.mockResolvedValue({ userId: 'user-123', exp: 9999999999 });
 
       const result = await handleConnect(event);
 
@@ -113,11 +113,11 @@ describe('WebSocket Handlers', () => {
     it('should pass token and public key to parseWsToken', async () => {
       const event = mockWebSocketConnectEvent();
       event.queryStringParameters = { token: 'my-token' };
-      mockParseWsToken.mockResolvedValue({ userId: 'user-456', exp: 9999999999 });
+      mockParseIdentityToken.mockResolvedValue({ userId: 'user-456', exp: 9999999999 });
 
       await handleConnect(event);
 
-      expect(mockParseWsToken).toHaveBeenCalledWith('my-token', 'test-public-key');
+      expect(mockParseIdentityToken).toHaveBeenCalledWith('my-token', 'test-public-key');
     });
 
   });
