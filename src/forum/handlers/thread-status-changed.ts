@@ -1,11 +1,14 @@
 import { z } from 'zod';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
 
+const threadStatusValues = [ 'waiting_for_participant', 'waiting_for_trainer', 'closed' ] as const;
+const formerThreadStatusValues = [ ...threadStatusValues, 'not_started' ] as const;
+
 const threadStatusChangedPayloadSchema = z.object({
   participant_id: z.string(),
   item_id: z.string(),
-  new_status: z.string(),
-  former_status: z.string(),
+  new_status: z.enum(threadStatusValues),
+  former_status: z.enum(formerThreadStatusValues),
   helper_group_id: z.string(),
 });
 
