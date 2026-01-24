@@ -63,14 +63,14 @@ describe('handleThreadStatusChanged', () => {
 
     it('should handle different status values', () => {
       const envelope = createMockEnvelope(createMockPayload({
-        new_status: 'validated',
+        new_status: 'closed',
         former_status: 'waiting_for_participant',
       }));
 
       handleThreadStatusChanged(envelope);
 
       expect(consoleLogSpy).toHaveBeenCalledWith('Thread status changed:', expect.objectContaining({
-        newStatus: 'validated',
+        newStatus: 'closed',
         formerStatus: 'waiting_for_participant',
       }));
     });
