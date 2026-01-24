@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
 import { dynamodb } from '../../dynamodb';
-import { ForumMessageAction, isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
+import { isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
+import { ForumMessageAction } from '../ws-messages';
 
 const submissionPayloadSchema = z.object({
   answer_id: z.string(),

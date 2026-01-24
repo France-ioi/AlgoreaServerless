@@ -3,7 +3,8 @@ import { ThreadEventLabel, ThreadEvents } from '../../dbmodels/forum/thread-even
 import { dynamodb } from '../../dynamodb';
 import { DecodingError, Forbidden } from '../../utils/errors';
 import { z, ZodError } from 'zod';
-import { ForumMessageAction, isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
+import { isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
+import { ForumMessageAction } from '../ws-messages';
 import { HandlerFunction, Request, Response } from 'lambda-api';
 import { extractTokenFromHttp } from '../token';
 import { created } from '../../utils/rest-responses';

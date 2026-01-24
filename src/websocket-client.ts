@@ -7,32 +7,13 @@ export interface SendResult {
   error?: unknown,
 }
 
-export enum ForumMessageAction {
-  NewMessage = 'forum.message.new',
-  NewSubmission = 'forum.submission.new',
+/**
+ * Base interface for all WebSocket messages.
+ * All messages must have an action string to identify the message type.
+ */
+export interface WsMessage {
+  action: string,
 }
-
-interface ForumNewMessage {
-  action: ForumMessageAction.NewMessage,
-  participantId: string,
-  itemId: string,
-  authorId: string,
-  time: number,
-  text: string,
-  uuid: string,
-}
-
-interface ForumNewSubmission {
-  action: ForumMessageAction.NewSubmission,
-  answerId: string,
-  participantId: string,
-  itemId: string,
-  attemptId: string,
-  authorId: string,
-  time: number,
-}
-
-type Message = ForumNewMessage | ForumNewSubmission;
 
 /**
  * The websocket connection id. It is really a string!
@@ -67,7 +48,7 @@ class WSClient {
     }
   }
 
-  private async sendMessages(connectionId: string, message: Message): Promise<SendResult> {
+  private async sendMessages(connectionId: string, message: WsMessage): Promise<SendResult> {
     return await this.api.postToConnection({
       // AWS uses PascalCase for naming convention while we don't. Deactivate the rule for AWS functions and re-enable it right after.
       /* eslint-disable @typescript-eslint/naming-convention */
@@ -82,7 +63,7 @@ class WSClient {
   /**
    * Sends messages to the given `connectionId`'s. The promise never fails but the returned results may be successes or failures.
    */
-  async send(connectionIds: string[], message: Message): Promise<SendResult[]> {
+  async send(connectionIds: string[], message: WsMessage): Promise<SendResult[]> {
     const uniqueIds = [ ...new Set(connectionIds) ];
     return await Promise.all(uniqueIds.map(connectionId => this.sendMessages(connectionId, message)));
   }
