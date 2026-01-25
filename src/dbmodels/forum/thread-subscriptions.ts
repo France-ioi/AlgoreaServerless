@@ -39,9 +39,9 @@ export function deserializeThreadId(serialized: string): ThreadId {
  *
  * Database schema:
  * - pk: stage#THREAD#{participantId}#{itemId}#SUB
- * - sk: insertion time (allows multiple subscriptions per thread)
+ * - sk: insertion timestamp (milliseconds since epoch, allows multiple subscriptions per thread)
  * - connectionId: the WebSocket connection id
- * - ttl: auto-deletion time (tied to WebSocket connection lifetime)
+ * - ttl: auto-deletion time (seconds since epoch, DynamoDB TTL format, tied to WebSocket connection lifetime)
  * - userId: the user id of the subscriber
  */
 export class ThreadSubscriptions extends Table {

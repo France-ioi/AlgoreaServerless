@@ -19,9 +19,9 @@ export type ThreadFollow = z.infer<typeof threadFollowSchema>;
 /**
  * Thread follows are stored in the database with the following schema:
  * - pk: ${stage}#THREAD#${participantId}#${itemId}#FOLLOW
- * - sk: insertion time
+ * - sk: insertion timestamp (milliseconds since epoch)
  * - userId: the user id of the follower
- * - ttl: optional auto-deletion time
+ * - ttl: optional auto-deletion time (seconds since epoch, DynamoDB TTL format)
  */
 export class ThreadFollows extends Table {
 

@@ -38,9 +38,9 @@ const u2cEntrySchema = z.object({
  *
  * Two entry types are stored:
  * - c2u (connection to user): pk: `${stage}#CONN#${connectionId}#USER`, sk: 0
- *   Contains: userId, creationTime, ttl
- * - u2c (user to connection): pk: `${stage}#USER#${userId}#CONN`, sk: creationTime
- *   Contains: connectionId, ttl
+ *   Contains: userId, creationTime (ms since epoch), ttl (seconds since epoch, DynamoDB TTL format)
+ * - u2c (user to connection): pk: `${stage}#USER#${userId}#CONN`, sk: creationTime (ms since epoch)
+ *   Contains: connectionId, ttl (seconds since epoch, DynamoDB TTL format)
  */
 export class UserConnections extends Table {
 

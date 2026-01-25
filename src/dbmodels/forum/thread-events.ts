@@ -36,7 +36,7 @@ function pk(threadId: ThreadId): string {
 /**
  * Thread events are stored in the database with the following schema:
  * - pk: see above
- * - sk: event time
+ * - sk: event timestamp (milliseconds since epoch)
  * - label: the type of event
  * - createdBy: the user id of the creator
  * - data: the event data
