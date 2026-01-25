@@ -1,11 +1,10 @@
-import { Request } from 'lambda-api';
 import { createCheckoutSession } from './checkout-session';
+import { RequestWithPortalToken } from '../token';
 import * as config from '../../config';
 import * as stripe from '../../stripe';
 import * as stripeCustomer from '../lib/stripe/customer';
 import * as stripePrice from '../lib/stripe/price';
 import * as checkoutSession from '../lib/stripe/checkout-session';
-import * as token from '../token';
 import { DecodingError, ServerError } from '../../utils/errors';
 
 jest.mock('../../config');
@@ -13,7 +12,6 @@ jest.mock('../../stripe');
 jest.mock('../lib/stripe/customer');
 jest.mock('../lib/stripe/price');
 jest.mock('../lib/stripe/checkout-session');
-jest.mock('../token');
 
 const mockLoadConfig = config.loadConfig as jest.MockedFunction<typeof config.loadConfig>;
 const mockGetStripeClient = stripe.getStripeClient as jest.MockedFunction<typeof stripe.getStripeClient>;
@@ -26,12 +24,9 @@ const mockFindPriceByItemId = stripePrice.findPriceByItemId as jest.MockedFuncti
 const mockCreateCheckoutSession = checkoutSession.createCheckoutSession as jest.MockedFunction<
   typeof checkoutSession.createCheckoutSession
 >;
-const mockExtractTokenFromHttp = token.extractTokenFromHttp as jest.MockedFunction<
-  typeof token.extractTokenFromHttp
->;
 
 describe('Checkout Session Handler', () => {
-  let mockRequest: Partial<Request>;
+  let mockRequest: Partial<RequestWithPortalToken>;
   let mockStripeClient: any;
   let consoleErrorSpy: jest.SpyInstance;
 
@@ -39,20 +34,18 @@ describe('Checkout Session Handler', () => {
     mockRequest = {
       headers: { authorization: 'Bearer test-token' },
       body: { return_url: 'https://example.com/return' },
+      portalToken: {
+        itemId: 'item_123',
+        userId: 'user_456',
+        firstname: 'John',
+        lastname: 'Doe',
+        email: 'john@example.com',
+      },
     };
 
     mockStripeClient = { customers: {}, prices: {}, checkout: {} };
 
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-
-    // Default mocks
-    mockExtractTokenFromHttp.mockResolvedValue({
-      itemId: 'item_123',
-      userId: 'user_456',
-      firstname: 'John',
-      lastname: 'Doe',
-      email: 'john@example.com',
-    });
 
     mockLoadConfig.mockReturnValue({
       portal: {
@@ -76,10 +69,9 @@ describe('Checkout Session Handler', () => {
   });
 
   it('should successfully create checkout session with valid request', async () => {
-    const result = await createCheckoutSession(mockRequest as Request, {} as any);
+    const result = await createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any);
 
     expect(result).toEqual({ client_secret: 'cs_test_secret' });
-    expect(mockExtractTokenFromHttp).toHaveBeenCalledWith(mockRequest.headers);
     expect(mockFindOrCreateCustomer).toHaveBeenCalledWith(
       mockStripeClient,
       'user_456',
@@ -100,11 +92,11 @@ describe('Checkout Session Handler', () => {
     mockRequest.body = {};
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow(DecodingError);
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow('Missing or invalid return_url in request body');
   });
 
@@ -112,7 +104,7 @@ describe('Checkout Session Handler', () => {
     mockRequest.body = { return_url: '' };
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow(DecodingError);
   });
 
@@ -122,11 +114,11 @@ describe('Checkout Session Handler', () => {
     });
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow(ServerError);
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow('Payment is not configured');
   });
 
@@ -134,11 +126,11 @@ describe('Checkout Session Handler', () => {
     mockGetStripeClient.mockReturnValue(null);
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow(ServerError);
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow('Stripe client is not available');
   });
 
@@ -146,11 +138,11 @@ describe('Checkout Session Handler', () => {
     mockFindPriceByItemId.mockRejectedValue(new DecodingError('No price found for item'));
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow(DecodingError);
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow('No price found for item');
   });
 
@@ -159,24 +151,16 @@ describe('Checkout Session Handler', () => {
     mockCreateCheckoutSession.mockRejectedValue(stripeError);
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow(ServerError);
 
     await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
+      createCheckoutSession(mockRequest as RequestWithPortalToken, {} as any)
     ).rejects.toThrow('Failed to create checkout session');
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       'Error creating checkout session with Stripe:',
       stripeError
     );
-  });
-
-  it('should handle token extraction errors', async () => {
-    mockExtractTokenFromHttp.mockRejectedValue(new DecodingError('Invalid token'));
-
-    await expect(
-      createCheckoutSession(mockRequest as Request, {} as any)
-    ).rejects.toThrow(DecodingError);
   });
 });

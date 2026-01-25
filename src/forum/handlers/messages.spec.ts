@@ -1,5 +1,5 @@
 import { clearTable } from '../../testutils/db';
-import { generateToken, initializeKeys } from '../../testutils/token-generator';
+import { ThreadToken, RequestWithThreadToken } from '../thread-token';
 
 const mockSend = jest.fn();
 
@@ -13,14 +13,21 @@ import { ThreadEvents } from '../../dbmodels/forum/thread-events';
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
 import { dynamodb } from '../../dynamodb';
 
+/** Helper to create a mock request with threadToken already set (as middleware would do) */
+function mockRequest(token: ThreadToken, extras: Partial<RequestWithThreadToken> = {}): RequestWithThreadToken {
+  return {
+    threadToken: token,
+    headers: {},
+    query: {},
+    body: {},
+    ...extras,
+  } as RequestWithThreadToken;
+}
+
 describe('Forum Messages Service', () => {
   let threadEvents: ThreadEvents;
   let threadSubs: ThreadSubscriptions;
   const threadId = { participantId: 'user123', itemId: 'item456' };
-
-  beforeAll(async () => {
-    await initializeKeys();
-  });
 
   beforeEach(async () => {
     threadEvents = new ThreadEvents(dynamodb);
@@ -32,13 +39,10 @@ describe('Forum Messages Service', () => {
   });
 
   describe('getAllMessages', () => {
-    it('should return empty array when no messages exist', async () => {
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        query: {},
-      } as any;
+    const baseToken: ThreadToken = { ...threadId, userId: 'user123', canWrite: false, canWatch: true, isMine: false };
 
+    it('should return empty array when no messages exist', async () => {
+      const req = mockRequest(baseToken);
       const resp = {} as any;
       const result = await getAllMessages(req, resp);
       expect(result).toEqual([]);
@@ -63,12 +67,7 @@ describe('Forum Messages Service', () => {
         },
       ]);
 
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        query: {},
-      } as any;
-
+      const req = mockRequest(baseToken);
       const resp = {} as any;
       const result = await getAllMessages(req, resp);
       expect(result).toHaveLength(2);
@@ -95,12 +94,7 @@ describe('Forum Messages Service', () => {
       }));
       await threadEvents.insert(messages);
 
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        query: { limit: '5' },
-      } as any;
-
+      const req = mockRequest(baseToken, { query: { limit: '5' } });
       const resp = {} as any;
       const result = await getAllMessages(req, resp);
       expect(result).toHaveLength(5);
@@ -115,12 +109,7 @@ describe('Forum Messages Service', () => {
       }));
       await threadEvents.insert(messages);
 
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        query: {},
-      } as any;
-
+      const req = mockRequest(baseToken);
       const resp = {} as any;
       const result = await getAllMessages(req, resp);
       expect(result).toHaveLength(10); // Default limit
@@ -135,44 +124,18 @@ describe('Forum Messages Service', () => {
       }));
       await threadEvents.insert(messages);
 
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        query: { limit: '50' }, // Requesting more than max
-      } as any;
-
-      const resp = {} as any;
-      await expect(getAllMessages(req, resp)).rejects.toThrow();
-    });
-
-    it('should throw error for invalid token', async () => {
-      const req = {
-        headers: { authorization: 'Bearer invalid-token' },
-        query: {},
-      } as any;
-
-      const resp = {} as any;
-      await expect(getAllMessages(req, resp)).rejects.toThrow();
-    });
-
-    it('should throw error when authorization header is missing', async () => {
-      const req = {
-        headers: {},
-        query: {},
-      } as any;
-
+      const req = mockRequest(baseToken, { query: { limit: '50' } }); // Requesting more than max
       const resp = {} as any;
       await expect(getAllMessages(req, resp)).rejects.toThrow();
     });
   });
 
   describe('createMessage', () => {
+    const writeToken: ThreadToken = { ...threadId, userId: 'user123', canWrite: true, canWatch: true, isMine: false };
+    const readOnlyToken: ThreadToken = { ...threadId, userId: 'user123', canWrite: false, canWatch: true, isMine: false };
+
     it('should create a message and return 201', async () => {
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: true });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        body: { text: 'New message', uuid: 'msg-uuid-1' },
-      } as any;
+      const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
         status: jest.fn(function(this: any) {
           return this;
@@ -194,11 +157,7 @@ describe('Forum Messages Service', () => {
     });
 
     it('should throw Forbidden when canWrite is false', async () => {
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        body: { text: 'New message', uuid: 'msg-uuid-1' },
-      } as any;
+      const req = mockRequest(readOnlyToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {} as any;
 
       await expect(createMessage(req, resp)).rejects.toThrow('This operation required canWrite');
@@ -208,11 +167,7 @@ describe('Forum Messages Service', () => {
       await threadSubs.subscribe(threadId, 'conn-1', 'user1');
       await threadSubs.subscribe(threadId, 'conn-2', 'user2');
 
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: true });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        body: { text: 'New message', uuid: 'msg-uuid-1' },
-      } as any;
+      const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
         status: jest.fn(function(this: any) {
           return this;
@@ -249,11 +204,7 @@ describe('Forum Messages Service', () => {
         return { success: true, connectionId: id };
       })));
 
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: true });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        body: { text: 'New message', uuid: 'msg-uuid-1' },
-      } as any;
+      const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
         status: jest.fn(function(this: any) {
           return this;
@@ -272,11 +223,7 @@ describe('Forum Messages Service', () => {
     });
 
     it('should validate request body', async () => {
-      const token = await generateToken({ ...threadId, userId: 'user123', canWrite: true });
-      const req = {
-        headers: { authorization: `Bearer ${token}` },
-        body: { text: 'New message' }, // Missing uuid
-      } as any;
+      const req = mockRequest(writeToken, { body: { text: 'New message' } }); // Missing uuid
       const resp = {} as any;
 
       await expect(createMessage(req, resp)).rejects.toThrow();

@@ -5,15 +5,15 @@ import { DecodingError, Forbidden } from '../../utils/errors';
 import { z, ZodError } from 'zod';
 import { isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
 import { ForumMessageAction } from '../ws-messages';
-import { HandlerFunction, Request, Response } from 'lambda-api';
-import { extractThreadTokenFromHttp } from '../thread-token';
+import { HandlerFunction, Response } from 'lambda-api';
+import { RequestWithThreadToken } from '../thread-token';
 import { created } from '../../utils/rest-responses';
 
 const subscriptions = new ThreadSubscriptions(dynamodb);
 const threadEvents = new ThreadEvents(dynamodb);
 
-async function create(req: Request, resp: Response): Promise<ReturnType<typeof created>> {
-  const { participantId, itemId, userId, canWrite } = await extractThreadTokenFromHttp(req.headers);
+async function create(req: RequestWithThreadToken, resp: Response): Promise<ReturnType<typeof created>> {
+  const { participantId, itemId, userId, canWrite } = req.threadToken;
   if (!canWrite) throw new Forbidden('This operation required canWrite');
 
   const threadId = { participantId, itemId };
@@ -48,8 +48,8 @@ async function create(req: Request, resp: Response): Promise<ReturnType<typeof c
 const defaultLimit = 10;
 const maxLimit = 20;
 
-async function getAll(req: Request): Promise<{ time: number, text: string, authorId: string, uuid: string }[]> {
-  const token = await extractThreadTokenFromHttp(req.headers);
+async function getAll(req: RequestWithThreadToken): Promise<{ time: number, text: string, authorId: string, uuid: string }[]> {
+  const { threadToken } = req;
   const limitParam = req.query['limit'] ? +req.query['limit'] : undefined;
   let limit: number;
   try {
@@ -59,7 +59,7 @@ async function getAll(req: Request): Promise<{ time: number, text: string, autho
     throw err;
   }
 
-  const messages = await threadEvents.getAllMessages(token, { limit });
+  const messages = await threadEvents.getAllMessages(threadToken, { limit });
   return messages.map(m => ({
     time: m.sk,
     authorId: m.data.authorId,
@@ -68,5 +68,5 @@ async function getAll(req: Request): Promise<{ time: number, text: string, autho
   }));
 }
 
-export const getAllMessages: HandlerFunction = getAll;
-export const createMessage: HandlerFunction = create;
+export const getAllMessages = getAll as unknown as HandlerFunction;
+export const createMessage = create as unknown as HandlerFunction;

@@ -6,10 +6,11 @@ import { subscribe, unsubscribe } from './handlers/thread-subscription';
 import { handleSubmissionCreated } from './handlers/submission-created';
 import { handleThreadStatusChanged } from './handlers/thread-status-changed';
 import { handleGradeSaved } from './handlers/grade-saved';
+import { requireThreadToken } from './thread-token';
 
 const restRoutes = (api: API): void => {
-  api.get('/message', getAllMessages);
-  api.post('/message', createMessage);
+  api.get('/message', requireThreadToken, getAllMessages);
+  api.post('/message', requireThreadToken, createMessage);
 };
 
 const wsActions = (ws: WsServer): void => {

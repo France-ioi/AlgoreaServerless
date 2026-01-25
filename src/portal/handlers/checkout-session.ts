@@ -1,7 +1,7 @@
-import { HandlerFunction, Request } from 'lambda-api';
+import { HandlerFunction } from 'lambda-api';
 import { z } from 'zod';
 import { loadConfig } from '../../config';
-import { extractTokenFromHttp } from '../token';
+import { RequestWithPortalToken } from '../token';
 import { getStripeClient } from '../../stripe';
 import { findOrCreateCustomer } from '../lib/stripe/customer';
 import { findPriceByItemId } from '../lib/stripe/price';
@@ -12,9 +12,8 @@ const requestBodySchema = z.object({
   return_url: z.string().min(1),
 });
 
-async function post(req: Request): Promise<{ client_secret: string }> {
-  // Extract and validate token
-  const token = await extractTokenFromHttp(req.headers);
+async function post(req: RequestWithPortalToken): Promise<{ client_secret: string }> {
+  const { portalToken } = req;
 
   // Validate request body
   const bodyResult = requestBodySchema.safeParse(req.body);
@@ -40,11 +39,11 @@ async function post(req: Request): Promise<{ client_secret: string }> {
     const [ customerId, priceId ] = await Promise.all([
       findOrCreateCustomer(
         stripe,
-        token.userId,
-        `${token.firstname} ${token.lastname}`,
-        token.email
+        portalToken.userId,
+        `${portalToken.firstname} ${portalToken.lastname}`,
+        portalToken.email
       ),
-      findPriceByItemId(stripe, token.itemId),
+      findPriceByItemId(stripe, portalToken.itemId),
     ]);
 
     // Create checkout session
@@ -52,7 +51,7 @@ async function post(req: Request): Promise<{ client_secret: string }> {
       stripe,
       customerId,
       priceId,
-      token.itemId,
+      portalToken.itemId,
       returnUrl
     );
 
@@ -72,4 +71,4 @@ async function post(req: Request): Promise<{ client_secret: string }> {
   }
 }
 
-export const createCheckoutSession: HandlerFunction = post;
+export const createCheckoutSession = post as unknown as HandlerFunction;

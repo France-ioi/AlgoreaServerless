@@ -1,5 +1,5 @@
 import { AuthenticationError } from '../utils/errors';
-import { Request } from 'lambda-api';
+import { Middleware, Request } from 'lambda-api';
 import * as z from 'zod';
 import { WsRequest } from '../utils/lambda-ws-server';
 import { verifyJwt, extractBearerToken } from '../auth/jwt';
@@ -22,6 +22,11 @@ export interface ThreadToken {
   canWrite: boolean,
 }
 
+/** Request with a parsed ThreadToken attached */
+export interface RequestWithThreadToken extends Request {
+  threadToken: ThreadToken,
+}
+
 export async function parseThreadToken(token: string, publicKeyPem?: string): Promise<ThreadToken> {
   const payload = await verifyJwt(token, publicKeyPem);
   const decodedPayload = jwsPayloadSchema.parse(payload);
@@ -35,10 +40,20 @@ export async function parseThreadToken(token: string, publicKeyPem?: string): Pr
   };
 }
 
-export async function extractThreadTokenFromHttp(headers: Request['headers']): Promise<ThreadToken> {
+async function extractThreadTokenFromHttp(headers: Request['headers']): Promise<ThreadToken> {
   const jws = extractBearerToken(headers['authorization']);
   return parseThreadToken(jws, process.env.BACKEND_PUBLIC_KEY);
 }
+
+/**
+ * Middleware that parses the ThreadToken from the Authorization header
+ * and attaches it to the request as `req.threadToken`
+ */
+export const requireThreadToken: Middleware = (async (req, _res, next) => {
+  const token = await extractThreadTokenFromHttp(req.headers);
+  (req as RequestWithThreadToken).threadToken = token;
+  next();
+}) as Middleware;
 
 export async function extractThreadTokenFromWs(body: WsRequest['body']): Promise<ThreadToken> {
   const result = z.object({ token: z.string() }).safeParse(body);

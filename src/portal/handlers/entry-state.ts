@@ -1,13 +1,12 @@
-import { HandlerFunction, Request } from 'lambda-api';
+import { HandlerFunction } from 'lambda-api';
 import { loadConfig } from '../../config';
-import { extractTokenFromHttp } from '../token';
+import { RequestWithPortalToken } from '../token';
 import { getStripeClient } from '../../stripe';
 import { findOrCreateCustomer } from '../lib/stripe/customer';
 import { hasPaidInvoice } from '../lib/stripe/invoice';
 
-async function get(req: Request): Promise<{ payment: { state: string } }> {
-  // Extract and validate token
-  const token = await extractTokenFromHttp(req.headers);
+async function get(req: RequestWithPortalToken): Promise<{ payment: { state: string } }> {
+  const { portalToken } = req;
 
   // Check if payment is configured
   const config = loadConfig();
@@ -33,13 +32,13 @@ async function get(req: Request): Promise<{ payment: { state: string } }> {
     // Find or create customer
     const customerId = await findOrCreateCustomer(
       stripe,
-      token.userId,
-      `${token.firstname} ${token.lastname}`,
-      token.email
+      portalToken.userId,
+      `${portalToken.firstname} ${portalToken.lastname}`,
+      portalToken.email
     );
 
     // Check if customer has paid invoice for this item
-    const isPaid = await hasPaidInvoice(stripe, customerId, token.itemId);
+    const isPaid = await hasPaidInvoice(stripe, customerId, portalToken.itemId);
 
     return {
       payment: {
@@ -58,4 +57,4 @@ async function get(req: Request): Promise<{ payment: { state: string } }> {
   }
 }
 
-export const getEntryState: HandlerFunction = get;
+export const getEntryState = get as unknown as HandlerFunction;
