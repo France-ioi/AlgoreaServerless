@@ -4,6 +4,7 @@ import createWsServer from './utils/lambda-ws-server';
 import createEventBusServer from './utils/lambda-eventbus-server';
 import { forumRoutes, forumWsActions, forumEventHandlers } from './forum/routes';
 import { portalRoutes } from './portal/routes';
+import { notificationRoutes } from './routes/notifications';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
 import { handleConnect, handleDisconnect } from './websocket/handlers';
@@ -27,6 +28,7 @@ api.options('/*', () => ({}));
 // routes registration
 api.register(forumRoutes, { prefix: '/forum' });
 api.register(portalRoutes, { prefix: '/portal' });
+api.register(notificationRoutes, { prefix: '/notifications' });
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////

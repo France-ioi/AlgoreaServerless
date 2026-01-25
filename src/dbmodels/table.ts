@@ -139,16 +139,20 @@ export class Table {
 
       if (params.projectionAttributes) {
         // Handle reserved words like "data" by using ExpressionAttributeNames
-        queryParams.ExpressionAttributeNames = {};
+        const expressionAttributeNames: Record<string, string> = {};
         queryParams.ProjectionExpression = params.projectionAttributes.map(attr => {
           // Reserved words in DynamoDB need to be aliased
           const reservedWords = [ 'data', 'name', 'type', 'status', 'timestamp' ];
           if (reservedWords.includes(attr.toLowerCase())) {
-            queryParams.ExpressionAttributeNames![`#${attr}`] = attr;
+            expressionAttributeNames[`#${attr}`] = attr;
             return `#${attr}`;
           }
           return attr;
         }).join(', ');
+        // Only set ExpressionAttributeNames if it's not empty (DynamoDB rejects empty objects)
+        if (Object.keys(expressionAttributeNames).length > 0) {
+          queryParams.ExpressionAttributeNames = expressionAttributeNames;
+        }
       }
 
       if (params.limit) {
