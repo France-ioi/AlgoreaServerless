@@ -28,11 +28,20 @@ export function deserializeThreadId(serialized: string): ThreadId {
 }
 
 /**
- * Thread subscriptions are stored in the database with the following schema:
- * - pk: see above
- * - sk: insertion time
- * - connectionId: the connection id
- * - ttl: auto-deletion time
+ * Thread Subscriptions - Connection-level real-time update tracking
+ *
+ * A subscription links a specific WebSocket connection to a thread, enabling real-time
+ * message delivery to that particular frontend instance (browser tab/window).
+ *
+ * Key distinction from ThreadFollows:
+ * - Subscription = connection-specific, short-lived (TTL-based), for live updates
+ * - Follow = user-specific, persistent, for notifications
+ *
+ * Database schema:
+ * - pk: stage#THREAD#{participantId}#{itemId}#SUB
+ * - sk: insertion time (allows multiple subscriptions per thread)
+ * - connectionId: the WebSocket connection id
+ * - ttl: auto-deletion time (tied to WebSocket connection lifetime)
  * - userId: the user id of the subscriber
  */
 export class ThreadSubscriptions extends Table {

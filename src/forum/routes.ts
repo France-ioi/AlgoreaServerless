@@ -17,6 +17,11 @@ const restRoutes = (api: API): void => {
   api.delete('/follow', requireIdentityToken, unfollowThread);
 };
 
+/**
+ * WebSocket actions for connection-specific operations.
+ * Subscriptions are on WS (not REST) because they track which specific connection/frontend
+ * window should receive live updates. See thread-subscription.ts for details.
+ */
 const wsActions = (ws: WsServer): void => {
   ws.on('subscribe', subscribe);
   ws.on('unsubscribe', unsubscribe);
