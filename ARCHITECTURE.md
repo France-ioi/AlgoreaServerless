@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: January 23, 2026
+**Last Updated**: January 25, 2026
 
 ## Overview
 
@@ -124,21 +124,30 @@ AlgoreaServerless/
 ├── src/                    # Source code
 │   ├── auth/              # Shared authentication module
 │   │   ├── jwt.ts         # JWT verification and token extraction
-│   │   └── jwt.spec.ts    # Authentication tests
+│   │   ├── identity-token.ts      # Identity token parsing
+│   │   ├── identity-token-middleware.ts  # Identity token middleware
+│   │   └── *.spec.ts      # Authentication tests
 │   ├── dbmodels/          # Database models and data access
 │   │   ├── forum/         # Forum-specific models
 │   │   │   ├── thread.ts
 │   │   │   ├── thread-events.ts
+│   │   │   ├── thread-follows.ts
 │   │   │   └── thread-subscriptions.ts
+│   │   ├── notifications.ts  # User notifications model
 │   │   └── table.ts       # Base table class
+│   ├── handlers/          # App-level request handlers
+│   │   └── notifications.ts  # Notification handlers
+│   ├── routes/            # App-level route registration
+│   │   └── notifications.ts  # Notification routes
 │   ├── forum/             # Forum feature module
 │   │   ├── routes.ts      # Route and action registration
 │   │   ├── handlers/      # HTTP/WebSocket request handlers
 │   │   │   ├── messages.ts
+│   │   │   ├── thread-follow.ts
 │   │   │   └── thread-subscription.ts
 │   │   ├── e2e/           # End-to-end tests
 │   │   ├── spec/          # Unit tests
-│   │   └── token.ts       # Forum JWT token parsing
+│   │   └── thread-token.ts  # Forum JWT token parsing
 │   ├── portal/            # Portal feature module
 │   │   ├── routes.ts      # Route registration
 │   │   ├── handlers/      # HTTP request handlers
@@ -201,10 +210,17 @@ Built on the `lambda-api` library with:
 - **Middleware Pipeline**: Error handling → CORS → Route handlers
 - **Route Registration**: Modular route registration with prefixes
 - **Forum Routes** (`/sls/forum`):
-  - `GET /message` - Retrieve thread messages
-  - `POST /message` - Create new message
+  - `GET /thread/:itemId/:participantId/messages` - Retrieve thread messages
+  - `POST /thread/:itemId/:participantId/messages` - Create new message
+  - `POST /thread/:itemId/:participantId/follows` - Follow a thread (requires thread token)
+  - `DELETE /thread/:itemId/:participantId/follows` - Unfollow a thread (requires identity token)
 - **Portal Routes** (`/sls/portal`):
   - `GET /entry-state` - Get payment state for an item
+  - `POST /checkout-session` - Create Stripe checkout session
+- **Notification Routes** (`/sls/notifications`):
+  - `GET /` - List user notifications (last 20)
+  - `DELETE /:sk` - Delete notification by sk, or all if sk="all"
+  - `PUT /:sk/mark-as-read` - Mark notification as read/unread
 - **Common Routes**:
   - `OPTIONS /*` - CORS preflight handling
 
@@ -282,6 +298,19 @@ eb.on('submission_created', handleSubmissionCreated, { supportedMajorVersion: 1 
 - Auto-cleanup of stale connections via DynamoDB TTL
 - Supports subscription management and connection cleanup
 
+**ThreadFollows** (`src/dbmodels/forum/thread-follows.ts`)
+- Manages persistent user follows for threads (for notifications)
+- Schema: `pk` (thread identifier + #FOLLOW), `sk` (follow time), `userId`
+- Unlike subscriptions, follows persist across sessions
+- Used to determine who should receive notifications about thread activity
+
+**Notifications** (`src/dbmodels/notifications.ts`)
+- Stores per-user notifications with auto-expiration
+- Schema: `pk` ({stage}#USER#{userId}#NOTIF), `sk` (creation time ms), `notificationType`, `payload`, `readTime`, `ttl`
+- TTL: ~2 months (auto-cleanup via DynamoDB TTL)
+- `readTime`: timestamp when marked as read (undefined = unread)
+- Supports listing, deletion, and read status management
+
 ### 6. Authentication
 
 JWT-based authentication using JOSE library with a shared verification layer:
@@ -299,9 +328,21 @@ Core JWT verification functions used by both forum and portal:
   - Uses `decodeJwt()` instead of `jwtVerify()` when enabled
   - Throws `ServerError` if `NO_SIG_CHECK=1` is set in non-dev stages
 
-#### Forum Token Module (`src/forum/token.ts`)
+#### Identity Token Module (`src/auth/identity-token.ts`)
 
-Domain-specific token parsing for forum features:
+Generic token for user identification (used by notifications and some forum endpoints):
+- **Token Sources**: HTTP Authorization header (Bearer) only
+- **Token Payload**:
+  - `user_id`: User identifier
+  - `exp`: Token expiration time
+- **Functions**:
+  - `parseIdentityToken(token, publicKey)`: Validates and transforms identity token
+- **Middleware**: `requireIdentityToken` attaches parsed token to request as `req.identityToken`
+- **Usage**: Used for endpoints that only need user identification (notifications, unfollowing threads)
+
+#### Forum Thread Token Module (`src/forum/thread-token.ts`)
+
+Domain-specific token parsing for forum thread operations:
 - **Token Sources**: HTTP Authorization header (Bearer) or WebSocket message body
 - **Token Payload**:
   - `participant_id`: Forum participant identifier
@@ -314,6 +355,7 @@ Domain-specific token parsing for forum features:
   - `parseToken(token, publicKey)`: Validates and transforms forum token
   - `extractTokenFromHttp(headers)`: Extracts and parses from HTTP headers
   - `extractTokenFromWs(body)`: Extracts and parses from WebSocket message
+- **Middleware**: `requireThreadToken` attaches parsed token to request as `req.threadToken`
 
 #### Portal Token Module (`src/portal/token.ts`)
 
@@ -423,6 +465,23 @@ sk: {timestamp}
 connectionId: string
 userId: string
 ttl: {timestamp + 7200} (2 hours)
+```
+
+#### Thread Follows
+```
+pk: {STAGE}#THREAD#{participantId}#{itemId}#FOLLOW
+sk: {timestamp}
+userId: string
+```
+
+#### User Notifications
+```
+pk: {STAGE}#USER#{userId}#NOTIF
+sk: {timestamp} (creation time in milliseconds)
+notificationType: string
+payload: Record<string, unknown>
+readTime?: number (milliseconds, when marked as read)
+ttl: {timestamp + ~5184000} (~60 days, in seconds since epoch)
 ```
 
 ### Key Design Patterns
@@ -1195,6 +1254,65 @@ The checkout session and entry-state services work together:
 5. **Verification**: Client calls `GET /entry-state` → returns `"paid"`
 
 This creates a complete payment verification cycle.
+
+## Notifications Feature
+
+### Overview
+
+The notifications module provides per-user notification storage and management. It's an app-level feature (not specific to forum or portal) that can be used by any part of the system.
+
+### REST API Endpoints
+
+All endpoints require identity token authentication (Bearer token in Authorization header).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/sls/notifications` | Return last 20 notifications (newest first) |
+| DELETE | `/sls/notifications/:sk` | Delete notification by sk, or all if sk="all" |
+| PUT | `/sls/notifications/:sk/mark-as-read` | Mark as read/unread (defaults to read if no body) |
+
+### Request/Response Examples
+
+**GET /notifications**
+```json
+{
+  "notifications": [
+    {
+      "sk": 1706000000000,
+      "notificationType": "forum.reply",
+      "payload": { "threadId": "...", "message": "..." },
+      "readTime": 1706100000000
+    }
+  ]
+}
+```
+
+**PUT /notifications/:sk/mark-as-read**
+```json
+// Request body (optional, defaults to { "read": true })
+{ "read": true }
+
+// Response
+{ "status": "ok" }
+```
+
+### Database Model
+
+- **PK**: `{stage}#USER#{userId}#NOTIF`
+- **SK**: Creation time (milliseconds)
+- **TTL**: ~2 months (auto-cleanup)
+- **readTime**: Timestamp when marked as read (undefined = unread)
+
+### Architecture
+
+```
+src/
+├── handlers/notifications.ts     # Request handlers
+├── routes/notifications.ts       # Route registration
+└── dbmodels/notifications.ts     # Database model
+```
+
+The handlers use the identity token middleware (`requireIdentityToken`) which extracts `userId` from the JWT token.
 
 ## Related Documentation
 
