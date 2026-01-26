@@ -32,7 +32,7 @@ describe('E2E: Thread Isolation', () => {
 
     // Post message to thread1
     await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread1.itemId}/${thread1.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${thread1Token}` },
       body: JSON.stringify({ text: 'Thread 1 message', uuid: 'msg-t1' }),
@@ -40,7 +40,7 @@ describe('E2E: Thread Isolation', () => {
 
     // Post message to thread2
     await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread2.itemId}/${thread2.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${thread2Token}` },
       body: JSON.stringify({ text: 'Thread 2 message', uuid: 'msg-t2' }),
@@ -48,7 +48,7 @@ describe('E2E: Thread Isolation', () => {
 
     // Get messages from thread1
     const thread1Messages = await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread1.itemId}/${thread1.participantId}/messages`,
       httpMethod: 'GET',
       headers: { authorization: `Bearer ${thread1Token}` },
     }), {} as any) as any;
@@ -59,7 +59,7 @@ describe('E2E: Thread Isolation', () => {
 
     // Get messages from thread2
     const thread2Messages = await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread2.itemId}/${thread2.participantId}/messages`,
       httpMethod: 'GET',
       headers: { authorization: `Bearer ${thread2Token}` },
     }), {} as any) as any;
@@ -92,7 +92,7 @@ describe('E2E: Thread Isolation', () => {
 
     // Post message to thread1
     await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread1.itemId}/${thread1.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${thread1User1}` },
       body: JSON.stringify({ text: 'Thread 1 only', uuid: 'msg-t1-only' }),
@@ -116,14 +116,14 @@ describe('E2E: Thread Isolation', () => {
 
     // Post to both threads
     await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread1.itemId}/${thread1.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${thread1Token}` },
       body: JSON.stringify({ text: 'Message in thread1', uuid: 'msg-1' }),
     }), {} as any);
 
     await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread2.itemId}/${thread2.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${thread2Token}` },
       body: JSON.stringify({ text: 'Message in thread2', uuid: 'msg-2' }),
@@ -131,13 +131,13 @@ describe('E2E: Thread Isolation', () => {
 
     // Retrieve from both threads
     const thread1Result = await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread1.itemId}/${thread1.participantId}/messages`,
       httpMethod: 'GET',
       headers: { authorization: `Bearer ${thread1Token}` },
     }), {} as any) as any;
 
     const thread2Result = await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread2.itemId}/${thread2.participantId}/messages`,
       httpMethod: 'GET',
       headers: { authorization: `Bearer ${thread2Token}` },
     }), {} as any) as any;
@@ -180,7 +180,7 @@ describe('E2E: Thread Isolation', () => {
 
     // Post to thread1
     await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${thread1.itemId}/${thread1.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${posterToken}` },
       body: JSON.stringify({ text: 'After unsubscribe', uuid: 'msg-after' }),

@@ -11,10 +11,10 @@ import { requireIdentityToken } from '../auth/identity-token-middleware';
 import { followThread, unfollowThread } from './handlers/thread-follow';
 
 const restRoutes = (api: API): void => {
-  api.get('/message', requireThreadToken, getAllMessages);
-  api.post('/message', requireThreadToken, createMessage);
-  api.post('/follow', requireThreadToken, followThread);
-  api.delete('/follow', requireIdentityToken, unfollowThread);
+  api.get('/thread/:itemId/:participantId/messages', requireThreadToken, getAllMessages);
+  api.post('/thread/:itemId/:participantId/messages', requireThreadToken, createMessage);
+  api.post('/thread/:itemId/:participantId/follows', requireThreadToken, followThread);
+  api.delete('/thread/:itemId/:participantId/follows', requireIdentityToken, unfollowThread);
 };
 
 /**

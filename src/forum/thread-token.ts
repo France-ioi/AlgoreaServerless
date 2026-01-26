@@ -1,4 +1,4 @@
-import { AuthenticationError } from '../utils/errors';
+import { AuthenticationError, Forbidden } from '../utils/errors';
 import { Middleware, Request } from 'lambda-api';
 import * as z from 'zod';
 import { WsRequest } from '../utils/lambda-ws-server';
@@ -46,11 +46,27 @@ async function extractThreadTokenFromHttp(headers: Request['headers']): Promise<
 }
 
 /**
- * Middleware that parses the ThreadToken from the Authorization header
+ * Validates that the thread token matches the route parameters.
+ * Throws Forbidden if the token's itemId/participantId don't match the route.
+ */
+function validateTokenMatchesRoute(token: ThreadToken, params: Request['params']): void {
+  const { itemId, participantId } = params;
+  if (itemId && token.itemId !== itemId) {
+    throw new Forbidden(`Token itemId '${token.itemId}' does not match route itemId '${itemId}'`);
+  }
+  if (participantId && token.participantId !== participantId) {
+    throw new Forbidden(`Token participantId '${token.participantId}' does not match route participantId '${participantId}'`);
+  }
+}
+
+/**
+ * Middleware that parses the ThreadToken from the Authorization header,
+ * validates it matches route parameters (itemId, participantId),
  * and attaches it to the request as `req.threadToken`
  */
 export const requireThreadToken: Middleware = (async (req, _res, next) => {
   const token = await extractThreadTokenFromHttp(req.headers);
+  validateTokenMatchesRoute(token, req.params);
   (req as RequestWithThreadToken).threadToken = token;
   next();
 }) as Middleware;

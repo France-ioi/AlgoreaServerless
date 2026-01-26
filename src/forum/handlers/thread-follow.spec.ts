@@ -13,6 +13,7 @@ function mockRequestWithThreadToken(token: ThreadToken, extras: Partial<RequestW
     headers: {},
     query: {},
     body: {},
+    params: {},
     ...extras,
   } as RequestWithThreadToken;
 }
@@ -27,6 +28,7 @@ function mockRequestWithIdentityToken(
     headers: {},
     query: {},
     body: {},
+    params: {},
     ...extras,
   } as RequestWithIdentityToken;
 }
@@ -84,7 +86,7 @@ describe('Thread Follow Handlers', () => {
       await threadFollows.follow(threadId, 'user-123');
 
       const req = mockRequestWithIdentityToken(identityToken, {
-        query: { participant_id: 'user123', item_id: 'item456' },
+        params: { participantId: 'user123', itemId: 'item456' },
       });
       const resp = {} as any;
 
@@ -98,7 +100,7 @@ describe('Thread Follow Handlers', () => {
 
     it('should ignore if user is not following', async () => {
       const req = mockRequestWithIdentityToken(identityToken, {
-        query: { participant_id: 'user123', item_id: 'item456' },
+        params: { participantId: 'user123', itemId: 'item456' },
       });
       const resp = {} as any;
 
@@ -107,22 +109,22 @@ describe('Thread Follow Handlers', () => {
       expect(result).toEqual({ status: 'ok' });
     });
 
-    it('should throw DecodingError when participant_id is missing', async () => {
+    it('should throw DecodingError when participantId is missing', async () => {
       const req = mockRequestWithIdentityToken(identityToken, {
-        query: { item_id: 'item456' },
+        params: { itemId: 'item456' },
       });
       const resp = {} as any;
 
-      await expect(unfollowThread(req, resp)).rejects.toThrow('Missing or invalid query parameters');
+      await expect(unfollowThread(req, resp)).rejects.toThrow('Missing path parameters');
     });
 
-    it('should throw DecodingError when item_id is missing', async () => {
+    it('should throw DecodingError when itemId is missing', async () => {
       const req = mockRequestWithIdentityToken(identityToken, {
-        query: { participant_id: 'user123' },
+        params: { participantId: 'user123' },
       });
       const resp = {} as any;
 
-      await expect(unfollowThread(req, resp)).rejects.toThrow('Missing or invalid query parameters');
+      await expect(unfollowThread(req, resp)).rejects.toThrow('Missing path parameters');
     });
 
     it('should not affect other followers when unfollowing', async () => {
@@ -130,7 +132,7 @@ describe('Thread Follow Handlers', () => {
       await threadFollows.follow(threadId, 'user-456');
 
       const req = mockRequestWithIdentityToken(identityToken, {
-        query: { participant_id: 'user123', item_id: 'item456' },
+        params: { participantId: 'user123', itemId: 'item456' },
       });
       const resp = {} as any;
 

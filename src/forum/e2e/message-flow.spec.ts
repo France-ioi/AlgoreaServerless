@@ -43,7 +43,7 @@ describe('E2E: Message Flow', () => {
 
     // Step 2: User1 posts a message via REST API
     const postEvent = mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${threadId.itemId}/${threadId.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${user1Token}` },
       body: JSON.stringify({ text: 'Hello from user1', uuid: 'msg-uuid-1' }),
@@ -65,7 +65,7 @@ describe('E2E: Message Flow', () => {
 
     // Step 4: User2 retrieves messages via REST API
     const getEvent = mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${threadId.itemId}/${threadId.participantId}/messages`,
       httpMethod: 'GET',
       headers: { authorization: `Bearer ${user2Token}` },
     });
@@ -112,7 +112,7 @@ describe('E2E: Message Flow', () => {
 
     // User1 posts a message
     const postEvent = mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${threadId.itemId}/${threadId.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${user1Token}` },
       body: JSON.stringify({ text: 'Broadcast message', uuid: 'msg-broadcast' }),
@@ -136,7 +136,7 @@ describe('E2E: Message Flow', () => {
     // Post three messages
     for (let i = 1; i <= 3; i++) {
       const postEvent = mockALBEvent({
-        path: '/sls/forum/message',
+        path: `/sls/forum/thread/${threadId.itemId}/${threadId.participantId}/messages`,
         httpMethod: 'POST',
         headers: { authorization: `Bearer ${userToken}` },
         body: JSON.stringify({ text: `Message ${i}`, uuid: `msg-${i}` }),
@@ -148,7 +148,7 @@ describe('E2E: Message Flow', () => {
 
     // Retrieve all messages
     const getEvent = mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${threadId.itemId}/${threadId.participantId}/messages`,
       httpMethod: 'GET',
       headers: { authorization: `Bearer ${userToken}` },
     });
@@ -191,7 +191,7 @@ describe('E2E: Message Flow', () => {
 
     // Post a message
     const postEvent = mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${threadId.itemId}/${threadId.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${user1Token}` },
       body: JSON.stringify({ text: 'Test cleanup', uuid: 'msg-cleanup' }),
@@ -210,7 +210,7 @@ describe('E2E: Message Flow', () => {
       Promise.resolve(connectionIds.map((id: string) => ({ success: true, connectionId: id }))));
 
     await globalHandler(mockALBEvent({
-      path: '/sls/forum/message',
+      path: `/sls/forum/thread/${threadId.itemId}/${threadId.participantId}/messages`,
       httpMethod: 'POST',
       headers: { authorization: `Bearer ${user1Token}` },
       body: JSON.stringify({ text: 'Second message', uuid: 'msg-2' }),
