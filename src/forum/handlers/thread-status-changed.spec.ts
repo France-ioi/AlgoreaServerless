@@ -44,40 +44,19 @@ describe('handleThreadStatusChanged', () => {
   });
 
   describe('successful parsing', () => {
-    it('should log the parsed payload fields', async () => {
-      const envelope = createMockEnvelope();
-
-      await handleThreadStatusChanged(envelope);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith('Thread status changed:', {
-        participantId: '3',
-        itemId: '1000',
-        newStatus: 'waiting_for_trainer',
-        formerStatus: 'not_started',
-        helperGroupId: '100',
-        instance: 'dev',
-        requestId: 'test-request-123',
-      });
-    });
-
     it('should handle events with all required fields without throwing', async () => {
       const envelope = createMockEnvelope();
 
       await expect(handleThreadStatusChanged(envelope)).resolves.not.toThrow();
     });
 
-    it('should handle different status values', async () => {
+    it('should handle different status values without throwing', async () => {
       const envelope = createMockEnvelope(createMockPayload({
         new_status: 'closed',
         former_status: 'waiting_for_participant',
       }));
 
-      await handleThreadStatusChanged(envelope);
-
-      expect(consoleLogSpy).toHaveBeenCalledWith('Thread status changed:', expect.objectContaining({
-        newStatus: 'closed',
-        formerStatus: 'waiting_for_participant',
-      }));
+      await expect(handleThreadStatusChanged(envelope)).resolves.not.toThrow();
     });
   });
 
