@@ -53,8 +53,26 @@ This is an AWS Serverless application using:
 # Documentation and architecture
 
 - Save plans in the `.cursor/plans` directory
-- Update `ARCHITECTURE.md` when making architectural changes (keep under 1000 lines)
 - Update `src/portal/openapi.yaml` when modifying the portal REST API
+
+## ARCHITECTURE.md updates
+
+`ARCHITECTURE.md` is the source of truth for agents. **Always update it** when:
+- Adding or changing patterns (DI, singletons, middleware, etc.)
+- Adding new modules, services, or database models
+- Changing how components interact or data flows
+- Adding new endpoints or WebSocket actions
+- Modifying authentication or authorization flows
+
+Keep the file under 1000 lines. Update the "Last Updated" date when making changes.
+
+# Task completion checklist
+
+Before marking a task complete, verify:
+- [ ] Linting passes (`npm run lint`)
+- [ ] Tests pass (`npm test`)
+- [ ] `ARCHITECTURE.md` updated if architectural changes were made
+- [ ] `src/portal/openapi.yaml` updated if portal REST API was modified
 
 # Interactions
 
