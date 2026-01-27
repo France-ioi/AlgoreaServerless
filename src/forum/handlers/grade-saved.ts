@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
+import { UserConnections } from '../../dbmodels/user-connections';
 import { dynamodb } from '../../dynamodb';
-import { isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
 import { ForumMessageAction } from '../ws-messages';
+import { broadcastAndCleanup } from '../../services/ws-broadcast';
 
 const gradeSavedPayloadSchema = z.object({
   answer_id: z.string(),
@@ -18,6 +19,7 @@ const gradeSavedPayloadSchema = z.object({
 export type GradeSavedPayload = z.infer<typeof gradeSavedPayloadSchema>;
 
 const subscriptions = new ThreadSubscriptions(dynamodb);
+const userConnections = new UserConnections(dynamodb);
 
 /**
  * Handles the grade_saved event from EventBridge.
@@ -56,13 +58,7 @@ export function handleGradeSaved(envelope: EventEnvelope): void {
       validated,
       time,
     };
-    const sendResults = await wsClient.send(subscribers.map(s => s.connectionId), wsMessage);
-    logSendResults(sendResults);
-    const goneSubscribers = sendResults
-      .map((res, idx) => ({ ...res, sk: subscribers[idx]!.sk }))
-      .filter(isClosedConnection)
-      .map(r => r.sk);
-    return subscriptions.unsubscribeSet(threadId, goneSubscribers);
+    await broadcastAndCleanup(subscribers, s => s.connectionId, wsMessage, userConnections, subscriptions);
   }).catch(err => {
     // eslint-disable-next-line no-console
     console.error('Failed to notify subscribers for grade_saved:', err);

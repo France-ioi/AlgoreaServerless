@@ -1,6 +1,8 @@
 import { generateToken, initializeKeys } from '../../testutils/token-generator';
 import { mockALBEvent, mockWebSocketMessageEvent } from '../../testutils/event-mocks';
 import { clearTable } from '../../testutils/db';
+import { UserConnections } from '../../dbmodels/user-connections';
+import { dynamodb } from '../../dynamodb';
 
 const mockSend = jest.fn();
 
@@ -164,11 +166,17 @@ describe('E2E: Message Flow', () => {
   });
 
   it('should clean up gone subscribers when posting message', async () => {
+    const userConnections = new UserConnections(dynamodb);
+
     const user1Token = await generateToken({ ...threadId, userId: 'user1', canWrite: true });
     const user2Token = await generateToken({ ...threadId, userId: 'user2', canWrite: false });
     const user3Token = await generateToken({ ...threadId, userId: 'user3', canWrite: false });
 
-    // Subscribe two users
+    // Create user connections before subscribing (simulating what handleConnect does)
+    await userConnections.insert('user2-conn', 'user2');
+    await userConnections.insert('user3-gone-conn', 'user3');
+
+    // Subscribe two users (this will also update the connection with subscriptionKeys)
     await globalHandler(mockWebSocketMessageEvent({
       connectionId: 'user2-conn',
       body: JSON.stringify({ action: 'forum.subscribe', token: user2Token }),

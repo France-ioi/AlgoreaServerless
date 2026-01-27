@@ -4,6 +4,7 @@ import { UserConnections } from '../dbmodels/user-connections';
 import { ThreadSubscriptions } from '../dbmodels/forum/thread-subscriptions';
 import { dynamodb } from '../dynamodb';
 import { WsHandlerResult } from '../utils/lambda-ws-server';
+import { cleanupGoneConnection } from '../services/ws-broadcast';
 
 /**
  * Handles websocket connection events.
@@ -47,20 +48,14 @@ export async function handleDisconnect(event: APIGatewayProxyEvent): Promise<WsH
     return { statusCode: 500, body: 'Internal error: missing connectionId' };
   }
 
-  // Remove connection from database
   const userConnections = new UserConnections(dynamodb);
-  const deleted = await userConnections.delete(connectionId);
+  const threadSubscriptions = new ThreadSubscriptions(dynamodb);
+  const { userId } = await cleanupGoneConnection(connectionId, userConnections, threadSubscriptions);
 
-  if (!deleted) {
+  if (!userId) {
     // eslint-disable-next-line no-console
     console.warn(`Disconnect: connection ${connectionId} was not found in database (already deleted or TTL expired?)`);
   }
 
-  // Clean up thread subscription if the connection was subscribed to a thread
-  if (deleted?.subscriptionKeys) {
-    const threadSubscriptions = new ThreadSubscriptions(dynamodb);
-    await threadSubscriptions.unsubscribeByKeys(deleted.subscriptionKeys);
-  }
-
-  return { statusCode: 200, body: 'Disconnected', userId: deleted?.userId };
+  return { statusCode: 200, body: 'Disconnected', userId };
 }

@@ -1,10 +1,12 @@
 import { UserConnections } from '../dbmodels/user-connections';
+import { ThreadSubscriptions } from '../dbmodels/forum/thread-subscriptions';
 import { Notifications, NotificationInput, Notification } from '../dbmodels/notifications';
 import { dynamodb } from '../dynamodb';
-import { wsClient, isClosedConnection, logSendResults } from '../websocket-client';
 import { NotificationAction, NotificationNewMessage } from '../ws-messages';
+import { broadcastAndCleanup } from './ws-broadcast';
 
 const userConnections = new UserConnections(dynamodb);
+const subscriptions = new ThreadSubscriptions(dynamodb);
 const notifications = new Notifications(dynamodb);
 
 /**
@@ -14,7 +16,7 @@ const notifications = new Notifications(dynamodb);
  * 1. Creates the notification in the database
  * 2. Checks if the user has active WebSocket connections and sends the notification via WS
  *
- * Gone connections are cleaned up after the WS send attempt.
+ * Gone connections are cleaned up after the WS send attempt (both user connection AND thread subscription).
  *
  * @param userId - The user to notify
  * @param notification - The notification type and payload
@@ -42,12 +44,7 @@ export async function notifyUser(userId: string, notification: NotificationInput
         notification: fullNotification,
       };
 
-      const sendResults = await wsClient.send(connectionIds, wsMessage);
-      logSendResults(sendResults);
-
-      // Clean up gone connections
-      const goneConnectionIds = sendResults.filter(isClosedConnection).map(r => r.connectionId);
-      await Promise.all(goneConnectionIds.map(connId => userConnections.delete(connId)));
+      await broadcastAndCleanup(connectionIds, id => id, wsMessage, userConnections, subscriptions);
     }),
   ]);
 

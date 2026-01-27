@@ -1,17 +1,19 @@
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
 import { ThreadFollows } from '../../dbmodels/forum/thread-follows';
 import { ThreadEventLabel, ThreadEvents } from '../../dbmodels/forum/thread-events';
+import { UserConnections } from '../../dbmodels/user-connections';
 import { dynamodb } from '../../dynamodb';
 import { DecodingError, Forbidden } from '../../utils/errors';
 import { z, ZodError } from 'zod';
-import { isClosedConnection, logSendResults, wsClient } from '../../websocket-client';
 import { ForumMessageAction } from '../ws-messages';
 import { HandlerFunction, Response } from 'lambda-api';
 import { RequestWithThreadToken } from '../thread-token';
 import { created } from '../../utils/rest-responses';
 import { notifyUsers } from '../../services/notify-user';
+import { broadcastAndCleanup } from '../../services/ws-broadcast';
 
 const subscriptions = new ThreadSubscriptions(dynamodb);
+const userConnections = new UserConnections(dynamodb);
 const threadFollows = new ThreadFollows(dynamodb);
 const threadEvents = new ThreadEvents(dynamodb);
 
@@ -58,26 +60,14 @@ async function create(req: RequestWithThreadToken, resp: Response): Promise<Retu
     threadEvents.insert([{ label: ThreadEventLabel.Message, sk: time, threadId, data: { authorId, text, uuid } }]),
     subscriptions.getSubscribers({ threadId }).then(async subscribers => {
       const wsMessage = { action: ForumMessageAction.NewMessage, participantId, itemId, authorId, time, text, uuid };
-      const sendResults = await wsClient.send(subscribers.map(s => s.connectionId), wsMessage);
-      logSendResults(sendResults);
-
-      // Track successful subscriber userIds and gone subscribers
-      const successfulUserIds = new Set<string>();
-      const goneSubscriberSks: number[] = [];
-
-      sendResults.forEach((res, idx) => {
-        const subscriber = subscribers[idx]!;
-        if (isClosedConnection(res)) {
-          goneSubscriberSks.push(subscriber.sk);
-        } else if (res.success) {
-          successfulUserIds.add(subscriber.userId);
-        }
-      });
-
-      // Clean up gone subscriptions
-      await subscriptions.unsubscribeSet(threadId, goneSubscriberSks);
-
-      return successfulUserIds;
+      const { successfulRecipients } = await broadcastAndCleanup(
+        subscribers,
+        s => s.connectionId,
+        wsMessage,
+        userConnections,
+        subscriptions
+      );
+      return new Set(successfulRecipients.map(s => s.userId));
     }),
     threadFollows.getFollowers(threadId),
   ]);

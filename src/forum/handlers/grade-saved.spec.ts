@@ -10,6 +10,7 @@ jest.mock('../../websocket-client', () => ({
 import { handleGradeSaved, GradeSavedPayload } from './grade-saved';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
+import { UserConnections } from '../../dbmodels/user-connections';
 import { dynamodb } from '../../dynamodb';
 
 function createMockPayload(overrides?: Partial<GradeSavedPayload>): GradeSavedPayload {
@@ -39,6 +40,7 @@ function createMockEnvelope(payload: unknown = createMockPayload()): EventEnvelo
 
 describe('handleGradeSaved', () => {
   let threadSubs: ThreadSubscriptions;
+  let userConnections: UserConnections;
   let consoleErrorSpy: jest.SpyInstance;
 
   const defaultPayload = createMockPayload();
@@ -46,6 +48,7 @@ describe('handleGradeSaved', () => {
 
   beforeEach(async () => {
     threadSubs = new ThreadSubscriptions(dynamodb);
+    userConnections = new UserConnections(dynamodb);
     await clearTable();
     jest.clearAllMocks();
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
@@ -90,7 +93,8 @@ describe('handleGradeSaved', () => {
       // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      expect(mockSend).toHaveBeenCalledWith([], expect.any(Object));
+      // broadcastAndCleanup returns early when there are no entries
+      expect(mockSend).not.toHaveBeenCalled();
     });
 
     it('should handle events with all required fields without throwing', () => {
@@ -142,9 +146,18 @@ describe('handleGradeSaved', () => {
 
   describe('cleanup of gone connections', () => {
     it('should remove gone subscribers after sending message', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user1');
-      await threadSubs.subscribe(threadId, 'conn-gone', 'user2');
-      await threadSubs.subscribe(threadId, 'conn-3', 'user3');
+      // Set up user connections with subscriptions (needed for full cleanup)
+      await userConnections.insert('conn-1', 'user1');
+      await userConnections.insert('conn-gone', 'user2');
+      await userConnections.insert('conn-3', 'user3');
+
+      const subKeys1 = await threadSubs.subscribe(threadId, 'conn-1', 'user1');
+      const subKeysGone = await threadSubs.subscribe(threadId, 'conn-gone', 'user2');
+      const subKeys3 = await threadSubs.subscribe(threadId, 'conn-3', 'user3');
+
+      await userConnections.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys1 });
+      await userConnections.updateConnectionInfo('conn-gone', { subscriptionKeys: subKeysGone });
+      await userConnections.updateConnectionInfo('conn-3', { subscriptionKeys: subKeys3 });
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
         if (id === 'conn-gone') {
@@ -164,6 +177,10 @@ describe('handleGradeSaved', () => {
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(2);
       expect(subscribers.map(s => s.connectionId)).not.toContain('conn-gone');
+
+      // Verify user connection was also cleaned up
+      const goneUserConns = await userConnections.getAll('user2');
+      expect(goneUserConns).toHaveLength(0);
     });
   });
 

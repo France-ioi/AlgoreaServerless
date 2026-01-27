@@ -196,8 +196,9 @@ describe('WebSocket Handlers', () => {
 
       await handleDisconnect(event);
 
-      // ThreadSubscriptions should not be instantiated when there's no subscription
-      expect(MockThreadSubscriptions).not.toHaveBeenCalled();
+      // ThreadSubscriptions.unsubscribeByKeys should not be called when there's no subscription
+      const mockThreadSubsInstance = MockThreadSubscriptions.mock.results[0]?.value;
+      expect(mockThreadSubsInstance.unsubscribeByKeys).not.toHaveBeenCalled();
     });
 
   });

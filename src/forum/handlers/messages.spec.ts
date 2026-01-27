@@ -30,11 +30,13 @@ function mockRequest(token: ThreadToken, extras: Partial<RequestWithThreadToken>
 describe('Forum Messages Service', () => {
   let threadEvents: ThreadEvents;
   let threadSubs: ThreadSubscriptions;
+  let userConnections: UserConnections;
   const threadId = { participantId: 'user123', itemId: 'item456' };
 
   beforeEach(async () => {
     threadEvents = new ThreadEvents(dynamodb);
     threadSubs = new ThreadSubscriptions(dynamodb);
+    userConnections = new UserConnections(dynamodb);
     await clearTable();
     jest.clearAllMocks();
     mockSend.mockImplementation((connectionIds) =>
@@ -194,9 +196,18 @@ describe('Forum Messages Service', () => {
     });
 
     it('should remove gone subscribers after sending message', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user1');
-      await threadSubs.subscribe(threadId, 'conn-gone', 'user2');
-      await threadSubs.subscribe(threadId, 'conn-3', 'user3');
+      // Set up user connections with subscriptions (needed for full cleanup)
+      await userConnections.insert('conn-1', 'user1');
+      await userConnections.insert('conn-gone', 'user2');
+      await userConnections.insert('conn-3', 'user3');
+
+      const subKeys1 = await threadSubs.subscribe(threadId, 'conn-1', 'user1');
+      const subKeysGone = await threadSubs.subscribe(threadId, 'conn-gone', 'user2');
+      const subKeys3 = await threadSubs.subscribe(threadId, 'conn-3', 'user3');
+
+      await userConnections.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys1 });
+      await userConnections.updateConnectionInfo('conn-gone', { subscriptionKeys: subKeysGone });
+      await userConnections.updateConnectionInfo('conn-3', { subscriptionKeys: subKeys3 });
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
         if (id === 'conn-gone') {
@@ -223,6 +234,10 @@ describe('Forum Messages Service', () => {
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(2);
       expect(subscribers.map(s => s.connectionId)).not.toContain('conn-gone');
+
+      // Verify user connection was also cleaned up
+      const goneUserConns = await userConnections.getAll('user2');
+      expect(goneUserConns).toHaveLength(0);
     });
 
     it('should validate request body', async () => {
