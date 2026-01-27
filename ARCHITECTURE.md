@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: January 25, 2026
+**Last Updated**: January 27, 2026
 
 ## Overview
 
@@ -283,6 +283,35 @@ eb.on('submission_created', handleSubmissionCreated, { supportedMajorVersion: 1 
   - `sqlRead()`: Execute read queries with pagination
   - `batchUpdate()`: Batch write operations (max 25 items)
 - **Error Handling**: Wraps AWS errors with contextual information
+
+#### Singleton Pattern
+
+Each `Table` subclass exports a singleton instance for use across the application:
+
+```typescript
+// Each table module exports both the class and a singleton instance
+export class UserConnections extends Table { ... }
+export const userConnectionsTable = new UserConnections(dynamodb);
+```
+
+**Available singletons**:
+- `userConnectionsTable` - User WebSocket connections
+- `threadSubscriptionsTable` - Thread subscription management
+- `threadFollowsTable` - Thread follow management
+- `threadEventsTable` - Thread messages and events
+- `notificationsTable` - User notifications
+
+**Rationale**: Table classes are stateless (only hold a reference to the shared `dynamodb` client). Singletons eliminate redundant instantiation and simplify function signatures by removing dependency injection parameters.
+
+**Usage**:
+```typescript
+// Import and use directly - no need to pass as parameters
+import { userConnectionsTable } from '../dbmodels/user-connections';
+
+await userConnectionsTable.insert(connectionId, userId);
+```
+
+**Testing**: The class is still exported for tests that need fresh instances or mocking.
 
 #### Data Models
 
