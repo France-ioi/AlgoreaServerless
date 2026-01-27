@@ -1,9 +1,9 @@
 import { handleThreadStatusChanged, ThreadStatusChangedPayload } from './thread-status-changed';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
-import { ThreadFollows } from '../../dbmodels/forum/thread-follows';
+import { ThreadFollows } from '../dbmodels/thread-follows';
 import { dynamodb } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
-import { ThreadId } from '../../dbmodels/forum/thread';
+import { ThreadId } from '../dbmodels/thread';
 
 function createMockPayload(overrides?: Partial<ThreadStatusChangedPayload>): ThreadStatusChangedPayload {
   return {

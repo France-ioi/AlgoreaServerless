@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
-import { threadFollowsTable, threadFollowTtlAfterClose } from '../../dbmodels/forum/thread-follows';
+import { threadFollowsTable, threadFollowTtlAfterClose } from '../dbmodels/thread-follows';
 
 const threadStatusValues = [ 'waiting_for_participant', 'waiting_for_trainer', 'closed' ] as const;
 const formerThreadStatusValues = [ ...threadStatusValues, 'not_started' ] as const;

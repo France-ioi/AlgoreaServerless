@@ -3,7 +3,7 @@ import { ThreadToken, RequestWithThreadToken } from '../thread-token';
 import { IdentityToken } from '../../auth/identity-token';
 import { RequestWithIdentityToken } from '../../auth/identity-token-middleware';
 import { followThread, unfollowThread } from './thread-follow';
-import { ThreadFollows } from '../../dbmodels/forum/thread-follows';
+import { ThreadFollows } from '../dbmodels/thread-follows';
 import { dynamodb } from '../../dynamodb';
 
 /** Helper to create a mock request with threadToken already set (as middleware would do) */

@@ -9,9 +9,9 @@ jest.mock('../../websocket-client', () => ({
 }));
 
 import { getAllMessages, createMessage } from './messages';
-import { ThreadEvents } from '../../dbmodels/forum/thread-events';
-import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
-import { ThreadFollows } from '../../dbmodels/forum/thread-follows';
+import { ThreadEvents } from '../dbmodels/thread-events';
+import { ThreadSubscriptions } from '../dbmodels/thread-subscriptions';
+import { ThreadFollows } from '../dbmodels/thread-follows';
 import { Notifications } from '../../dbmodels/notifications';
 import { UserConnections } from '../../dbmodels/user-connections';
 import { dynamodb } from '../../dynamodb';

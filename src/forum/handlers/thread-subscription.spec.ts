@@ -1,5 +1,5 @@
 import { subscribe, unsubscribe } from './thread-subscription';
-import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
+import { ThreadSubscriptions } from '../dbmodels/thread-subscriptions';
 import { dynamodb } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { generateToken, initializeKeys } from '../../testutils/token-generator';

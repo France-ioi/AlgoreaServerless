@@ -9,7 +9,7 @@ jest.mock('../websocket-client', () => ({
 
 import { cleanupGoneConnection, broadcastAndCleanup } from './ws-broadcast';
 import { userConnectionsTable } from '../dbmodels/user-connections';
-import { threadSubscriptionsTable } from '../dbmodels/forum/thread-subscriptions';
+import { threadSubscriptionsTable } from '../forum/dbmodels/thread-subscriptions';
 
 describe('ws-broadcast', () => {
   const threadId = { participantId: 'user123', itemId: 'item456' };

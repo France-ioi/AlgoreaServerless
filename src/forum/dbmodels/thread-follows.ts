@@ -1,4 +1,4 @@
-import { Table } from '../table';
+import { Table } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
 import { dynamodb } from '../../dynamodb';

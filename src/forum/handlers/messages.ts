@@ -1,6 +1,6 @@
-import { threadSubscriptionsTable } from '../../dbmodels/forum/thread-subscriptions';
-import { threadFollowsTable } from '../../dbmodels/forum/thread-follows';
-import { ThreadEventLabel, threadEventsTable } from '../../dbmodels/forum/thread-events';
+import { threadSubscriptionsTable } from '../dbmodels/thread-subscriptions';
+import { threadFollowsTable } from '../dbmodels/thread-follows';
+import { ThreadEventLabel, threadEventsTable } from '../dbmodels/thread-events';
 import { DecodingError, Forbidden } from '../../utils/errors';
 import { z, ZodError } from 'zod';
 import { ForumMessageAction } from '../ws-messages';

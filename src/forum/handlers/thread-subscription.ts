@@ -15,7 +15,7 @@
  * In contrast, "follows" (see thread-follow.ts) are user-level and handled via REST because
  * they represent a persistent user preference that doesn't depend on any active connection.
  */
-import { threadSubscriptionsTable } from '../../dbmodels/forum/thread-subscriptions';
+import { threadSubscriptionsTable } from '../dbmodels/thread-subscriptions';
 import { userConnectionsTable } from '../../dbmodels/user-connections';
 import { WsRequest } from '../../utils/lambda-ws-server';
 import { extractThreadTokenFromWs } from '../thread-token';

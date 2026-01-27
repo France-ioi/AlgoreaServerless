@@ -9,7 +9,7 @@ jest.mock('../../websocket-client', () => ({
 
 import { handleGradeSaved, GradeSavedPayload } from './grade-saved';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
-import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
+import { ThreadSubscriptions } from '../dbmodels/thread-subscriptions';
 import { UserConnections } from '../../dbmodels/user-connections';
 import { dynamodb } from '../../dynamodb';
 

@@ -1,4 +1,4 @@
-import { threadFollowsTable } from '../../dbmodels/forum/thread-follows';
+import { threadFollowsTable } from '../dbmodels/thread-follows';
 import { HandlerFunction } from 'lambda-api';
 import { RequestWithThreadToken } from '../thread-token';
 import { RequestWithIdentityToken } from '../../auth/identity-token-middleware';

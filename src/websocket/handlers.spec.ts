@@ -19,7 +19,7 @@ jest.mock('../dbmodels/user-connections', () => ({
 const mockThreadSubscriptionsTable = {
   unsubscribeByKeys: jest.fn().mockResolvedValue(undefined),
 };
-jest.mock('../dbmodels/forum/thread-subscriptions', () => ({
+jest.mock('../forum/dbmodels/thread-subscriptions', () => ({
   ThreadSubscriptions: jest.fn(),
   threadSubscriptionsTable: mockThreadSubscriptionsTable,
 }));

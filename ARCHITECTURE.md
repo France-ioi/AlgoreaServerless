@@ -127,13 +127,9 @@ AlgoreaServerless/
 │   │   ├── identity-token.ts      # Identity token parsing
 │   │   ├── identity-token-middleware.ts  # Identity token middleware
 │   │   └── *.spec.ts      # Authentication tests
-│   ├── dbmodels/          # Database models and data access
-│   │   ├── forum/         # Forum-specific models
-│   │   │   ├── thread.ts
-│   │   │   ├── thread-events.ts
-│   │   │   ├── thread-follows.ts
-│   │   │   └── thread-subscriptions.ts
+│   ├── dbmodels/          # Shared database models and base classes
 │   │   ├── notifications.ts  # User notifications model
+│   │   ├── user-connections.ts  # WebSocket user connections model
 │   │   └── table.ts       # Base table class
 │   ├── handlers/          # App-level request handlers
 │   │   └── notifications.ts  # Notification handlers
@@ -141,6 +137,11 @@ AlgoreaServerless/
 │   │   └── notifications.ts  # Notification routes
 │   ├── forum/             # Forum feature module
 │   │   ├── routes.ts      # Route and action registration
+│   │   ├── dbmodels/      # Forum-specific database models
+│   │   │   ├── thread.ts
+│   │   │   ├── thread-events.ts
+│   │   │   ├── thread-follows.ts
+│   │   │   └── thread-subscriptions.ts
 │   │   ├── handlers/      # HTTP/WebSocket request handlers
 │   │   │   ├── messages.ts
 │   │   │   ├── thread-follow.ts
@@ -315,19 +316,19 @@ await userConnectionsTable.insert(connectionId, userId);
 
 #### Data Models
 
-**ThreadEvents** (`src/dbmodels/forum/thread-events.ts`)
+**ThreadEvents** (`src/forum/dbmodels/thread-events.ts`)
 - Stores forum messages and events
 - Schema: `pk` (thread identifier), `sk` (timestamp), `label` (event type), `data` (event payload)
 - Discriminated union types using Zod for type-safe event handling
 - Supports batch insertion and querying with limits
 
-**ThreadSubscriptions** (`src/dbmodels/forum/thread-subscriptions.ts`)
+**ThreadSubscriptions** (`src/forum/dbmodels/thread-subscriptions.ts`)
 - Manages WebSocket connection subscriptions to threads
 - Schema: `pk` (thread identifier), `sk` (subscription time), `connectionId`, `userId`, `ttl` (2 hours)
 - Auto-cleanup of stale connections via DynamoDB TTL
 - Supports subscription management and connection cleanup
 
-**ThreadFollows** (`src/dbmodels/forum/thread-follows.ts`)
+**ThreadFollows** (`src/forum/dbmodels/thread-follows.ts`)
 - Manages persistent user follows for threads (for notifications)
 - Schema: `pk` (thread identifier + #FOLLOW), `sk` (follow time), `userId`
 - Unlike subscriptions, follows persist across sessions

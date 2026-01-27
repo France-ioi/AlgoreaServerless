@@ -1,6 +1,6 @@
 import { ConnectionId, WsMessage, isClosedConnection, logSendResults, wsClient } from '../websocket-client';
 import { userConnectionsTable } from '../dbmodels/user-connections';
-import { threadSubscriptionsTable } from '../dbmodels/forum/thread-subscriptions';
+import { threadSubscriptionsTable } from '../forum/dbmodels/thread-subscriptions';
 
 /**
  * Result of a user connection cleanup.

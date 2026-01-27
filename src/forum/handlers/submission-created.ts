@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
-import { threadSubscriptionsTable } from '../../dbmodels/forum/thread-subscriptions';
+import { threadSubscriptionsTable } from '../dbmodels/thread-subscriptions';
 import { ForumMessageAction } from '../ws-messages';
 import { broadcastAndCleanup } from '../../services/ws-broadcast';
 

@@ -1,5 +1,5 @@
-import { ThreadId } from '../dbmodels/forum/thread';
-import { ThreadEventLabel } from '../dbmodels/forum/thread-events';
+import { ThreadId } from '../forum/dbmodels/thread';
+import { ThreadEventLabel } from '../forum/dbmodels/thread-events';
 import { ConnectionId } from '../websocket-client';
 import { loadFixture } from './db';
 import { v4 as uuidv4 } from 'uuid';

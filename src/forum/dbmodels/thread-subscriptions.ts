@@ -1,5 +1,5 @@
 import { ConnectionId } from '../../websocket-client';
-import { Table, TableKey, wsConnectionTtl } from '../table';
+import { Table, TableKey, wsConnectionTtl } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
 import { dynamodb } from '../../dynamodb';
