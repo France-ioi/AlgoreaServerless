@@ -17,12 +17,8 @@ jest.mock('../dbmodels/user-connections', () => ({
 // Mock the ThreadSubscriptions module
 jest.mock('../dbmodels/forum/thread-subscriptions', () => ({
   ThreadSubscriptions: jest.fn().mockImplementation(() => ({
-    unsubscribeConnectionId: jest.fn().mockResolvedValue(undefined),
+    unsubscribeByKeys: jest.fn().mockResolvedValue(undefined),
   })),
-  deserializeThreadId: jest.fn((serialized: string) => {
-    const [ participantId, itemId ] = serialized.split('#');
-    return { participantId, itemId };
-  }),
 }));
 
 import { parseIdentityToken } from '../auth/identity-token';
@@ -173,14 +169,15 @@ describe('WebSocket Handlers', () => {
       });
     });
 
-    it('should unsubscribe from thread when connection has subscribedThreadId', async () => {
-      // Override the mock to return a connection with subscribedThreadId
+    it('should unsubscribe from thread when connection has subscriptionKeys', async () => {
+      // Override the mock to return a connection with subscriptionKeys
+      const subscriptionKeys = { pk: 'dev#THREAD#participant123#item456#SUB', sk: 1234567890 };
       MockUserConnections.mockImplementationOnce(() => ({
         insert: jest.fn().mockResolvedValue(undefined),
         delete: jest.fn().mockResolvedValue({
           userId: 'user-with-sub',
           creationTime: 1234567890,
-          subscribedThreadId: 'participant123#item456',
+          subscriptionKeys,
         }),
       }) as unknown as UserConnections);
 
@@ -190,14 +187,11 @@ describe('WebSocket Handlers', () => {
       await handleDisconnect(event);
 
       const mockThreadSubsInstance = MockThreadSubscriptions.mock.results[0]?.value;
-      expect(mockThreadSubsInstance.unsubscribeConnectionId).toHaveBeenCalledWith(
-        { participantId: 'participant123', itemId: 'item456' },
-        'conn-with-sub'
-      );
+      expect(mockThreadSubsInstance.unsubscribeByKeys).toHaveBeenCalledWith(subscriptionKeys);
     });
 
-    it('should not call unsubscribe when connection has no subscribedThreadId', async () => {
-      // Default mock returns no subscribedThreadId
+    it('should not call unsubscribe when connection has no subscriptionKeys', async () => {
+      // Default mock returns no subscriptionKeys
       const event = mockWebSocketDisconnectEvent();
 
       await handleDisconnect(event);

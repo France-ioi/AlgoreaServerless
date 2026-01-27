@@ -16,7 +16,7 @@
  * they represent a persistent user preference that doesn't depend on any active connection.
  */
 import { dynamodb } from '../../dynamodb';
-import { ThreadSubscriptions, serializeThreadId } from '../../dbmodels/forum/thread-subscriptions';
+import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
 import { UserConnections } from '../../dbmodels/user-connections';
 import { WsRequest } from '../../utils/lambda-ws-server';
 import { extractThreadTokenFromWs } from '../thread-token';
@@ -27,11 +27,9 @@ const userConnections = new UserConnections(dynamodb);
 export async function subscribe(request: WsRequest): Promise<void> {
   const { participantId, itemId, userId } = await extractThreadTokenFromWs(request.body);
   const threadId = { participantId, itemId };
-  await subscriptions.subscribe(threadId, request.connectionId(), userId);
-  // Store the subscription info in the connection for cleanup on disconnect
-  await userConnections.updateConnectionInfo(request.connectionId(), {
-    subscribedThreadId: serializeThreadId(threadId),
-  });
+  const subscriptionKeys = await subscriptions.subscribe(threadId, request.connectionId(), userId);
+  // Store the subscription keys in the connection for efficient cleanup on disconnect
+  await userConnections.updateConnectionInfo(request.connectionId(), { subscriptionKeys });
 }
 /**
  * Unsubscribe from a thread

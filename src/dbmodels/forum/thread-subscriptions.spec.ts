@@ -25,6 +25,18 @@ describe('ThreadSubscriptions', () => {
       expect(subscribers[0]?.sk).toBeGreaterThan(0);
     });
 
+    it('should return subscription keys', async () => {
+      const connectionId = 'conn-123';
+      const userId = 'user-123';
+
+      const keys = await threadSubs.subscribe(threadId, connectionId, userId);
+
+      expect(keys.pk).toContain('THREAD');
+      expect(keys.pk).toContain(threadId.participantId);
+      expect(keys.pk).toContain(threadId.itemId);
+      expect(keys.sk).toBeGreaterThan(0);
+    });
+
     it('should allow multiple connections to subscribe to the same thread', async () => {
       await threadSubs.subscribe(threadId, 'conn-1', 'user-1');
       await threadSubs.subscribe(threadId, 'conn-2', 'user-2');
@@ -121,6 +133,31 @@ describe('ThreadSubscriptions', () => {
 
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(1);
+    });
+  });
+
+  describe('unsubscribeByKeys', () => {
+    it('should unsubscribe using subscription keys directly', async () => {
+      const keys = await threadSubs.subscribe(threadId, 'conn-123', 'user-123');
+
+      let subscribers = await threadSubs.getSubscribers({ threadId });
+      expect(subscribers).toHaveLength(1);
+
+      await threadSubs.unsubscribeByKeys(keys);
+
+      subscribers = await threadSubs.getSubscribers({ threadId });
+      expect(subscribers).toHaveLength(0);
+    });
+
+    it('should only unsubscribe the specific subscription', async () => {
+      const keys1 = await threadSubs.subscribe(threadId, 'conn-1', 'user-1');
+      await threadSubs.subscribe(threadId, 'conn-2', 'user-2');
+
+      await threadSubs.unsubscribeByKeys(keys1);
+
+      const subscribers = await threadSubs.getSubscribers({ threadId });
+      expect(subscribers).toHaveLength(1);
+      expect(subscribers[0]?.connectionId).toBe('conn-2');
     });
   });
 

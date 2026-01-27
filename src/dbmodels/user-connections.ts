@@ -17,7 +17,7 @@ function u2cPk(userId: UserId): string {
 const c2uEntrySchema = z.object({
   userId: z.string(),
   creationTime: z.number(),
-  subscribedThreadId: z.string().optional(), // Serialized as `participantId#itemId`
+  subscriptionKeys: z.object({ pk: z.string(), sk: z.number() }).optional(), // DynamoDB keys for the thread subscription
 });
 
 type C2uEntry = z.infer<typeof c2uEntrySchema>;
@@ -66,12 +66,12 @@ export class UserConnections extends Table {
   /**
    * Delete a user connection by connectionId.
    * Removes both c2u and u2c entries.
-   * @returns The deleted connection info, or null if the connection was not found
+   * @returns The deleted connection info (including subscriptionKeys for cleanup), or null if not found
    */
   async delete(connectionId: ConnectionId): Promise<C2uEntry | null> {
     // 1) Get c2u entry to find userId, creationTime, and any subscription info
     const c2uResults = await this.sqlRead({
-      query: `SELECT userId, creationTime, subscribedThreadId FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
+      query: `SELECT userId, creationTime, subscriptionKeys FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
       params: [ c2uPk(connectionId), 0 ],
     });
 
@@ -80,7 +80,7 @@ export class UserConnections extends Table {
       return null;
     }
 
-    const { userId, creationTime, subscribedThreadId } = c2uEntrySchema.parse(c2uResults[0]);
+    const { userId, creationTime, subscriptionKeys } = c2uEntrySchema.parse(c2uResults[0]);
 
     // 2) Delete both entries in a transaction
     await this.sqlWrite([
@@ -94,7 +94,7 @@ export class UserConnections extends Table {
       },
     ]);
 
-    return { userId, creationTime, subscribedThreadId };
+    return { userId, creationTime, subscriptionKeys };
   }
 
   /**
@@ -107,11 +107,11 @@ export class UserConnections extends Table {
     const removeClauses: string[] = [];
     const params: unknown[] = [];
 
-    if (info.subscribedThreadId !== undefined) {
-      setClauses.push('subscribedThreadId = ?');
-      params.push(info.subscribedThreadId);
+    if (info.subscriptionKeys !== undefined) {
+      setClauses.push('subscriptionKeys = ?');
+      params.push(info.subscriptionKeys);
     } else {
-      removeClauses.push('subscribedThreadId');
+      removeClauses.push('subscriptionKeys');
     }
 
     let query = `UPDATE "${this.tableName}"`;

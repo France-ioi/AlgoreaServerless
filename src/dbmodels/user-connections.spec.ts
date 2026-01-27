@@ -171,74 +171,74 @@ describe('UserConnections', () => {
 
   describe('updateConnectionInfo', () => {
 
-    it('should set subscribedThreadId on a connection', async () => {
+    it('should set subscriptionKeys on a connection', async () => {
       await userConnections.insert('conn-info', 'user-info');
 
-      await userConnections.updateConnectionInfo('conn-info', {
-        subscribedThreadId: 'participant123#item456',
-      });
+      const subscriptionKeys = { pk: 'dev#THREAD#participant123#item456#SUB', sk: 1234567890 };
+      await userConnections.updateConnectionInfo('conn-info', { subscriptionKeys });
 
       // Verify the field was set
       const result = await dynamodb.executeStatement({
-        Statement: `SELECT subscribedThreadId FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
+        Statement: `SELECT subscriptionKeys FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
         Parameters: [
           { S: `${process.env.STAGE}#CONN#conn-info#USER` },
           { N: '0' },
         ],
       });
-      expect(result.Items?.[0]?.subscribedThreadId?.S).toBe('participant123#item456');
+      const storedKeys = result.Items?.[0]?.subscriptionKeys?.M;
+      expect(storedKeys?.pk?.S).toBe(subscriptionKeys.pk);
+      expect(storedKeys?.sk?.N).toBe(String(subscriptionKeys.sk));
     });
 
-    it('should remove subscribedThreadId when not provided', async () => {
+    it('should remove subscriptionKeys when not provided', async () => {
       await userConnections.insert('conn-remove', 'user-remove');
       await userConnections.updateConnectionInfo('conn-remove', {
-        subscribedThreadId: 'participant#item',
+        subscriptionKeys: { pk: 'dev#THREAD#p#i#SUB', sk: 123 },
       });
 
       // Now remove it by passing empty info
       await userConnections.updateConnectionInfo('conn-remove', {});
 
       const result = await dynamodb.executeStatement({
-        Statement: `SELECT subscribedThreadId FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
+        Statement: `SELECT subscriptionKeys FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
         Parameters: [
           { S: `${process.env.STAGE}#CONN#conn-remove#USER` },
           { N: '0' },
         ],
       });
-      expect(result.Items?.[0]?.subscribedThreadId).toBeUndefined();
+      expect(result.Items?.[0]?.subscriptionKeys).toBeUndefined();
     });
 
     it('should not throw when connection does not exist', async () => {
       await expect(
         userConnections.updateConnectionInfo('non-existent-conn', {
-          subscribedThreadId: 'participant#item',
+          subscriptionKeys: { pk: 'dev#THREAD#p#i#SUB', sk: 123 },
         })
       ).resolves.not.toThrow();
     });
 
   });
 
-  describe('delete with subscribedThreadId', () => {
+  describe('delete with subscriptionKeys', () => {
 
-    it('should return subscribedThreadId when present', async () => {
+    it('should return subscriptionKeys when present', async () => {
       await userConnections.insert('conn-sub', 'user-sub');
-      await userConnections.updateConnectionInfo('conn-sub', {
-        subscribedThreadId: 'part123#item456',
-      });
+      const subscriptionKeys = { pk: 'dev#THREAD#part123#item456#SUB', sk: 9876543210 };
+      await userConnections.updateConnectionInfo('conn-sub', { subscriptionKeys });
 
       const result = await userConnections.delete('conn-sub');
 
       expect(result).not.toBeNull();
-      expect(result?.subscribedThreadId).toBe('part123#item456');
+      expect(result?.subscriptionKeys).toEqual(subscriptionKeys);
     });
 
-    it('should return undefined subscribedThreadId when not set', async () => {
+    it('should return undefined subscriptionKeys when not set', async () => {
       await userConnections.insert('conn-nosub', 'user-nosub');
 
       const result = await userConnections.delete('conn-nosub');
 
       expect(result).not.toBeNull();
-      expect(result?.subscribedThreadId).toBeUndefined();
+      expect(result?.subscriptionKeys).toBeUndefined();
     });
 
   });

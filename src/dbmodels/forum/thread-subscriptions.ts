@@ -3,28 +3,18 @@ import { Table, TableKey, wsConnectionTtl } from '../table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
 
+/**
+ * The DynamoDB keys for a subscription entry.
+ * Can be used to directly delete the subscription without querying.
+ */
+export interface SubscriptionKeys {
+  pk: string,
+  sk: number,
+}
+
 function pk(thread: ThreadId): string {
   const stage = process.env.STAGE || 'dev';
   return `${stage}#THREAD#${thread.participantId}#${thread.itemId}#SUB`;
-}
-
-/**
- * Serialize a ThreadId to a string for storage in connection info.
- */
-export function serializeThreadId(thread: ThreadId): string {
-  return `${thread.participantId}#${thread.itemId}`;
-}
-
-/**
- * Deserialize a ThreadId from its string representation.
- * @throws Error if the serialized string is invalid
- */
-export function deserializeThreadId(serialized: string): ThreadId {
-  const parts = serialized.split('#');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error(`Invalid serialized ThreadId: ${serialized}`);
-  }
-  return { participantId: parts[0], itemId: parts[1] };
 }
 
 /**
@@ -65,12 +55,14 @@ export class ThreadSubscriptions extends Table {
       })).parse(results);
   }
 
-  async subscribe(thread: ThreadId, connectionId: ConnectionId, userId: string): Promise<void> {
+  async subscribe(thread: ThreadId, connectionId: ConnectionId, userId: string): Promise<SubscriptionKeys> {
     // TODO: we should check what error we get if we resubscribe while we didn't unsubscribe properly before .. and do something
+    const keys: SubscriptionKeys = { pk: pk(thread), sk: Date.now() };
     await this.sqlWrite({
       query: `INSERT INTO "${ this.tableName }" VALUE { 'pk': ?, 'sk': ?, 'connectionId': ?, 'ttl': ?, 'userId': ? }`,
-      params: [ pk(thread), Date.now(), connectionId, wsConnectionTtl(), userId ]
+      params: [ keys.pk, keys.sk, connectionId, wsConnectionTtl(), userId ]
     });
+    return keys;
   }
 
   private async delete(keys: TableKey[]): Promise<void> {
@@ -93,5 +85,13 @@ export class ThreadSubscriptions extends Table {
       return;
     }
     await this.unsubscribeSet(threadId, entry.map(e => e.sk));
+  }
+
+  /**
+   * Unsubscribe using the subscription keys directly.
+   * More efficient than unsubscribeConnectionId as it doesn't require a query.
+   */
+  async unsubscribeByKeys(keys: SubscriptionKeys): Promise<void> {
+    await this.delete([ keys ]);
   }
 }

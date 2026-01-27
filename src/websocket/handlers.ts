@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent } from 'aws-lambda';
 import { parseIdentityToken } from '../auth/identity-token';
 import { UserConnections } from '../dbmodels/user-connections';
-import { ThreadSubscriptions, deserializeThreadId } from '../dbmodels/forum/thread-subscriptions';
+import { ThreadSubscriptions } from '../dbmodels/forum/thread-subscriptions';
 import { dynamodb } from '../dynamodb';
 import { WsHandlerResult } from '../utils/lambda-ws-server';
 
@@ -57,10 +57,9 @@ export async function handleDisconnect(event: APIGatewayProxyEvent): Promise<WsH
   }
 
   // Clean up thread subscription if the connection was subscribed to a thread
-  if (deleted?.subscribedThreadId) {
+  if (deleted?.subscriptionKeys) {
     const threadSubscriptions = new ThreadSubscriptions(dynamodb);
-    const threadId = deserializeThreadId(deleted.subscribedThreadId);
-    await threadSubscriptions.unsubscribeConnectionId(threadId, connectionId);
+    await threadSubscriptions.unsubscribeByKeys(deleted.subscriptionKeys);
   }
 
   return { statusCode: 200, body: 'Disconnected', userId: deleted?.userId };
