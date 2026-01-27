@@ -11,6 +11,9 @@ jest.mock('../../websocket-client', () => ({
 import { getAllMessages, createMessage } from './messages';
 import { ThreadEvents } from '../../dbmodels/forum/thread-events';
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
+import { ThreadFollows } from '../../dbmodels/forum/thread-follows';
+import { Notifications } from '../../dbmodels/notifications';
+import { UserConnections } from '../../dbmodels/user-connections';
 import { dynamodb } from '../../dynamodb';
 
 /** Helper to create a mock request with threadToken already set (as middleware would do) */
@@ -227,6 +230,147 @@ describe('Forum Messages Service', () => {
       const resp = {} as any;
 
       await expect(createMessage(req, resp)).rejects.toThrow();
+    });
+  });
+
+  describe('createMessage with followers', () => {
+    let threadFollows: ThreadFollows;
+    let notifications: Notifications;
+    let userConnections: UserConnections;
+    const writeToken: ThreadToken = { ...threadId, userId: 'author-user', canWrite: true, canWatch: true, isMine: false };
+
+    beforeEach(() => {
+      threadFollows = new ThreadFollows(dynamodb);
+      notifications = new Notifications(dynamodb);
+      userConnections = new UserConnections(dynamodb);
+    });
+
+    it('should notify followers who are not subscribers', async () => {
+      // Follower with no active subscription
+      await threadFollows.follow(threadId, 'follower-user');
+      // Also add a connection for the follower so we can verify the WS notification
+      await userConnections.insert('follower-conn', 'follower-user');
+
+      const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
+      const resp = {
+        status: jest.fn(function(this: any) {
+          return this;
+        }),
+        send: jest.fn(),
+      } as any;
+
+      await createMessage(req, resp);
+
+      // Verify notification was created for follower
+      const followerNotifs = await notifications.getNotifications('follower-user', 10);
+      expect(followerNotifs).toHaveLength(1);
+      expect(followerNotifs[0]?.notificationType).toBe('forum.new_message');
+      expect(followerNotifs[0]?.payload).toMatchObject({
+        participantId: threadId.participantId,
+        itemId: threadId.itemId,
+        authorId: 'author-user',
+        text: 'New message',
+        uuid: 'msg-uuid-1',
+      });
+    });
+
+    it('should exclude author from follower notifications', async () => {
+      // Author is also a follower
+      await threadFollows.follow(threadId, 'author-user');
+
+      const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
+      const resp = {
+        status: jest.fn(function(this: any) {
+          return this;
+        }),
+        send: jest.fn(),
+      } as any;
+
+      await createMessage(req, resp);
+
+      // Verify no notification was created for the author
+      const authorNotifs = await notifications.getNotifications('author-user', 10);
+      expect(authorNotifs).toHaveLength(0);
+    });
+
+    it('should exclude successful subscribers from follower notifications', async () => {
+      // User is both a follower and an active subscriber
+      await threadFollows.follow(threadId, 'subscriber-user');
+      await threadSubs.subscribe(threadId, 'sub-conn', 'subscriber-user');
+
+      const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
+      const resp = {
+        status: jest.fn(function(this: any) {
+          return this;
+        }),
+        send: jest.fn(),
+      } as any;
+
+      await createMessage(req, resp);
+
+      // Verify no notification was created (they received WS message via subscription)
+      const userNotifs = await notifications.getNotifications('subscriber-user', 10);
+      expect(userNotifs).toHaveLength(0);
+    });
+
+    it('should notify followers whose subscription connection was gone', async () => {
+      // User is both a follower and a subscriber, but their connection is gone
+      await threadFollows.follow(threadId, 'gone-subscriber');
+      await threadSubs.subscribe(threadId, 'gone-conn', 'gone-subscriber');
+      await userConnections.insert('other-conn', 'gone-subscriber');
+
+      mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
+        if (id === 'gone-conn') {
+          const error = new Error('Gone');
+          error.name = 'GoneException';
+          return { success: false, connectionId: id, error };
+        }
+        return { success: true, connectionId: id };
+      })));
+
+      const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
+      const resp = {
+        status: jest.fn(function(this: any) {
+          return this;
+        }),
+        send: jest.fn(),
+      } as any;
+
+      await createMessage(req, resp);
+
+      // Verify notification was created (their subscription WS failed)
+      const userNotifs = await notifications.getNotifications('gone-subscriber', 10);
+      expect(userNotifs).toHaveLength(1);
+      expect(userNotifs[0]?.notificationType).toBe('forum.new_message');
+    });
+
+    it('should notify multiple followers correctly', async () => {
+      // Set up various scenarios
+      await threadFollows.follow(threadId, 'follower-only');
+      await threadFollows.follow(threadId, 'subscriber-and-follower');
+      await threadFollows.follow(threadId, 'author-user'); // author is also a follower
+
+      // subscriber-and-follower has an active subscription
+      await threadSubs.subscribe(threadId, 'sub-conn', 'subscriber-and-follower');
+
+      const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
+      const resp = {
+        status: jest.fn(function(this: any) {
+          return this;
+        }),
+        send: jest.fn(),
+      } as any;
+
+      await createMessage(req, resp);
+
+      // Only follower-only should get a notification
+      const followerOnlyNotifs = await notifications.getNotifications('follower-only', 10);
+      const subscriberNotifs = await notifications.getNotifications('subscriber-and-follower', 10);
+      const authorNotifs = await notifications.getNotifications('author-user', 10);
+
+      expect(followerOnlyNotifs).toHaveLength(1);
+      expect(subscriberNotifs).toHaveLength(0); // Got WS message via subscription
+      expect(authorNotifs).toHaveLength(0); // Is the author
     });
   });
 });

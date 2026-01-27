@@ -46,8 +46,10 @@ export function deserializeThreadId(serialized: string): ThreadId {
  */
 export class ThreadSubscriptions extends Table {
 
-  async getSubscribers(filter: { threadId: ThreadId, connectionId?: ConnectionId }): Promise<{ connectionId: ConnectionId, sk: number }[]> {
-    let query = `SELECT connectionId, sk FROM "${ this.tableName }" WHERE pk = ?`;
+  async getSubscribers(
+    filter: { threadId: ThreadId, connectionId?: ConnectionId }
+  ): Promise<{ connectionId: ConnectionId, sk: number, userId: string }[]> {
+    let query = `SELECT connectionId, sk, userId FROM "${ this.tableName }" WHERE pk = ?`;
     const params = [ pk(filter.threadId) ];
     if (filter.connectionId) {
       query += ' AND connectionId = ?';
@@ -59,6 +61,7 @@ export class ThreadSubscriptions extends Table {
       z.object({
         connectionId: z.string(),
         sk: z.number(),
+        userId: z.string(),
       })).parse(results);
   }
 

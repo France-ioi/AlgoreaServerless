@@ -1,4 +1,5 @@
 import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
+import { ThreadFollows } from '../../dbmodels/forum/thread-follows';
 import { ThreadEventLabel, ThreadEvents } from '../../dbmodels/forum/thread-events';
 import { dynamodb } from '../../dynamodb';
 import { DecodingError, Forbidden } from '../../utils/errors';
@@ -8,8 +9,10 @@ import { ForumMessageAction } from '../ws-messages';
 import { HandlerFunction, Response } from 'lambda-api';
 import { RequestWithThreadToken } from '../thread-token';
 import { created } from '../../utils/rest-responses';
+import { notifyUsers } from '../../services/notify-user';
 
 const subscriptions = new ThreadSubscriptions(dynamodb);
+const threadFollows = new ThreadFollows(dynamodb);
 const threadEvents = new ThreadEvents(dynamodb);
 
 async function create(req: RequestWithThreadToken, resp: Response): Promise<ReturnType<typeof created>> {
@@ -27,21 +30,50 @@ async function create(req: RequestWithThreadToken, resp: Response): Promise<Retu
   const time = Date.now();
   const authorId = userId;
 
-  await Promise.all([
-    // create the entry
+  // Run all operations in parallel:
+  // 1. Insert the message in the database
+  // 2. Notify subscribers via WebSocket and track successful user IDs
+  // 3. Get thread followers
+  const [ , successfulSubscriberUserIds, followers ] = await Promise.all([
     threadEvents.insert([{ label: ThreadEventLabel.Message, sk: time, threadId, data: { authorId, text, uuid } }]),
-    // notify all subscribers
     subscriptions.getSubscribers({ threadId }).then(async subscribers => {
       const wsMessage = { action: ForumMessageAction.NewMessage, participantId, itemId, authorId, time, text, uuid };
       const sendResults = await wsClient.send(subscribers.map(s => s.connectionId), wsMessage);
       logSendResults(sendResults);
-      const goneSubscribers = sendResults
-        .map((res, idx) => ({ ...res, sk: subscribers[idx]!.sk }))
-        .filter(isClosedConnection)
-        .map(r => r.sk);
-      return subscriptions.unsubscribeSet(threadId, goneSubscribers);
+
+      // Track successful subscriber userIds and gone subscribers
+      const successfulUserIds = new Set<string>();
+      const goneSubscriberSks: number[] = [];
+
+      sendResults.forEach((res, idx) => {
+        const subscriber = subscribers[idx]!;
+        if (isClosedConnection(res)) {
+          goneSubscriberSks.push(subscriber.sk);
+        } else if (res.success) {
+          successfulUserIds.add(subscriber.userId);
+        }
+      });
+
+      // Clean up gone subscriptions
+      await subscriptions.unsubscribeSet(threadId, goneSubscriberSks);
+
+      return successfulUserIds;
     }),
+    threadFollows.getFollowers(threadId),
   ]);
+
+  // Notify followers who didn't receive the WS message (excluding author and successful subscribers)
+  const followersToNotify = followers
+    .map(f => f.userId)
+    .filter(followerId => followerId !== authorId && !successfulSubscriberUserIds.has(followerId));
+
+  if (followersToNotify.length > 0) {
+    await notifyUsers(followersToNotify, {
+      notificationType: 'forum.new_message',
+      payload: { participantId, itemId, authorId, time, text, uuid },
+    });
+  }
+
   return created(resp);
 }
 

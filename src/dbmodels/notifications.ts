@@ -63,11 +63,19 @@ export class Notifications extends Table {
 
   async create(userId: string, notification: NotificationInput): Promise<number> {
     const sk = Date.now();
+    await this.createWithSk(userId, sk, notification);
+    return sk;
+  }
+
+  /**
+   * Create a notification with a pre-determined sk (timestamp).
+   * Useful when sk needs to be known upfront (e.g., for parallel WS delivery).
+   */
+  async createWithSk(userId: string, sk: number, notification: NotificationInput): Promise<void> {
     await this.sqlWrite({
       query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'sk': ?, 'notificationType': ?, 'payload': ?, 'ttl': ? }`,
       params: [ pk(userId), sk, notification.notificationType, notification.payload, notificationTtl() ],
     });
-    return sk;
   }
 
   async delete(userId: string, sk: number): Promise<void> {
