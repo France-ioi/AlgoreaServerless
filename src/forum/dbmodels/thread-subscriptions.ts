@@ -3,6 +3,7 @@ import { Table, TableKey, wsConnectionTtl } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
 import { dynamodb } from '../../dynamodb';
+import { safeParseArray } from '../../utils/zod-utils';
 
 /**
  * The DynamoDB keys for a subscription entry.
@@ -47,13 +48,12 @@ export class ThreadSubscriptions extends Table {
       params.push(filter.connectionId);
     }
     const results = await this.sqlRead({ query, params });
-    // TODO filter those which cannot be parsed and log them in function that can be reused everywhere
-    return z.array(
-      z.object({
-        connectionId: z.string(),
-        sk: z.number(),
-        userId: z.string(),
-      })).parse(results);
+    const subscriberSchema = z.object({
+      connectionId: z.string(),
+      sk: z.number(),
+      userId: z.string(),
+    });
+    return safeParseArray(results as unknown[], subscriberSchema, 'thread subscriber');
   }
 
   async insert(thread: ThreadId, connectionId: ConnectionId, userId: string): Promise<SubscriptionKeys> {

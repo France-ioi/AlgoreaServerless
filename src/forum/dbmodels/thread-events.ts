@@ -2,6 +2,7 @@ import { Table } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { literal, z } from 'zod';
 import { dynamodb } from '../../dynamodb';
+import { safeParseArray } from '../../utils/zod-utils';
 
 /**
  * DB labels of the thread events
@@ -64,10 +65,7 @@ export class ThreadEvents extends Table {
       limit: options.limit,
       scanIndexForward: false, // false = DESC order
     });
-    return results
-      .map(r => threadEventSchema.safeParse(r))
-      .filter(r => r.success)
-      .map(r => r.data);
+    return safeParseArray(results as unknown[], threadEventSchema, 'thread event');
   }
 }
 

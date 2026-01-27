@@ -1,6 +1,7 @@
 import { Table, TableKey } from './table';
 import { z } from 'zod';
 import { dynamodb } from '../dynamodb';
+import { safeParseArray } from '../utils/zod-utils';
 
 /**
  * Notification TTL in seconds (~2 months / 60 days).
@@ -47,7 +48,7 @@ export class Notifications extends Table {
    * Get notifications for a user.
    * - Returns notifications in descending order (newest first)
    * - The limit may be constrained by DynamoDB query limits
-   * - Entries that cannot be parsed against the schema are silently ignored
+   * - Entries that cannot be parsed against the schema are filtered out and logged
    */
   async getNotifications(userId: string, limit: number): Promise<Notification[]> {
     const results = await this.query({
@@ -56,10 +57,7 @@ export class Notifications extends Table {
       limit,
       scanIndexForward: false, // false = DESC order (newest first)
     });
-    return results
-      .map(r => notificationSchema.safeParse(r))
-      .filter(r => r.success)
-      .map(r => r.data);
+    return safeParseArray(results as unknown[], notificationSchema, 'notification');
   }
 
   async insert(userId: string, notification: NotificationInput): Promise<number> {
