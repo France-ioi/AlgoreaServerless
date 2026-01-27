@@ -10,6 +10,7 @@ const threadStatusChangedPayloadSchema = z.object({
   new_status: z.enum(threadStatusValues),
   former_status: z.enum(formerThreadStatusValues),
   helper_group_id: z.string(),
+  updated_by: z.string(),
 });
 
 export type ThreadStatusChangedPayload = z.infer<typeof threadStatusChangedPayloadSchema>;
