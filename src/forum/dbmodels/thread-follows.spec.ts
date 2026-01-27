@@ -12,11 +12,11 @@ describe('ThreadFollows', () => {
     await clearTable();
   });
 
-  describe('follow', () => {
-    it('should add a user to thread followers', async () => {
+  describe('insert', () => {
+    it('should insert a follow entry for a user', async () => {
       const userId = 'user-123';
 
-      await threadFollows.follow(threadId, userId);
+      await threadFollows.insert(threadId, userId);
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(1);
@@ -24,21 +24,21 @@ describe('ThreadFollows', () => {
       expect(followers[0]?.sk).toBeGreaterThan(0);
     });
 
-    it('should allow multiple users to follow the same thread', async () => {
-      await threadFollows.follow(threadId, 'user-1');
-      await threadFollows.follow(threadId, 'user-2');
-      await threadFollows.follow(threadId, 'user-3');
+    it('should allow inserting multiple follow entries for the same thread', async () => {
+      await threadFollows.insert(threadId, 'user-1');
+      await threadFollows.insert(threadId, 'user-2');
+      await threadFollows.insert(threadId, 'user-3');
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(3);
       expect(followers.map(f => f.userId).sort()).toEqual([ 'user-1', 'user-2', 'user-3' ]);
     });
 
-    it('should ignore if user is already following', async () => {
+    it('should ignore if entry already exists', async () => {
       const userId = 'user-123';
 
-      await threadFollows.follow(threadId, userId);
-      await threadFollows.follow(threadId, userId);
+      await threadFollows.insert(threadId, userId);
+      await threadFollows.insert(threadId, userId);
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(1);
@@ -49,7 +49,7 @@ describe('ThreadFollows', () => {
   describe('isFollowing', () => {
     it('should return true if user is following', async () => {
       const userId = 'user-123';
-      await threadFollows.follow(threadId, userId);
+      await threadFollows.insert(threadId, userId);
 
       const result = await threadFollows.isFollowing(threadId, userId);
       expect(result).toBe(true);
@@ -68,43 +68,43 @@ describe('ThreadFollows', () => {
     });
 
     it('should return all followers for a thread', async () => {
-      await threadFollows.follow(threadId, 'user-1');
-      await threadFollows.follow(threadId, 'user-2');
+      await threadFollows.insert(threadId, 'user-1');
+      await threadFollows.insert(threadId, 'user-2');
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(2);
     });
   });
 
-  describe('unfollow', () => {
-    it('should remove a user from thread followers', async () => {
+  describe('deleteByUserId', () => {
+    it('should delete a follow entry by userId', async () => {
       const userId = 'user-123';
-      await threadFollows.follow(threadId, userId);
+      await threadFollows.insert(threadId, userId);
 
       let followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(1);
 
-      await threadFollows.unfollow(threadId, userId);
+      await threadFollows.deleteByUserId(threadId, userId);
 
       followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(0);
     });
 
-    it('should not affect other followers when unfollowing one', async () => {
-      await threadFollows.follow(threadId, 'user-1');
-      await threadFollows.follow(threadId, 'user-2');
-      await threadFollows.follow(threadId, 'user-3');
+    it('should not affect other followers when deleting one', async () => {
+      await threadFollows.insert(threadId, 'user-1');
+      await threadFollows.insert(threadId, 'user-2');
+      await threadFollows.insert(threadId, 'user-3');
 
-      await threadFollows.unfollow(threadId, 'user-2');
+      await threadFollows.deleteByUserId(threadId, 'user-2');
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(2);
       expect(followers.map(f => f.userId).sort()).toEqual([ 'user-1', 'user-3' ]);
     });
 
-    it('should handle unfollowing when not following gracefully', async () => {
+    it('should handle deleting non-existent follow entry gracefully', async () => {
       await expect(
-        threadFollows.unfollow(threadId, 'non-existent-user')
+        threadFollows.deleteByUserId(threadId, 'non-existent-user')
       ).resolves.not.toThrow();
     });
   });
@@ -114,8 +114,8 @@ describe('ThreadFollows', () => {
       const thread1: ThreadId = { participantId: 'user1', itemId: 'item1' };
       const thread2: ThreadId = { participantId: 'user2', itemId: 'item2' };
 
-      await threadFollows.follow(thread1, 'user-1');
-      await threadFollows.follow(thread2, 'user-2');
+      await threadFollows.insert(thread1, 'user-1');
+      await threadFollows.insert(thread2, 'user-2');
 
       const thread1Followers = await threadFollows.getFollowers(thread1);
       const thread2Followers = await threadFollows.getFollowers(thread2);
@@ -131,8 +131,8 @@ describe('ThreadFollows', () => {
     const pk = `${process.env.STAGE}#THREAD#${threadId.participantId}#${threadId.itemId}#FOLLOW`;
 
     it('should set TTL on all existing followers', async () => {
-      await threadFollows.follow(threadId, 'user-1');
-      await threadFollows.follow(threadId, 'user-2');
+      await threadFollows.insert(threadId, 'user-1');
+      await threadFollows.insert(threadId, 'user-2');
 
       const ttl = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
       await threadFollows.setTtlForAllFollowers(threadId, ttl);
@@ -160,8 +160,8 @@ describe('ThreadFollows', () => {
     it('should remove TTL from all followers and return their userIds', async () => {
       // Add followers with TTL
       const ttl = Math.floor(Date.now() / 1000) + 3600;
-      await threadFollows.follow(threadId, 'user-1', ttl);
-      await threadFollows.follow(threadId, 'user-2', ttl);
+      await threadFollows.insert(threadId, 'user-1', ttl);
+      await threadFollows.insert(threadId, 'user-2', ttl);
 
       const userIds = await threadFollows.removeTtlForAllFollowers(threadId);
 

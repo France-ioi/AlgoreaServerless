@@ -62,8 +62,8 @@ describe('handleGradeSaved', () => {
 
   describe('successful handling', () => {
     it('should notify all subscribers when grade is saved', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user1');
-      await threadSubs.subscribe(threadId, 'conn-2', 'user2');
+      await threadSubs.insert(threadId, 'conn-1', 'user1');
+      await threadSubs.insert(threadId, 'conn-2', 'user2');
 
       const envelope = createMockEnvelope();
       handleGradeSaved(envelope);
@@ -103,7 +103,7 @@ describe('handleGradeSaved', () => {
     });
 
     it('should handle validated=false and partial score', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user1');
+      await threadSubs.insert(threadId, 'conn-1', 'user1');
 
       const envelope = createMockEnvelope(createMockPayload({
         validated: false,
@@ -124,7 +124,7 @@ describe('handleGradeSaved', () => {
     });
 
     it('should handle zero score', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user1');
+      await threadSubs.insert(threadId, 'conn-1', 'user1');
 
       const envelope = createMockEnvelope(createMockPayload({
         validated: false,
@@ -151,9 +151,9 @@ describe('handleGradeSaved', () => {
       await userConnections.insert('conn-gone', 'user2');
       await userConnections.insert('conn-3', 'user3');
 
-      const subKeys1 = await threadSubs.subscribe(threadId, 'conn-1', 'user1');
-      const subKeysGone = await threadSubs.subscribe(threadId, 'conn-gone', 'user2');
-      const subKeys3 = await threadSubs.subscribe(threadId, 'conn-3', 'user3');
+      const subKeys1 = await threadSubs.insert(threadId, 'conn-1', 'user1');
+      const subKeysGone = await threadSubs.insert(threadId, 'conn-gone', 'user2');
+      const subKeys3 = await threadSubs.insert(threadId, 'conn-3', 'user3');
 
       await userConnections.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys1 });
       await userConnections.updateConnectionInfo('conn-gone', { subscriptionKeys: subKeysGone });

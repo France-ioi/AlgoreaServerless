@@ -41,7 +41,7 @@ describe('Notification Handlers', () => {
     });
 
     it('should return notifications for the user', async () => {
-      await notifications.create(userId, {
+      await notifications.insert(userId, {
         notificationType: 'forum.reply',
         payload: { message: 'Hello' },
       });
@@ -57,9 +57,9 @@ describe('Notification Handlers', () => {
     });
 
     it('should return notifications in descending order', async () => {
-      await notifications.create(userId, { notificationType: 'type-1', payload: {} });
+      await notifications.insert(userId, { notificationType: 'type-1', payload: {} });
       await new Promise(resolve => setTimeout(resolve, 10));
-      await notifications.create(userId, { notificationType: 'type-2', payload: {} });
+      await notifications.insert(userId, { notificationType: 'type-2', payload: {} });
 
       const req = mockRequestWithIdentityToken(identityToken);
       const resp = {} as any;
@@ -73,7 +73,7 @@ describe('Notification Handlers', () => {
 
     it('should limit to 20 notifications', async () => {
       for (let i = 0; i < 25; i++) {
-        await notifications.create(userId, { notificationType: `type-${i}`, payload: {} });
+        await notifications.insert(userId, { notificationType: `type-${i}`, payload: {} });
       }
 
       const req = mockRequestWithIdentityToken(identityToken);
@@ -87,7 +87,7 @@ describe('Notification Handlers', () => {
 
   describe('deleteNotification', () => {
     it('should delete a single notification', async () => {
-      const sk = await notifications.create(userId, {
+      const sk = await notifications.insert(userId, {
         notificationType: 'to-delete',
         payload: {},
       });
@@ -106,8 +106,8 @@ describe('Notification Handlers', () => {
     });
 
     it('should delete all notifications when sk is "all"', async () => {
-      await notifications.create(userId, { notificationType: 'type-1', payload: {} });
-      await notifications.create(userId, { notificationType: 'type-2', payload: {} });
+      await notifications.insert(userId, { notificationType: 'type-1', payload: {} });
+      await notifications.insert(userId, { notificationType: 'type-2', payload: {} });
 
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { sk: 'all' },
@@ -145,7 +145,7 @@ describe('Notification Handlers', () => {
 
   describe('markAsRead', () => {
     it('should mark notification as read by default (no body)', async () => {
-      const sk = await notifications.create(userId, {
+      const sk = await notifications.insert(userId, {
         notificationType: 'test',
         payload: {},
       });
@@ -165,7 +165,7 @@ describe('Notification Handlers', () => {
     });
 
     it('should mark notification as read when body.read is true', async () => {
-      const sk = await notifications.create(userId, {
+      const sk = await notifications.insert(userId, {
         notificationType: 'test',
         payload: {},
       });
@@ -185,7 +185,7 @@ describe('Notification Handlers', () => {
     });
 
     it('should unmark notification as read when body.read is false', async () => {
-      const sk = await notifications.create(userId, {
+      const sk = await notifications.insert(userId, {
         notificationType: 'test',
         payload: {},
       });
@@ -218,7 +218,7 @@ describe('Notification Handlers', () => {
     });
 
     it('should throw DecodingError for invalid body', async () => {
-      const sk = await notifications.create(userId, {
+      const sk = await notifications.insert(userId, {
         notificationType: 'test',
         payload: {},
       });

@@ -51,11 +51,11 @@ export class ThreadFollows extends Table {
   }
 
   /**
-   * Add a user to the thread followers.
+   * Insert a follow entry for a user on a thread.
    * If the user is already following, this is a no-op.
    * @param ttl Optional TTL in seconds since epoch for auto-deletion
    */
-  async follow(threadId: ThreadId, userId: string, ttl?: number): Promise<void> {
+  async insert(threadId: ThreadId, userId: string, ttl?: number): Promise<void> {
     // Check if already following
     const alreadyFollowing = await this.isFollowing(threadId, userId);
     if (alreadyFollowing) {
@@ -71,10 +71,10 @@ export class ThreadFollows extends Table {
   }
 
   /**
-   * Remove a user from the thread followers.
+   * Delete a follow entry for a user on a thread.
    * If the user is not following, this is a no-op.
    */
-  async unfollow(threadId: ThreadId, userId: string): Promise<void> {
+  async deleteByUserId(threadId: ThreadId, userId: string): Promise<void> {
     // Find the user's follow entry
     const results = await this.sqlRead({
       query: `SELECT sk FROM "${this.tableName}" WHERE pk = ? AND userId = ?`,

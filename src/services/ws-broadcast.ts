@@ -36,7 +36,7 @@ export async function cleanupGoneConnection(connectionId: ConnectionId): Promise
   const connInfo = await userConnectionsTable.delete(connectionId);
 
   if (connInfo?.subscriptionKeys) {
-    await threadSubscriptionsTable.unsubscribeByKeys(connInfo.subscriptionKeys);
+    await threadSubscriptionsTable.deleteByKeys(connInfo.subscriptionKeys);
   }
 
   return { userId: connInfo?.userId };

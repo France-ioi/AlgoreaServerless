@@ -137,8 +137,8 @@ describe('handleThreadStatusChanged - follower behavior', () => {
       const testThreadId = { participantId: 'participant-1', itemId: '1000' };
 
       // Pre-existing follower with TTL (e.g., from previous closure)
-      await threadFollows.follow(testThreadId, 'participant-1', ttl);
-      await threadFollows.follow(testThreadId, 'existing-follower', ttl);
+      await threadFollows.insert(testThreadId, 'participant-1', ttl);
+      await threadFollows.insert(testThreadId, 'existing-follower', ttl);
 
       const envelope = createMockEnvelope(createMockPayload({
         participant_id: 'participant-1',
@@ -170,8 +170,8 @@ describe('handleThreadStatusChanged - follower behavior', () => {
       const testThreadId = { participantId: 'participant-1', itemId: '1000' };
 
       // Add some followers
-      await threadFollows.follow(testThreadId, 'user-1');
-      await threadFollows.follow(testThreadId, 'user-2');
+      await threadFollows.insert(testThreadId, 'user-1');
+      await threadFollows.insert(testThreadId, 'user-2');
 
       const envelope = createMockEnvelope(createMockPayload({
         participant_id: 'participant-1',
@@ -214,7 +214,7 @@ describe('handleThreadStatusChanged - follower behavior', () => {
   describe('no-op transitions', () => {
     it('should not modify followers for open -> open transitions', async () => {
       const testThreadId = { participantId: 'participant-1', itemId: '1000' };
-      await threadFollows.follow(testThreadId, 'existing-user');
+      await threadFollows.insert(testThreadId, 'existing-user');
 
       const envelope = createMockEnvelope(createMockPayload({
         participant_id: 'participant-1',
@@ -235,7 +235,7 @@ describe('handleThreadStatusChanged - follower behavior', () => {
       // Note: This transition might not happen in practice but should be handled
       const testThreadId = { participantId: 'participant-1', itemId: '1000' };
       const ttl = Math.floor(Date.now() / 1000) + 3600;
-      await threadFollows.follow(testThreadId, 'existing-user', ttl);
+      await threadFollows.insert(testThreadId, 'existing-user', ttl);
 
       const envelope = createMockEnvelope(createMockPayload({
         participant_id: 'participant-1',

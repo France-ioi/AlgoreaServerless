@@ -10,7 +10,7 @@ describe('UserConnections', () => {
     await clearTable();
   });
 
-  describe('insert', () => {
+  describe('create', () => {
 
     it('should create both c2u and u2c entries', async () => {
       await userConnections.insert('conn-123', 'user-456');

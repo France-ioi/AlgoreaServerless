@@ -169,8 +169,8 @@ describe('Forum Messages Service', () => {
     });
 
     it('should notify all subscribers when message is created', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user1');
-      await threadSubs.subscribe(threadId, 'conn-2', 'user2');
+      await threadSubs.insert(threadId, 'conn-1', 'user1');
+      await threadSubs.insert(threadId, 'conn-2', 'user2');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -201,9 +201,9 @@ describe('Forum Messages Service', () => {
       await userConnections.insert('conn-gone', 'user2');
       await userConnections.insert('conn-3', 'user3');
 
-      const subKeys1 = await threadSubs.subscribe(threadId, 'conn-1', 'user1');
-      const subKeysGone = await threadSubs.subscribe(threadId, 'conn-gone', 'user2');
-      const subKeys3 = await threadSubs.subscribe(threadId, 'conn-3', 'user3');
+      const subKeys1 = await threadSubs.insert(threadId, 'conn-1', 'user1');
+      const subKeysGone = await threadSubs.insert(threadId, 'conn-gone', 'user2');
+      const subKeys3 = await threadSubs.insert(threadId, 'conn-3', 'user3');
 
       await userConnections.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys1 });
       await userConnections.updateConnectionInfo('conn-gone', { subscriptionKeys: subKeysGone });
@@ -262,7 +262,7 @@ describe('Forum Messages Service', () => {
 
     it('should notify followers who are not subscribers', async () => {
       // Follower with no active subscription
-      await threadFollows.follow(threadId, 'follower-user');
+      await threadFollows.insert(threadId, 'follower-user');
       // Also add a connection for the follower so we can verify the WS notification
       await userConnections.insert('follower-conn', 'follower-user');
 
@@ -291,7 +291,7 @@ describe('Forum Messages Service', () => {
 
     it('should exclude author from follower notifications', async () => {
       // Author is also a follower
-      await threadFollows.follow(threadId, 'author-user');
+      await threadFollows.insert(threadId, 'author-user');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -310,8 +310,8 @@ describe('Forum Messages Service', () => {
 
     it('should exclude successful subscribers from follower notifications', async () => {
       // User is both a follower and an active subscriber
-      await threadFollows.follow(threadId, 'subscriber-user');
-      await threadSubs.subscribe(threadId, 'sub-conn', 'subscriber-user');
+      await threadFollows.insert(threadId, 'subscriber-user');
+      await threadSubs.insert(threadId, 'sub-conn', 'subscriber-user');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -330,8 +330,8 @@ describe('Forum Messages Service', () => {
 
     it('should notify followers whose subscription connection was gone', async () => {
       // User is both a follower and a subscriber, but their connection is gone
-      await threadFollows.follow(threadId, 'gone-subscriber');
-      await threadSubs.subscribe(threadId, 'gone-conn', 'gone-subscriber');
+      await threadFollows.insert(threadId, 'gone-subscriber');
+      await threadSubs.insert(threadId, 'gone-conn', 'gone-subscriber');
       await userConnections.insert('other-conn', 'gone-subscriber');
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
@@ -361,12 +361,12 @@ describe('Forum Messages Service', () => {
 
     it('should notify multiple followers correctly', async () => {
       // Set up various scenarios
-      await threadFollows.follow(threadId, 'follower-only');
-      await threadFollows.follow(threadId, 'subscriber-and-follower');
-      await threadFollows.follow(threadId, 'author-user'); // author is also a follower
+      await threadFollows.insert(threadId, 'follower-only');
+      await threadFollows.insert(threadId, 'subscriber-and-follower');
+      await threadFollows.insert(threadId, 'author-user'); // author is also a follower
 
       // subscriber-and-follower has an active subscription
-      await threadSubs.subscribe(threadId, 'sub-conn', 'subscriber-and-follower');
+      await threadSubs.insert(threadId, 'sub-conn', 'subscriber-and-follower');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {

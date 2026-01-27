@@ -15,7 +15,7 @@ async function follow(req: RequestWithThreadToken): Promise<typeof okResponse> {
   const { participantId, itemId, userId } = req.threadToken;
   const threadId = { participantId, itemId };
 
-  await threadFollowsTable.follow(threadId, userId);
+  await threadFollowsTable.insert(threadId, userId);
 
   return okResponse;
 }
@@ -34,7 +34,7 @@ async function unfollow(req: RequestWithIdentityToken): Promise<typeof okRespons
   }
 
   const threadId = { participantId, itemId };
-  await threadFollowsTable.unfollow(threadId, userId);
+  await threadFollowsTable.deleteByUserId(threadId, userId);
 
   return okResponse;
 }

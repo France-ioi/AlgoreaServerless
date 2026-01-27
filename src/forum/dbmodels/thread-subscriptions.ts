@@ -56,8 +56,8 @@ export class ThreadSubscriptions extends Table {
       })).parse(results);
   }
 
-  async subscribe(thread: ThreadId, connectionId: ConnectionId, userId: string): Promise<SubscriptionKeys> {
-    // TODO: we should check what error we get if we resubscribe while we didn't unsubscribe properly before .. and do something
+  async insert(thread: ThreadId, connectionId: ConnectionId, userId: string): Promise<SubscriptionKeys> {
+    // TODO: we should check what error we get if we re-insert while we didn't delete properly before .. and do something
     const keys: SubscriptionKeys = { pk: pk(thread), sk: Date.now() };
     await this.sqlWrite({
       query: `INSERT INTO "${ this.tableName }" VALUE { 'pk': ?, 'sk': ?, 'connectionId': ?, 'ttl': ?, 'userId': ? }`,
@@ -66,34 +66,34 @@ export class ThreadSubscriptions extends Table {
     return keys;
   }
 
-  private async delete(keys: TableKey[]): Promise<void> {
+  private async deleteRows(keys: TableKey[]): Promise<void> {
     await this.sqlWrite(keys.map(k => ({
       query: `DELETE FROM "${ this.tableName }" WHERE pk = ? AND sk = ?`,
       params: [ k.pk, k.sk ],
     })));
   }
 
-  async unsubscribeSet(thread: ThreadId, sks: number[]): Promise<void> {
+  async deleteSet(thread: ThreadId, sks: number[]): Promise<void> {
     if (sks.length === 0) return;
-    await this.delete(sks.map(sk => ({ pk: pk(thread), sk })));
+    await this.deleteRows(sks.map(sk => ({ pk: pk(thread), sk })));
   }
 
-  async unsubscribeConnectionId(threadId: ThreadId, connectionId: ConnectionId): Promise<void> {
+  async deleteByConnectionId(threadId: ThreadId, connectionId: ConnectionId): Promise<void> {
     const entry = await this.getSubscribers({ threadId, connectionId });
     if (!entry.length) {
       // eslint-disable-next-line no-console
-      console.warn('Unexpected: unsubscribing from a not existing connection.', JSON.stringify(threadId), connectionId);
+      console.warn('Unexpected: deleting a non-existing subscription.', JSON.stringify(threadId), connectionId);
       return;
     }
-    await this.unsubscribeSet(threadId, entry.map(e => e.sk));
+    await this.deleteSet(threadId, entry.map(e => e.sk));
   }
 
   /**
-   * Unsubscribe using the subscription keys directly.
-   * More efficient than unsubscribeConnectionId as it doesn't require a query.
+   * Delete subscription using the keys directly.
+   * More efficient than deleteByConnectionId as it doesn't require a query.
    */
-  async unsubscribeByKeys(keys: SubscriptionKeys): Promise<void> {
-    await this.delete([ keys ]);
+  async deleteByKeys(keys: SubscriptionKeys): Promise<void> {
+    await this.deleteRows([ keys ]);
   }
 }
 

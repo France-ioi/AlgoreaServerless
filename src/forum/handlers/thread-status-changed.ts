@@ -57,11 +57,11 @@ export async function handleThreadStatusChanged(envelope: EventEnvelope): Promis
 
     // Add participant if not already following
     if (!existingFollowerIds.includes(data.participant_id)) {
-      await threadFollowsTable.follow(threadId, data.participant_id);
+      await threadFollowsTable.insert(threadId, data.participant_id);
     }
     // Add updater if different from participant and not already following
     if (data.updated_by !== data.participant_id && !existingFollowerIds.includes(data.updated_by)) {
-      await threadFollowsTable.follow(threadId, data.updated_by);
+      await threadFollowsTable.insert(threadId, data.updated_by);
     }
   } else if (wasOpen && !isNowOpen) {
     // Thread closed: add 2-week TTL

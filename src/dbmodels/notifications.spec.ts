@@ -13,7 +13,7 @@ describe('Notifications', () => {
 
   describe('create', () => {
     it('should create a notification and return its sk', async () => {
-      const sk = await notifications.create(userId, {
+      const sk = await notifications.insert(userId, {
         notificationType: 'forum.reply',
         payload: { threadId: 'thread-1', message: 'Hello' },
       });
@@ -36,17 +36,17 @@ describe('Notifications', () => {
     });
 
     it('should return notifications in descending order (newest first)', async () => {
-      await notifications.create(userId, {
+      await notifications.insert(userId, {
         notificationType: 'type-1',
         payload: { order: 1 },
       });
       await new Promise(resolve => setTimeout(resolve, 10)); // ensure different timestamps
-      await notifications.create(userId, {
+      await notifications.insert(userId, {
         notificationType: 'type-2',
         payload: { order: 2 },
       });
       await new Promise(resolve => setTimeout(resolve, 10));
-      await notifications.create(userId, {
+      await notifications.insert(userId, {
         notificationType: 'type-3',
         payload: { order: 3 },
       });
@@ -60,7 +60,7 @@ describe('Notifications', () => {
 
     it('should respect the limit parameter', async () => {
       for (let i = 0; i < 5; i++) {
-        await notifications.create(userId, {
+        await notifications.insert(userId, {
           notificationType: `type-${i}`,
           payload: { index: i },
         });
@@ -72,11 +72,11 @@ describe('Notifications', () => {
     });
 
     it('should isolate notifications between users', async () => {
-      await notifications.create('user-1', {
+      await notifications.insert('user-1', {
         notificationType: 'for-user-1',
         payload: {},
       });
-      await notifications.create('user-2', {
+      await notifications.insert('user-2', {
         notificationType: 'for-user-2',
         payload: {},
       });
@@ -93,7 +93,7 @@ describe('Notifications', () => {
 
   describe('delete', () => {
     it('should delete a single notification', async () => {
-      const sk = await notifications.create(userId, {
+      const sk = await notifications.insert(userId, {
         notificationType: 'to-delete',
         payload: {},
       });
@@ -108,12 +108,12 @@ describe('Notifications', () => {
     });
 
     it('should not affect other notifications when deleting one', async () => {
-      const sk1 = await notifications.create(userId, {
+      const sk1 = await notifications.insert(userId, {
         notificationType: 'keep',
         payload: {},
       });
       await new Promise(resolve => setTimeout(resolve, 5));
-      const sk2 = await notifications.create(userId, {
+      const sk2 = await notifications.insert(userId, {
         notificationType: 'delete',
         payload: {},
       });
@@ -134,9 +134,9 @@ describe('Notifications', () => {
 
   describe('deleteAll', () => {
     it('should delete all notifications for a user', async () => {
-      await notifications.create(userId, { notificationType: 'type-1', payload: {} });
-      await notifications.create(userId, { notificationType: 'type-2', payload: {} });
-      await notifications.create(userId, { notificationType: 'type-3', payload: {} });
+      await notifications.insert(userId, { notificationType: 'type-1', payload: {} });
+      await notifications.insert(userId, { notificationType: 'type-2', payload: {} });
+      await notifications.insert(userId, { notificationType: 'type-3', payload: {} });
 
       let result = await notifications.getNotifications(userId, 10);
       expect(result).toHaveLength(3);
@@ -148,8 +148,8 @@ describe('Notifications', () => {
     });
 
     it('should not affect other users notifications', async () => {
-      await notifications.create('user-1', { notificationType: 'for-user-1', payload: {} });
-      await notifications.create('user-2', { notificationType: 'for-user-2', payload: {} });
+      await notifications.insert('user-1', { notificationType: 'for-user-1', payload: {} });
+      await notifications.insert('user-2', { notificationType: 'for-user-2', payload: {} });
 
       await notifications.deleteAll('user-1');
 
@@ -169,7 +169,7 @@ describe('Notifications', () => {
 
   describe('setReadTime', () => {
     it('should mark a notification as read', async () => {
-      const sk = await notifications.create(userId, {
+      const sk = await notifications.insert(userId, {
         notificationType: 'unread',
         payload: {},
       });
@@ -183,7 +183,7 @@ describe('Notifications', () => {
     });
 
     it('should unmark a notification as read', async () => {
-      const sk = await notifications.create(userId, {
+      const sk = await notifications.insert(userId, {
         notificationType: 'test',
         payload: {},
       });

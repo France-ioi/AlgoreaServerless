@@ -12,12 +12,12 @@ describe('ThreadSubscriptions', () => {
     await clearTable();
   });
 
-  describe('subscribe', () => {
-    it('should subscribe a connection to a thread', async () => {
+  describe('insert', () => {
+    it('should insert a subscription for a connection to a thread', async () => {
       const connectionId = 'conn-123';
       const userId = 'user-123';
 
-      await threadSubs.subscribe(threadId, connectionId, userId);
+      await threadSubs.insert(threadId, connectionId, userId);
 
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(1);
@@ -29,7 +29,7 @@ describe('ThreadSubscriptions', () => {
       const connectionId = 'conn-123';
       const userId = 'user-123';
 
-      const keys = await threadSubs.subscribe(threadId, connectionId, userId);
+      const keys = await threadSubs.insert(threadId, connectionId, userId);
 
       expect(keys.pk).toContain('THREAD');
       expect(keys.pk).toContain(threadId.participantId);
@@ -37,10 +37,10 @@ describe('ThreadSubscriptions', () => {
       expect(keys.sk).toBeGreaterThan(0);
     });
 
-    it('should allow multiple connections to subscribe to the same thread', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user-1');
-      await threadSubs.subscribe(threadId, 'conn-2', 'user-2');
-      await threadSubs.subscribe(threadId, 'conn-3', 'user-3');
+    it('should allow inserting multiple subscriptions to the same thread', async () => {
+      await threadSubs.insert(threadId, 'conn-1', 'user-1');
+      await threadSubs.insert(threadId, 'conn-2', 'user-2');
+      await threadSubs.insert(threadId, 'conn-3', 'user-3');
 
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(3);
@@ -55,8 +55,8 @@ describe('ThreadSubscriptions', () => {
     });
 
     it('should return all subscribers for a thread', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user-1');
-      await threadSubs.subscribe(threadId, 'conn-2', 'user-2');
+      await threadSubs.insert(threadId, 'conn-1', 'user-1');
+      await threadSubs.insert(threadId, 'conn-2', 'user-2');
 
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(2);
@@ -64,8 +64,8 @@ describe('ThreadSubscriptions', () => {
 
     it('should filter subscribers by connectionId', async () => {
       const connectionId = 'conn-123';
-      await threadSubs.subscribe(threadId, connectionId, 'user-123');
-      await threadSubs.subscribe(threadId, 'conn-456', 'user-456');
+      await threadSubs.insert(threadId, connectionId, 'user-123');
+      await threadSubs.insert(threadId, 'conn-456', 'user-456');
 
       const subscribers = await threadSubs.getSubscribers({ threadId, connectionId });
       expect(subscribers).toHaveLength(1);
@@ -79,81 +79,81 @@ describe('ThreadSubscriptions', () => {
     });
   });
 
-  describe('unsubscribeConnectionId', () => {
-    it('should unsubscribe a connection from a thread', async () => {
+  describe('deleteByConnectionId', () => {
+    it('should delete a subscription by connection id', async () => {
       const connectionId = 'conn-123';
-      await threadSubs.subscribe(threadId, connectionId, 'user-123');
+      await threadSubs.insert(threadId, connectionId, 'user-123');
 
       let subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(1);
 
-      await threadSubs.unsubscribeConnectionId(threadId, connectionId);
+      await threadSubs.deleteByConnectionId(threadId, connectionId);
 
       subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(0);
     });
 
-    it('should not affect other subscriptions when unsubscribing one', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user-1');
-      await threadSubs.subscribe(threadId, 'conn-2', 'user-2');
-      await threadSubs.subscribe(threadId, 'conn-3', 'user-3');
+    it('should not affect other subscriptions when deleting one', async () => {
+      await threadSubs.insert(threadId, 'conn-1', 'user-1');
+      await threadSubs.insert(threadId, 'conn-2', 'user-2');
+      await threadSubs.insert(threadId, 'conn-3', 'user-3');
 
-      await threadSubs.unsubscribeConnectionId(threadId, 'conn-2');
+      await threadSubs.deleteByConnectionId(threadId, 'conn-2');
 
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(2);
       expect(subscribers.map(s => s.connectionId).sort()).toEqual([ 'conn-1', 'conn-3' ]);
     });
 
-    it('should handle unsubscribing from non-existent subscription gracefully', async () => {
+    it('should handle deleting non-existent subscription gracefully', async () => {
       await expect(
-        threadSubs.unsubscribeConnectionId(threadId, 'non-existent-conn')
+        threadSubs.deleteByConnectionId(threadId, 'non-existent-conn')
       ).resolves.not.toThrow();
     });
   });
 
-  describe('unsubscribeSet', () => {
-    it('should unsubscribe multiple connections by sk', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user-1');
-      await threadSubs.subscribe(threadId, 'conn-2', 'user-2');
-      await threadSubs.subscribe(threadId, 'conn-3', 'user-3');
+  describe('deleteSet', () => {
+    it('should delete multiple subscriptions by sk', async () => {
+      await threadSubs.insert(threadId, 'conn-1', 'user-1');
+      await threadSubs.insert(threadId, 'conn-2', 'user-2');
+      await threadSubs.insert(threadId, 'conn-3', 'user-3');
 
       const subscribers = await threadSubs.getSubscribers({ threadId });
       const sksToRemove = subscribers.slice(0, 2).map(s => s.sk);
 
-      await threadSubs.unsubscribeSet(threadId, sksToRemove);
+      await threadSubs.deleteSet(threadId, sksToRemove);
 
       const remainingSubscribers = await threadSubs.getSubscribers({ threadId });
       expect(remainingSubscribers).toHaveLength(1);
     });
 
     it('should handle empty sk array', async () => {
-      await threadSubs.subscribe(threadId, 'conn-1', 'user-1');
-      await threadSubs.unsubscribeSet(threadId, []);
+      await threadSubs.insert(threadId, 'conn-1', 'user-1');
+      await threadSubs.deleteSet(threadId, []);
 
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(1);
     });
   });
 
-  describe('unsubscribeByKeys', () => {
-    it('should unsubscribe using subscription keys directly', async () => {
-      const keys = await threadSubs.subscribe(threadId, 'conn-123', 'user-123');
+  describe('deleteByKeys', () => {
+    it('should delete a subscription using keys directly', async () => {
+      const keys = await threadSubs.insert(threadId, 'conn-123', 'user-123');
 
       let subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(1);
 
-      await threadSubs.unsubscribeByKeys(keys);
+      await threadSubs.deleteByKeys(keys);
 
       subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(0);
     });
 
-    it('should only unsubscribe the specific subscription', async () => {
-      const keys1 = await threadSubs.subscribe(threadId, 'conn-1', 'user-1');
-      await threadSubs.subscribe(threadId, 'conn-2', 'user-2');
+    it('should only delete the specific subscription', async () => {
+      const keys1 = await threadSubs.insert(threadId, 'conn-1', 'user-1');
+      await threadSubs.insert(threadId, 'conn-2', 'user-2');
 
-      await threadSubs.unsubscribeByKeys(keys1);
+      await threadSubs.deleteByKeys(keys1);
 
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(1);
@@ -166,8 +166,8 @@ describe('ThreadSubscriptions', () => {
       const thread1: ThreadId = { participantId: 'user1', itemId: 'item1' };
       const thread2: ThreadId = { participantId: 'user2', itemId: 'item2' };
 
-      await threadSubs.subscribe(thread1, 'conn-1', 'user-1');
-      await threadSubs.subscribe(thread2, 'conn-2', 'user-2');
+      await threadSubs.insert(thread1, 'conn-1', 'user-1');
+      await threadSubs.insert(thread2, 'conn-2', 'user-2');
 
       const thread1Subs = await threadSubs.getSubscribers({ threadId: thread1 });
       const thread2Subs = await threadSubs.getSubscribers({ threadId: thread2 });

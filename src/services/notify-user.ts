@@ -27,7 +27,7 @@ export async function notifyUser(userId: string, notification: NotificationInput
 
   await Promise.all([
     // Create notification in database
-    notificationsTable.createWithSk(userId, sk, notification),
+    notificationsTable.insertWithSk(userId, sk, notification),
 
     // Send via WebSocket if user has active connections
     userConnectionsTable.getAll(userId).then(async connectionIds => {

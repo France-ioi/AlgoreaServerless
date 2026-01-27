@@ -43,7 +43,7 @@ describe('ws-broadcast', () => {
     it('should clean up thread subscription when connection has one', async () => {
       // Create connection and subscription
       await userConnectionsTable.insert('conn-1', 'user-123');
-      const subKeys = await threadSubscriptionsTable.subscribe(threadId, 'conn-1', 'user-123');
+      const subKeys = await threadSubscriptionsTable.insert(threadId, 'conn-1', 'user-123');
       await userConnectionsTable.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys });
 
       const result = await cleanupGoneConnection('conn-1');
@@ -131,8 +131,8 @@ describe('ws-broadcast', () => {
       await userConnectionsTable.insert('conn-gone', 'user-gone');
 
       // Create subscriptions for both
-      const activeSubKeys = await threadSubscriptionsTable.subscribe(threadId, 'conn-active', 'user-active');
-      const goneSubKeys = await threadSubscriptionsTable.subscribe(threadId, 'conn-gone', 'user-gone');
+      const activeSubKeys = await threadSubscriptionsTable.insert(threadId, 'conn-active', 'user-active');
+      const goneSubKeys = await threadSubscriptionsTable.insert(threadId, 'conn-gone', 'user-gone');
       await userConnectionsTable.updateConnectionInfo('conn-active', { subscriptionKeys: activeSubKeys });
       await userConnectionsTable.updateConnectionInfo('conn-gone', { subscriptionKeys: goneSubKeys });
 

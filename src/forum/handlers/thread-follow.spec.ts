@@ -65,7 +65,7 @@ describe('Thread Follow Handlers', () => {
     });
 
     it('should ignore if user is already following', async () => {
-      await threadFollows.follow(threadId, 'user-123');
+      await threadFollows.insert(threadId, 'user-123');
 
       const req = mockRequestWithThreadToken(baseToken);
       const resp = {} as any;
@@ -83,7 +83,7 @@ describe('Thread Follow Handlers', () => {
     const identityToken: IdentityToken = { userId: 'user-123', exp: 9999999999 };
 
     it('should remove user from followers and return 200', async () => {
-      await threadFollows.follow(threadId, 'user-123');
+      await threadFollows.insert(threadId, 'user-123');
 
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { participantId: 'user123', itemId: 'item456' },
@@ -128,8 +128,8 @@ describe('Thread Follow Handlers', () => {
     });
 
     it('should not affect other followers when unfollowing', async () => {
-      await threadFollows.follow(threadId, 'user-123');
-      await threadFollows.follow(threadId, 'user-456');
+      await threadFollows.insert(threadId, 'user-123');
+      await threadFollows.insert(threadId, 'user-456');
 
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { participantId: 'user123', itemId: 'item456' },

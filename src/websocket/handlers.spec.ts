@@ -17,7 +17,7 @@ jest.mock('../dbmodels/user-connections', () => ({
 
 // Mock the ThreadSubscriptions module with singleton
 const mockThreadSubscriptionsTable = {
-  unsubscribeByKeys: jest.fn().mockResolvedValue(undefined),
+  deleteByKeys: jest.fn().mockResolvedValue(undefined),
 };
 jest.mock('../forum/dbmodels/thread-subscriptions', () => ({
   ThreadSubscriptions: jest.fn(),
@@ -166,7 +166,7 @@ describe('WebSocket Handlers', () => {
       });
     });
 
-    it('should unsubscribe from thread when connection has subscriptionKeys', async () => {
+    it('should delete subscription when connection has subscriptionKeys', async () => {
       // Override the mock to return a connection with subscriptionKeys
       const subscriptionKeys = { pk: 'dev#THREAD#participant123#item456#SUB', sk: 1234567890 };
       mockUserConnectionsTable.delete.mockResolvedValueOnce({
@@ -180,17 +180,17 @@ describe('WebSocket Handlers', () => {
 
       await handleDisconnect(event);
 
-      expect(mockThreadSubscriptionsTable.unsubscribeByKeys).toHaveBeenCalledWith(subscriptionKeys);
+      expect(mockThreadSubscriptionsTable.deleteByKeys).toHaveBeenCalledWith(subscriptionKeys);
     });
 
-    it('should not call unsubscribe when connection has no subscriptionKeys', async () => {
+    it('should not call delete when connection has no subscriptionKeys', async () => {
       // Default mock returns no subscriptionKeys
       const event = mockWebSocketDisconnectEvent();
 
       await handleDisconnect(event);
 
-      // threadSubscriptionsTable.unsubscribeByKeys should not be called when there's no subscription
-      expect(mockThreadSubscriptionsTable.unsubscribeByKeys).not.toHaveBeenCalled();
+      // threadSubscriptionsTable.deleteByKeys should not be called when there's no subscription
+      expect(mockThreadSubscriptionsTable.deleteByKeys).not.toHaveBeenCalled();
     });
 
   });
