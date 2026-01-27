@@ -15,6 +15,26 @@ const subscriptions = new ThreadSubscriptions(dynamodb);
 const threadFollows = new ThreadFollows(dynamodb);
 const threadEvents = new ThreadEvents(dynamodb);
 
+/**
+ * Creates a new message in a thread.
+ *
+ * This handler performs the following operations:
+ *
+ * 1. **Message Storage**: Inserts the message into the database as a thread event.
+ *
+ * 2. **Real-time Notification (Subscribers)**: Sends the message via WebSocket to all
+ *    active subscribers (users with open connections watching the thread). Gone connections
+ *    are cleaned up automatically.
+ *
+ * 3. **Persistent Notification (Followers)**: Creates notifications for thread followers who
+ *    did NOT receive the real-time WebSocket message. This excludes:
+ *    - The message author (they don't need to be notified of their own message)
+ *    - Users who successfully received the message via their active subscription
+ *
+ *    Followers with active connections receive both a WebSocket notification and a DB notification.
+ *
+ * Operations 1, 2, and 3 (fetching followers) run in parallel for performance.
+ */
 async function create(req: RequestWithThreadToken, resp: Response): Promise<ReturnType<typeof created>> {
   const { participantId, itemId, userId, canWrite } = req.threadToken;
   if (!canWrite) throw new Forbidden('This operation required canWrite');
