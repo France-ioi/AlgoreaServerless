@@ -51,17 +51,6 @@ export async function handleThreadStatusChanged(envelope: EventEnvelope): Promis
   const data = parseResult.data;
   const threadId = { participantId: data.participant_id, itemId: data.item_id };
 
-  // eslint-disable-next-line no-console
-  console.log('Thread status changed:', {
-    participantId: data.participant_id,
-    itemId: data.item_id,
-    newStatus: data.new_status,
-    formerStatus: data.former_status,
-    helperGroupId: data.helper_group_id,
-    instance: envelope.instance,
-    requestId: envelope.request_id,
-  });
-
   const wasOpen = isOpen(data.former_status);
   const isNowOpen = isOpen(data.new_status);
 
