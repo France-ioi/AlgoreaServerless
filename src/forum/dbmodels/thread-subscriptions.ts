@@ -57,7 +57,6 @@ export class ThreadSubscriptions extends Table {
   }
 
   async insert(thread: ThreadId, connectionId: ConnectionId, userId: string): Promise<SubscriptionKeys> {
-    // TODO: we should check what error we get if we re-insert while we didn't delete properly before .. and do something
     const keys: SubscriptionKeys = { pk: pk(thread), sk: Date.now() };
     await this.sqlWrite({
       query: `INSERT INTO "${ this.tableName }" VALUE { 'pk': ?, 'sk': ?, 'connectionId': ?, 'ttl': ?, 'userId': ? }`,
