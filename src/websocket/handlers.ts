@@ -1,8 +1,6 @@
 import { APIGatewayProxyEvent } from 'aws-lambda';
 import { parseIdentityToken } from '../auth/identity-token';
-import { UserConnections } from '../dbmodels/user-connections';
-import { ThreadSubscriptions } from '../dbmodels/forum/thread-subscriptions';
-import { dynamodb } from '../dynamodb';
+import { userConnectionsTable } from '../dbmodels/user-connections';
 import { WsHandlerResult } from '../utils/lambda-ws-server';
 import { cleanupGoneConnection } from '../services/ws-broadcast';
 
@@ -31,8 +29,7 @@ export async function handleConnect(event: APIGatewayProxyEvent): Promise<WsHand
   }
 
   // Store connection in database
-  const userConnections = new UserConnections(dynamodb);
-  await userConnections.insert(connectionId, userId);
+  await userConnectionsTable.insert(connectionId, userId);
 
   return { statusCode: 200, body: 'Connected', userId };
 }
@@ -48,9 +45,7 @@ export async function handleDisconnect(event: APIGatewayProxyEvent): Promise<WsH
     return { statusCode: 500, body: 'Internal error: missing connectionId' };
   }
 
-  const userConnections = new UserConnections(dynamodb);
-  const threadSubscriptions = new ThreadSubscriptions(dynamodb);
-  const { userId } = await cleanupGoneConnection(connectionId, userConnections, threadSubscriptions);
+  const { userId } = await cleanupGoneConnection(connectionId);
 
   if (!userId) {
     // eslint-disable-next-line no-console

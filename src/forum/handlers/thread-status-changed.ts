@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
-import { ThreadFollows, threadFollowTtlAfterClose } from '../../dbmodels/forum/thread-follows';
-import { dynamodb } from '../../dynamodb';
+import { threadFollowsTable, threadFollowTtlAfterClose } from '../../dbmodels/forum/thread-follows';
 
 const threadStatusValues = [ 'waiting_for_participant', 'waiting_for_trainer', 'closed' ] as const;
 const formerThreadStatusValues = [ ...threadStatusValues, 'not_started' ] as const;
@@ -16,8 +15,6 @@ const threadStatusChangedPayloadSchema = z.object({
 });
 
 export type ThreadStatusChangedPayload = z.infer<typeof threadStatusChangedPayloadSchema>;
-
-const threadFollows = new ThreadFollows(dynamodb);
 
 type ThreadStatus = typeof threadStatusValues[number] | typeof formerThreadStatusValues[number];
 
@@ -56,18 +53,18 @@ export async function handleThreadStatusChanged(envelope: EventEnvelope): Promis
 
   if (!wasOpen && isNowOpen) {
     // Thread opened: remove TTL and get existing followers
-    const existingFollowerIds = await threadFollows.removeTtlForAllFollowers(threadId);
+    const existingFollowerIds = await threadFollowsTable.removeTtlForAllFollowers(threadId);
 
     // Add participant if not already following
     if (!existingFollowerIds.includes(data.participant_id)) {
-      await threadFollows.follow(threadId, data.participant_id);
+      await threadFollowsTable.follow(threadId, data.participant_id);
     }
     // Add updater if different from participant and not already following
     if (data.updated_by !== data.participant_id && !existingFollowerIds.includes(data.updated_by)) {
-      await threadFollows.follow(threadId, data.updated_by);
+      await threadFollowsTable.follow(threadId, data.updated_by);
     }
   } else if (wasOpen && !isNowOpen) {
     // Thread closed: add 2-week TTL
-    await threadFollows.setTtlForAllFollowers(threadId, threadFollowTtlAfterClose());
+    await threadFollowsTable.setTtlForAllFollowers(threadId, threadFollowTtlAfterClose());
   }
 }

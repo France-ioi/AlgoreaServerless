@@ -1,13 +1,7 @@
-import { UserConnections } from '../dbmodels/user-connections';
-import { ThreadSubscriptions } from '../dbmodels/forum/thread-subscriptions';
-import { Notifications, NotificationInput, Notification } from '../dbmodels/notifications';
-import { dynamodb } from '../dynamodb';
+import { userConnectionsTable } from '../dbmodels/user-connections';
+import { notificationsTable, NotificationInput, Notification } from '../dbmodels/notifications';
 import { NotificationAction, NotificationNewMessage } from '../ws-messages';
 import { broadcastAndCleanup } from './ws-broadcast';
-
-const userConnections = new UserConnections(dynamodb);
-const subscriptions = new ThreadSubscriptions(dynamodb);
-const notifications = new Notifications(dynamodb);
 
 /**
  * Sends a notification to a user.
@@ -33,10 +27,10 @@ export async function notifyUser(userId: string, notification: NotificationInput
 
   await Promise.all([
     // Create notification in database
-    notifications.createWithSk(userId, sk, notification),
+    notificationsTable.createWithSk(userId, sk, notification),
 
     // Send via WebSocket if user has active connections
-    userConnections.getAll(userId).then(async connectionIds => {
+    userConnectionsTable.getAll(userId).then(async connectionIds => {
       if (connectionIds.length === 0) return;
 
       const wsMessage: NotificationNewMessage = {
@@ -44,7 +38,7 @@ export async function notifyUser(userId: string, notification: NotificationInput
         notification: fullNotification,
       };
 
-      await broadcastAndCleanup(connectionIds, id => id, wsMessage, userConnections, subscriptions);
+      await broadcastAndCleanup(connectionIds, id => id, wsMessage);
     }),
   ]);
 

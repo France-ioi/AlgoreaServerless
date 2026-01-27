@@ -1,6 +1,7 @@
 import { Table } from '../table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
+import { dynamodb } from '../../dynamodb';
 
 /**
  * TTL for thread follows after the thread is closed (2 weeks).
@@ -139,3 +140,6 @@ export class ThreadFollows extends Table {
     return followers.map(f => f.userId);
   }
 }
+
+/** Singleton instance for use across the application */
+export const threadFollowsTable = new ThreadFollows(dynamodb);

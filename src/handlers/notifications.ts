@@ -1,11 +1,8 @@
 import { HandlerFunction } from 'lambda-api';
 import { RequestWithIdentityToken } from '../auth/identity-token-middleware';
-import { Notifications, Notification } from '../dbmodels/notifications';
-import { dynamodb } from '../dynamodb';
+import { notificationsTable, Notification } from '../dbmodels/notifications';
 import { DecodingError } from '../utils/errors';
 import { z, ZodError } from 'zod';
-
-const notifications = new Notifications(dynamodb);
 
 const okResponse = { status: 'ok' };
 
@@ -19,7 +16,7 @@ interface NotificationsResponse {
  */
 async function get(req: RequestWithIdentityToken): Promise<NotificationsResponse> {
   const { userId } = req.identityToken;
-  const result = await notifications.getNotifications(userId, 20);
+  const result = await notificationsTable.getNotifications(userId, 20);
   return { notifications: result };
 }
 
@@ -37,13 +34,13 @@ async function remove(req: RequestWithIdentityToken): Promise<typeof okResponse>
   }
 
   if (skParam === 'all') {
-    await notifications.deleteAll(userId);
+    await notificationsTable.deleteAll(userId);
   } else {
     const sk = parseInt(skParam, 10);
     if (isNaN(sk)) {
       throw new DecodingError(`Invalid sk parameter: ${skParam}. Expected a number or "all".`);
     }
-    await notifications.delete(userId, sk);
+    await notificationsTable.delete(userId, sk);
   }
 
   return okResponse;
@@ -85,7 +82,7 @@ async function setReadStatus(req: RequestWithIdentityToken): Promise<typeof okRe
   }
 
   const readTime = read ? Date.now() : undefined;
-  await notifications.setReadTime(userId, sk, readTime);
+  await notificationsTable.setReadTime(userId, sk, readTime);
 
   return okResponse;
 }

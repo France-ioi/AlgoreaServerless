@@ -15,21 +15,17 @@
  * In contrast, "follows" (see thread-follow.ts) are user-level and handled via REST because
  * they represent a persistent user preference that doesn't depend on any active connection.
  */
-import { dynamodb } from '../../dynamodb';
-import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
-import { UserConnections } from '../../dbmodels/user-connections';
+import { threadSubscriptionsTable } from '../../dbmodels/forum/thread-subscriptions';
+import { userConnectionsTable } from '../../dbmodels/user-connections';
 import { WsRequest } from '../../utils/lambda-ws-server';
 import { extractThreadTokenFromWs } from '../thread-token';
-
-const subscriptions = new ThreadSubscriptions(dynamodb);
-const userConnections = new UserConnections(dynamodb);
 
 export async function subscribe(request: WsRequest): Promise<void> {
   const { participantId, itemId, userId } = await extractThreadTokenFromWs(request.body);
   const threadId = { participantId, itemId };
-  const subscriptionKeys = await subscriptions.subscribe(threadId, request.connectionId(), userId);
+  const subscriptionKeys = await threadSubscriptionsTable.subscribe(threadId, request.connectionId(), userId);
   // Store the subscription keys in the connection for efficient cleanup on disconnect
-  await userConnections.updateConnectionInfo(request.connectionId(), { subscriptionKeys });
+  await userConnectionsTable.updateConnectionInfo(request.connectionId(), { subscriptionKeys });
 }
 /**
  * Unsubscribe from a thread
@@ -37,7 +33,7 @@ export async function subscribe(request: WsRequest): Promise<void> {
  */
 export async function unsubscribe(request: WsRequest): Promise<void> {
   const token = await extractThreadTokenFromWs(request.body);
-  await subscriptions.unsubscribeConnectionId(token, request.connectionId());
+  await threadSubscriptionsTable.unsubscribeConnectionId(token, request.connectionId());
   // Clear the subscription info from the connection
-  await userConnections.updateConnectionInfo(request.connectionId(), {});
+  await userConnectionsTable.updateConnectionInfo(request.connectionId(), {});
 }

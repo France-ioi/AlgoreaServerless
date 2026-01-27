@@ -1,5 +1,6 @@
 import { Table, wsConnectionTtl } from './table';
 import { z } from 'zod';
+import { dynamodb } from '../dynamodb';
 
 export type ConnectionId = string;
 export type UserId = string;
@@ -147,3 +148,6 @@ export class UserConnections extends Table {
     return z.array(u2cEntrySchema).parse(results).map(entry => entry.connectionId);
   }
 }
+
+/** Singleton instance for use across the application */
+export const userConnectionsTable = new UserConnections(dynamodb);

@@ -1,6 +1,7 @@
 import { Table } from '../table';
 import { ThreadId } from './thread';
 import { literal, z } from 'zod';
+import { dynamodb } from '../../dynamodb';
 
 /**
  * DB labels of the thread events
@@ -69,3 +70,6 @@ export class ThreadEvents extends Table {
       .map(r => r.data);
   }
 }
+
+/** Singleton instance for use across the application */
+export const threadEventsTable = new ThreadEvents(dynamodb);

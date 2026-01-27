@@ -8,18 +8,13 @@ jest.mock('../websocket-client', () => ({
 }));
 
 import { cleanupGoneConnection, broadcastAndCleanup } from './ws-broadcast';
-import { UserConnections } from '../dbmodels/user-connections';
-import { ThreadSubscriptions } from '../dbmodels/forum/thread-subscriptions';
-import { dynamodb } from '../dynamodb';
+import { userConnectionsTable } from '../dbmodels/user-connections';
+import { threadSubscriptionsTable } from '../dbmodels/forum/thread-subscriptions';
 
 describe('ws-broadcast', () => {
-  let userConnections: UserConnections;
-  let subscriptions: ThreadSubscriptions;
   const threadId = { participantId: 'user123', itemId: 'item456' };
 
   beforeEach(async () => {
-    userConnections = new UserConnections(dynamodb);
-    subscriptions = new ThreadSubscriptions(dynamodb);
     await clearTable();
     jest.clearAllMocks();
     mockSend.mockImplementation((connectionIds) =>
@@ -28,64 +23,58 @@ describe('ws-broadcast', () => {
 
   describe('cleanupGoneConnection', () => {
     it('should delete user connection and return userId', async () => {
-      await userConnections.insert('conn-1', 'user-123');
+      await userConnectionsTable.insert('conn-1', 'user-123');
 
-      const result = await cleanupGoneConnection('conn-1', userConnections, subscriptions);
+      const result = await cleanupGoneConnection('conn-1');
 
       expect(result.userId).toBe('user-123');
 
       // Verify connection was deleted
-      const connections = await userConnections.getAll('user-123');
+      const connections = await userConnectionsTable.getAll('user-123');
       expect(connections).toHaveLength(0);
     });
 
     it('should return undefined userId when connection not found', async () => {
-      const result = await cleanupGoneConnection('non-existent', userConnections, subscriptions);
+      const result = await cleanupGoneConnection('non-existent');
 
       expect(result.userId).toBeUndefined();
     });
 
     it('should clean up thread subscription when connection has one', async () => {
       // Create connection and subscription
-      await userConnections.insert('conn-1', 'user-123');
-      const subKeys = await subscriptions.subscribe(threadId, 'conn-1', 'user-123');
-      await userConnections.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys });
+      await userConnectionsTable.insert('conn-1', 'user-123');
+      const subKeys = await threadSubscriptionsTable.subscribe(threadId, 'conn-1', 'user-123');
+      await userConnectionsTable.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys });
 
-      const result = await cleanupGoneConnection('conn-1', userConnections, subscriptions);
+      const result = await cleanupGoneConnection('conn-1');
 
       expect(result.userId).toBe('user-123');
 
       // Verify connection was deleted
-      const connections = await userConnections.getAll('user-123');
+      const connections = await userConnectionsTable.getAll('user-123');
       expect(connections).toHaveLength(0);
 
       // Verify subscription was also deleted
-      const subs = await subscriptions.getSubscribers({ threadId });
+      const subs = await threadSubscriptionsTable.getSubscribers({ threadId });
       expect(subs).toHaveLength(0);
     });
 
     it('should not fail when connection has no subscription', async () => {
-      await userConnections.insert('conn-1', 'user-123');
+      await userConnectionsTable.insert('conn-1', 'user-123');
 
-      const result = await cleanupGoneConnection('conn-1', userConnections, subscriptions);
+      const result = await cleanupGoneConnection('conn-1');
 
       expect(result.userId).toBe('user-123');
 
       // Verify connection was deleted
-      const connections = await userConnections.getAll('user-123');
+      const connections = await userConnectionsTable.getAll('user-123');
       expect(connections).toHaveLength(0);
     });
   });
 
   describe('broadcastAndCleanup', () => {
     it('should return empty successfulRecipients for empty entries array', async () => {
-      const result = await broadcastAndCleanup(
-        [],
-        (id: string) => id,
-        { action: 'test' },
-        userConnections,
-        subscriptions
-      );
+      const result = await broadcastAndCleanup([], (id: string) => id, { action: 'test' });
 
       expect(result.successfulRecipients).toEqual([]);
       expect(mockSend).not.toHaveBeenCalled();
@@ -97,13 +86,7 @@ describe('ws-broadcast', () => {
         { connectionId: 'conn-2', userId: 'user-2' },
       ];
 
-      const result = await broadcastAndCleanup(
-        entries,
-        e => e.connectionId,
-        { action: 'test' },
-        userConnections,
-        subscriptions
-      );
+      const result = await broadcastAndCleanup(entries, e => e.connectionId, { action: 'test' });
 
       expect(mockSend).toHaveBeenCalledWith([ 'conn-1', 'conn-2' ], { action: 'test' });
       expect(result.successfulRecipients).toHaveLength(2);
@@ -112,8 +95,8 @@ describe('ws-broadcast', () => {
 
     it('should clean up gone connections (user connection only)', async () => {
       // Create connections
-      await userConnections.insert('conn-active', 'user-active');
-      await userConnections.insert('conn-gone', 'user-gone');
+      await userConnectionsTable.insert('conn-active', 'user-active');
+      await userConnectionsTable.insert('conn-gone', 'user-gone');
 
       const entries = [
         { connectionId: 'conn-active', userId: 'user-active' },
@@ -129,35 +112,29 @@ describe('ws-broadcast', () => {
         return { success: true, connectionId: id };
       })));
 
-      const result = await broadcastAndCleanup(
-        entries,
-        e => e.connectionId,
-        { action: 'test' },
-        userConnections,
-        subscriptions
-      );
+      const result = await broadcastAndCleanup(entries, e => e.connectionId, { action: 'test' });
 
       // Only the successful entry should be returned
       expect(result.successfulRecipients).toHaveLength(1);
       expect(result.successfulRecipients[0]?.connectionId).toBe('conn-active');
 
       // Gone connection should be cleaned up
-      const activeConnections = await userConnections.getAll('user-active');
-      const goneConnections = await userConnections.getAll('user-gone');
+      const activeConnections = await userConnectionsTable.getAll('user-active');
+      const goneConnections = await userConnectionsTable.getAll('user-gone');
       expect(activeConnections).toContain('conn-active');
       expect(goneConnections).toHaveLength(0);
     });
 
     it('should clean up gone connections with thread subscriptions (full cleanup)', async () => {
       // Create connections
-      await userConnections.insert('conn-active', 'user-active');
-      await userConnections.insert('conn-gone', 'user-gone');
+      await userConnectionsTable.insert('conn-active', 'user-active');
+      await userConnectionsTable.insert('conn-gone', 'user-gone');
 
       // Create subscriptions for both
-      const activeSubKeys = await subscriptions.subscribe(threadId, 'conn-active', 'user-active');
-      const goneSubKeys = await subscriptions.subscribe(threadId, 'conn-gone', 'user-gone');
-      await userConnections.updateConnectionInfo('conn-active', { subscriptionKeys: activeSubKeys });
-      await userConnections.updateConnectionInfo('conn-gone', { subscriptionKeys: goneSubKeys });
+      const activeSubKeys = await threadSubscriptionsTable.subscribe(threadId, 'conn-active', 'user-active');
+      const goneSubKeys = await threadSubscriptionsTable.subscribe(threadId, 'conn-gone', 'user-gone');
+      await userConnectionsTable.updateConnectionInfo('conn-active', { subscriptionKeys: activeSubKeys });
+      await userConnectionsTable.updateConnectionInfo('conn-gone', { subscriptionKeys: goneSubKeys });
 
       const entries = [
         { connectionId: 'conn-active', userId: 'user-active' },
@@ -173,49 +150,37 @@ describe('ws-broadcast', () => {
         return { success: true, connectionId: id };
       })));
 
-      const result = await broadcastAndCleanup(
-        entries,
-        e => e.connectionId,
-        { action: 'test' },
-        userConnections,
-        subscriptions
-      );
+      const result = await broadcastAndCleanup(entries, e => e.connectionId, { action: 'test' });
 
       // Only the successful entry should be returned
       expect(result.successfulRecipients).toHaveLength(1);
       expect(result.successfulRecipients[0]?.connectionId).toBe('conn-active');
 
       // Verify gone connection was cleaned up (user connection deleted)
-      const goneConnections = await userConnections.getAll('user-gone');
+      const goneConnections = await userConnectionsTable.getAll('user-gone');
       expect(goneConnections).toHaveLength(0);
 
       // Verify gone subscription was also cleaned up
-      const subs = await subscriptions.getSubscribers({ threadId });
+      const subs = await threadSubscriptionsTable.getSubscribers({ threadId });
       expect(subs).toHaveLength(1);
       expect(subs[0]?.connectionId).toBe('conn-active');
     });
 
     it('should work with connection IDs directly (as strings)', async () => {
-      await userConnections.insert('conn-1', 'user-1');
-      await userConnections.insert('conn-2', 'user-2');
+      await userConnectionsTable.insert('conn-1', 'user-1');
+      await userConnectionsTable.insert('conn-2', 'user-2');
 
       const connectionIds = [ 'conn-1', 'conn-2' ];
 
-      const result = await broadcastAndCleanup(
-        connectionIds,
-        id => id,
-        { action: 'test' },
-        userConnections,
-        subscriptions
-      );
+      const result = await broadcastAndCleanup(connectionIds, id => id, { action: 'test' });
 
       expect(mockSend).toHaveBeenCalledWith([ 'conn-1', 'conn-2' ], { action: 'test' });
       expect(result.successfulRecipients).toEqual([ 'conn-1', 'conn-2' ]);
     });
 
     it('should handle all connections being gone', async () => {
-      await userConnections.insert('conn-1', 'user-1');
-      await userConnections.insert('conn-2', 'user-2');
+      await userConnectionsTable.insert('conn-1', 'user-1');
+      await userConnectionsTable.insert('conn-2', 'user-2');
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
         const error = new Error('Gone');
@@ -223,19 +188,13 @@ describe('ws-broadcast', () => {
         return { success: false, connectionId: id, error };
       })));
 
-      const result = await broadcastAndCleanup(
-        [ 'conn-1', 'conn-2' ],
-        id => id,
-        { action: 'test' },
-        userConnections,
-        subscriptions
-      );
+      const result = await broadcastAndCleanup([ 'conn-1', 'conn-2' ], id => id, { action: 'test' });
 
       expect(result.successfulRecipients).toHaveLength(0);
 
       // Both connections should be cleaned up
-      const conn1 = await userConnections.getAll('user-1');
-      const conn2 = await userConnections.getAll('user-2');
+      const conn1 = await userConnectionsTable.getAll('user-1');
+      const conn2 = await userConnectionsTable.getAll('user-2');
       expect(conn1).toHaveLength(0);
       expect(conn2).toHaveLength(0);
     });
@@ -254,13 +213,7 @@ describe('ws-broadcast', () => {
         return { success: true, connectionId: id };
       })));
 
-      const result = await broadcastAndCleanup(
-        entries,
-        e => e.connectionId,
-        { action: 'test' },
-        userConnections,
-        subscriptions
-      );
+      const result = await broadcastAndCleanup(entries, e => e.connectionId, { action: 'test' });
 
       // Only truly successful entry should be returned
       expect(result.successfulRecipients).toHaveLength(1);

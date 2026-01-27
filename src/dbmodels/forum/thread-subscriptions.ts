@@ -2,6 +2,7 @@ import { ConnectionId } from '../../websocket-client';
 import { Table, TableKey, wsConnectionTtl } from '../table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
+import { dynamodb } from '../../dynamodb';
 
 /**
  * The DynamoDB keys for a subscription entry.
@@ -95,3 +96,6 @@ export class ThreadSubscriptions extends Table {
     await this.delete([ keys ]);
   }
 }
+
+/** Singleton instance for use across the application */
+export const threadSubscriptionsTable = new ThreadSubscriptions(dynamodb);

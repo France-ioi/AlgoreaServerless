@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
-import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
-import { UserConnections } from '../../dbmodels/user-connections';
-import { dynamodb } from '../../dynamodb';
+import { threadSubscriptionsTable } from '../../dbmodels/forum/thread-subscriptions';
 import { ForumMessageAction } from '../ws-messages';
 import { broadcastAndCleanup } from '../../services/ws-broadcast';
 
@@ -15,9 +13,6 @@ const submissionPayloadSchema = z.object({
 });
 
 export type SubmissionPayload = z.infer<typeof submissionPayloadSchema>;
-
-const subscriptions = new ThreadSubscriptions(dynamodb);
-const userConnections = new UserConnections(dynamodb);
 
 /**
  * Handles the submission_created event from EventBridge.
@@ -43,7 +38,7 @@ export function handleSubmissionCreated(envelope: EventEnvelope): void {
   const threadId = { participantId, itemId };
 
   // Notify all subscribers and clean up gone connections
-  subscriptions.getSubscribers({ threadId }).then(async subscribers => {
+  threadSubscriptionsTable.getSubscribers({ threadId }).then(async subscribers => {
     const wsMessage = {
       action: ForumMessageAction.NewSubmission as const,
       answerId,
@@ -53,7 +48,7 @@ export function handleSubmissionCreated(envelope: EventEnvelope): void {
       authorId,
       time,
     };
-    await broadcastAndCleanup(subscribers, s => s.connectionId, wsMessage, userConnections, subscriptions);
+    await broadcastAndCleanup(subscribers, s => s.connectionId, wsMessage);
   }).catch(err => {
     // eslint-disable-next-line no-console
     console.error('Failed to notify subscribers for submission_created:', err);

@@ -1,4 +1,3 @@
-import { handleConnect, handleDisconnect } from './handlers';
 import { mockWebSocketConnectEvent, mockWebSocketDisconnectEvent } from '../testutils/event-mocks';
 
 // Mock the identity token module
@@ -6,27 +5,28 @@ jest.mock('../auth/identity-token', () => ({
   parseIdentityToken: jest.fn(),
 }));
 
-// Mock the UserConnections module
+// Mock the UserConnections module with singleton
+const mockUserConnectionsTable = {
+  insert: jest.fn().mockResolvedValue(undefined),
+  delete: jest.fn().mockResolvedValue({ userId: 'deleted-user', creationTime: 1234567890 }),
+};
 jest.mock('../dbmodels/user-connections', () => ({
-  UserConnections: jest.fn().mockImplementation(() => ({
-    insert: jest.fn().mockResolvedValue(undefined),
-    delete: jest.fn().mockResolvedValue({ userId: 'deleted-user', creationTime: 1234567890 }),
-  })),
+  UserConnections: jest.fn(),
+  userConnectionsTable: mockUserConnectionsTable,
 }));
 
-// Mock the ThreadSubscriptions module
+// Mock the ThreadSubscriptions module with singleton
+const mockThreadSubscriptionsTable = {
+  unsubscribeByKeys: jest.fn().mockResolvedValue(undefined),
+};
 jest.mock('../dbmodels/forum/thread-subscriptions', () => ({
-  ThreadSubscriptions: jest.fn().mockImplementation(() => ({
-    unsubscribeByKeys: jest.fn().mockResolvedValue(undefined),
-  })),
+  ThreadSubscriptions: jest.fn(),
+  threadSubscriptionsTable: mockThreadSubscriptionsTable,
 }));
 
+import { handleConnect, handleDisconnect } from './handlers';
 import { parseIdentityToken } from '../auth/identity-token';
-import { UserConnections } from '../dbmodels/user-connections';
-import { ThreadSubscriptions } from '../dbmodels/forum/thread-subscriptions';
 const mockParseIdentityToken = parseIdentityToken as jest.MockedFunction<typeof parseIdentityToken>;
-const MockUserConnections = UserConnections as jest.MockedClass<typeof UserConnections>;
-const MockThreadSubscriptions = ThreadSubscriptions as jest.MockedClass<typeof ThreadSubscriptions>;
 
 describe('WebSocket Handlers', () => {
 
@@ -35,6 +35,8 @@ describe('WebSocket Handlers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env = { ...originalEnv, BACKEND_PUBLIC_KEY: 'test-public-key' };
+    // Reset mock implementations
+    mockUserConnectionsTable.delete.mockResolvedValue({ userId: 'deleted-user', creationTime: 1234567890 });
   });
 
   afterEach(() => {
@@ -82,7 +84,7 @@ describe('WebSocket Handlers', () => {
       });
     });
 
-    it('should call UserConnections.insert with connectionId and userId', async () => {
+    it('should call userConnectionsTable.insert with connectionId and userId', async () => {
       const event = mockWebSocketConnectEvent();
       event.requestContext.connectionId = 'conn-insert-test';
       event.queryStringParameters = { token: 'valid-token' };
@@ -90,8 +92,7 @@ describe('WebSocket Handlers', () => {
 
       await handleConnect(event);
 
-      const mockInstance = MockUserConnections.mock.results[0]?.value;
-      expect(mockInstance.insert).toHaveBeenCalledWith('conn-insert-test', 'user-insert-test');
+      expect(mockUserConnectionsTable.insert).toHaveBeenCalledWith('conn-insert-test', 'user-insert-test');
     });
 
     it('should return 500 when connectionId is missing', async () => {
@@ -132,14 +133,13 @@ describe('WebSocket Handlers', () => {
       });
     });
 
-    it('should call UserConnections.delete with connectionId', async () => {
+    it('should call userConnectionsTable.delete with connectionId', async () => {
       const event = mockWebSocketDisconnectEvent();
       event.requestContext.connectionId = 'test-connection-del';
 
       await handleDisconnect(event);
 
-      const mockInstance = MockUserConnections.mock.results[0]?.value;
-      expect(mockInstance.delete).toHaveBeenCalledWith('test-connection-del');
+      expect(mockUserConnectionsTable.delete).toHaveBeenCalledWith('test-connection-del');
     });
 
     it('should return 500 when connectionId is missing', async () => {
@@ -154,10 +154,7 @@ describe('WebSocket Handlers', () => {
 
     it('should return undefined userId when connection was not found', async () => {
       // Override the mock to return null for this test
-      MockUserConnections.mockImplementationOnce(() => ({
-        insert: jest.fn().mockResolvedValue(undefined),
-        delete: jest.fn().mockResolvedValue(null),
-      }) as unknown as UserConnections);
+      mockUserConnectionsTable.delete.mockResolvedValueOnce(null);
 
       const event = mockWebSocketDisconnectEvent();
       const result = await handleDisconnect(event);
@@ -172,22 +169,18 @@ describe('WebSocket Handlers', () => {
     it('should unsubscribe from thread when connection has subscriptionKeys', async () => {
       // Override the mock to return a connection with subscriptionKeys
       const subscriptionKeys = { pk: 'dev#THREAD#participant123#item456#SUB', sk: 1234567890 };
-      MockUserConnections.mockImplementationOnce(() => ({
-        insert: jest.fn().mockResolvedValue(undefined),
-        delete: jest.fn().mockResolvedValue({
-          userId: 'user-with-sub',
-          creationTime: 1234567890,
-          subscriptionKeys,
-        }),
-      }) as unknown as UserConnections);
+      mockUserConnectionsTable.delete.mockResolvedValueOnce({
+        userId: 'user-with-sub',
+        creationTime: 1234567890,
+        subscriptionKeys,
+      });
 
       const event = mockWebSocketDisconnectEvent();
       event.requestContext.connectionId = 'conn-with-sub';
 
       await handleDisconnect(event);
 
-      const mockThreadSubsInstance = MockThreadSubscriptions.mock.results[0]?.value;
-      expect(mockThreadSubsInstance.unsubscribeByKeys).toHaveBeenCalledWith(subscriptionKeys);
+      expect(mockThreadSubscriptionsTable.unsubscribeByKeys).toHaveBeenCalledWith(subscriptionKeys);
     });
 
     it('should not call unsubscribe when connection has no subscriptionKeys', async () => {
@@ -196,9 +189,8 @@ describe('WebSocket Handlers', () => {
 
       await handleDisconnect(event);
 
-      // ThreadSubscriptions.unsubscribeByKeys should not be called when there's no subscription
-      const mockThreadSubsInstance = MockThreadSubscriptions.mock.results[0]?.value;
-      expect(mockThreadSubsInstance.unsubscribeByKeys).not.toHaveBeenCalled();
+      // threadSubscriptionsTable.unsubscribeByKeys should not be called when there's no subscription
+      expect(mockThreadSubscriptionsTable.unsubscribeByKeys).not.toHaveBeenCalled();
     });
 
   });

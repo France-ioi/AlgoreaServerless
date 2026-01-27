@@ -1,5 +1,6 @@
 import { Table, TableKey } from './table';
 import { z } from 'zod';
+import { dynamodb } from '../dynamodb';
 
 /**
  * Notification TTL in seconds (~2 months / 60 days).
@@ -121,3 +122,6 @@ export class Notifications extends Table {
     }
   }
 }
+
+/** Singleton instance for use across the application */
+export const notificationsTable = new Notifications(dynamodb);

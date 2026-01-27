@@ -1,11 +1,8 @@
-import { ThreadFollows } from '../../dbmodels/forum/thread-follows';
-import { dynamodb } from '../../dynamodb';
+import { threadFollowsTable } from '../../dbmodels/forum/thread-follows';
 import { HandlerFunction } from 'lambda-api';
 import { RequestWithThreadToken } from '../thread-token';
 import { RequestWithIdentityToken } from '../../auth/identity-token-middleware';
 import { DecodingError } from '../../utils/errors';
-
-const threadFollows = new ThreadFollows(dynamodb);
 
 const okResponse = { status: 'ok' };
 
@@ -18,7 +15,7 @@ async function follow(req: RequestWithThreadToken): Promise<typeof okResponse> {
   const { participantId, itemId, userId } = req.threadToken;
   const threadId = { participantId, itemId };
 
-  await threadFollows.follow(threadId, userId);
+  await threadFollowsTable.follow(threadId, userId);
 
   return okResponse;
 }
@@ -37,7 +34,7 @@ async function unfollow(req: RequestWithIdentityToken): Promise<typeof okRespons
   }
 
   const threadId = { participantId, itemId };
-  await threadFollows.unfollow(threadId, userId);
+  await threadFollowsTable.unfollow(threadId, userId);
 
   return okResponse;
 }

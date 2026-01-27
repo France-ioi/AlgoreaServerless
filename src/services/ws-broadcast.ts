@@ -1,6 +1,6 @@
 import { ConnectionId, WsMessage, isClosedConnection, logSendResults, wsClient } from '../websocket-client';
-import { UserConnections } from '../dbmodels/user-connections';
-import { ThreadSubscriptions } from '../dbmodels/forum/thread-subscriptions';
+import { userConnectionsTable } from '../dbmodels/user-connections';
+import { threadSubscriptionsTable } from '../dbmodels/forum/thread-subscriptions';
 
 /**
  * Result of a user connection cleanup.
@@ -30,19 +30,13 @@ export interface BroadcastResult<T> {
  * returns subscriptionKeys for free.
  *
  * @param connectionId - The connection to clean up
- * @param userConnections - The UserConnections table instance
- * @param subscriptions - The ThreadSubscriptions table instance
  * @returns The userId if the connection was found, undefined otherwise
  */
-export async function cleanupGoneConnection(
-  connectionId: ConnectionId,
-  userConnections: UserConnections,
-  subscriptions: ThreadSubscriptions
-): Promise<CleanupResult> {
-  const connInfo = await userConnections.delete(connectionId);
+export async function cleanupGoneConnection(connectionId: ConnectionId): Promise<CleanupResult> {
+  const connInfo = await userConnectionsTable.delete(connectionId);
 
   if (connInfo?.subscriptionKeys) {
-    await subscriptions.unsubscribeByKeys(connInfo.subscriptionKeys);
+    await threadSubscriptionsTable.unsubscribeByKeys(connInfo.subscriptionKeys);
   }
 
   return { userId: connInfo?.userId };
@@ -60,16 +54,12 @@ export async function cleanupGoneConnection(
  * @param recipients - The recipients to broadcast to (e.g., subscribers, connection IDs)
  * @param getConnectionId - Function to extract connectionId from a recipient
  * @param message - The WebSocket message to send
- * @param userConnections - The UserConnections table instance
- * @param subscriptions - The ThreadSubscriptions table instance
  * @returns The recipients that successfully received the message
  */
 export async function broadcastAndCleanup<T>(
   recipients: T[],
   getConnectionId: (recipient: T) => ConnectionId,
-  message: WsMessage,
-  userConnections: UserConnections,
-  subscriptions: ThreadSubscriptions
+  message: WsMessage
 ): Promise<BroadcastResult<T>> {
   if (recipients.length === 0) {
     return { successfulRecipients: [] };
@@ -92,9 +82,7 @@ export async function broadcastAndCleanup<T>(
   });
 
   // Clean up all gone connections (both user connection and thread subscription)
-  await Promise.all(
-    goneConnectionIds.map(connId => cleanupGoneConnection(connId, userConnections, subscriptions))
-  );
+  await Promise.all(goneConnectionIds.map(cleanupGoneConnection));
 
   return { successfulRecipients };
 }

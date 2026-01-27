@@ -1,8 +1,6 @@
-import { ThreadSubscriptions } from '../../dbmodels/forum/thread-subscriptions';
-import { ThreadFollows } from '../../dbmodels/forum/thread-follows';
-import { ThreadEventLabel, ThreadEvents } from '../../dbmodels/forum/thread-events';
-import { UserConnections } from '../../dbmodels/user-connections';
-import { dynamodb } from '../../dynamodb';
+import { threadSubscriptionsTable } from '../../dbmodels/forum/thread-subscriptions';
+import { threadFollowsTable } from '../../dbmodels/forum/thread-follows';
+import { ThreadEventLabel, threadEventsTable } from '../../dbmodels/forum/thread-events';
 import { DecodingError, Forbidden } from '../../utils/errors';
 import { z, ZodError } from 'zod';
 import { ForumMessageAction } from '../ws-messages';
@@ -11,11 +9,6 @@ import { RequestWithThreadToken } from '../thread-token';
 import { created } from '../../utils/rest-responses';
 import { notifyUsers } from '../../services/notify-user';
 import { broadcastAndCleanup } from '../../services/ws-broadcast';
-
-const subscriptions = new ThreadSubscriptions(dynamodb);
-const userConnections = new UserConnections(dynamodb);
-const threadFollows = new ThreadFollows(dynamodb);
-const threadEvents = new ThreadEvents(dynamodb);
 
 /**
  * Creates a new message in a thread.
@@ -57,19 +50,13 @@ async function create(req: RequestWithThreadToken, resp: Response): Promise<Retu
   // 2. Notify subscribers via WebSocket and track successful user IDs
   // 3. Get thread followers
   const [ , successfulSubscriberUserIds, followers ] = await Promise.all([
-    threadEvents.insert([{ label: ThreadEventLabel.Message, sk: time, threadId, data: { authorId, text, uuid } }]),
-    subscriptions.getSubscribers({ threadId }).then(async subscribers => {
+    threadEventsTable.insert([{ label: ThreadEventLabel.Message, sk: time, threadId, data: { authorId, text, uuid } }]),
+    threadSubscriptionsTable.getSubscribers({ threadId }).then(async subscribers => {
       const wsMessage = { action: ForumMessageAction.NewMessage, participantId, itemId, authorId, time, text, uuid };
-      const { successfulRecipients } = await broadcastAndCleanup(
-        subscribers,
-        s => s.connectionId,
-        wsMessage,
-        userConnections,
-        subscriptions
-      );
+      const { successfulRecipients } = await broadcastAndCleanup(subscribers, s => s.connectionId, wsMessage);
       return new Set(successfulRecipients.map(s => s.userId));
     }),
-    threadFollows.getFollowers(threadId),
+    threadFollowsTable.getFollowers(threadId),
   ]);
 
   // Notify followers who didn't receive the WS message (excluding author and successful subscribers)
@@ -101,7 +88,7 @@ async function getAll(req: RequestWithThreadToken): Promise<{ time: number, text
     throw err;
   }
 
-  const messages = await threadEvents.getAllMessages(threadToken, { limit });
+  const messages = await threadEventsTable.getAllMessages(threadToken, { limit });
   return messages.map(m => ({
     time: m.sk,
     authorId: m.data.authorId,
