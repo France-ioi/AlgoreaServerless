@@ -126,4 +126,61 @@ describe('ThreadFollows', () => {
       expect(thread2Followers[0]?.userId).toBe('user-2');
     });
   });
+
+  describe('setTtlForAllFollowers', () => {
+    const pk = `${process.env.STAGE}#THREAD#${threadId.participantId}#${threadId.itemId}#FOLLOW`;
+
+    it('should set TTL on all existing followers', async () => {
+      await threadFollows.follow(threadId, 'user-1');
+      await threadFollows.follow(threadId, 'user-2');
+
+      const ttl = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+      await threadFollows.setTtlForAllFollowers(threadId, ttl);
+
+      // Verify TTL is set on both followers
+      const result = await dynamodb.executeStatement({
+        Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        Parameters: [{ S: pk }],
+      });
+      expect(result.Items).toHaveLength(2);
+      expect(result.Items?.[0]?.ttl?.N).toBe(String(ttl));
+      expect(result.Items?.[1]?.ttl?.N).toBe(String(ttl));
+    });
+
+    it('should handle empty followers list gracefully', async () => {
+      await expect(
+        threadFollows.setTtlForAllFollowers(threadId, Math.floor(Date.now() / 1000) + 3600)
+      ).resolves.not.toThrow();
+    });
+  });
+
+  describe('removeTtlForAllFollowers', () => {
+    const pk = `${process.env.STAGE}#THREAD#${threadId.participantId}#${threadId.itemId}#FOLLOW`;
+
+    it('should remove TTL from all followers and return their userIds', async () => {
+      // Add followers with TTL
+      const ttl = Math.floor(Date.now() / 1000) + 3600;
+      await threadFollows.follow(threadId, 'user-1', ttl);
+      await threadFollows.follow(threadId, 'user-2', ttl);
+
+      const userIds = await threadFollows.removeTtlForAllFollowers(threadId);
+
+      // Verify return value
+      expect(userIds.sort()).toEqual([ 'user-1', 'user-2' ]);
+
+      // Verify TTL is removed from all followers
+      const result = await dynamodb.executeStatement({
+        Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        Parameters: [{ S: pk }],
+      });
+      expect(result.Items).toHaveLength(2);
+      expect(result.Items?.[0]?.ttl).toBeUndefined();
+      expect(result.Items?.[1]?.ttl).toBeUndefined();
+    });
+
+    it('should return empty array for thread with no followers', async () => {
+      const userIds = await threadFollows.removeTtlForAllFollowers(threadId);
+      expect(userIds).toEqual([]);
+    });
+  });
 });

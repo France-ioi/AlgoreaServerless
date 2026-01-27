@@ -2,6 +2,18 @@ import { Table } from '../table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
 
+/**
+ * TTL for thread follows after the thread is closed (2 weeks).
+ */
+export const THREAD_FOLLOW_TTL_AFTER_CLOSE_SECONDS = 60 * 60 * 24 * 14;
+
+/**
+ * Calculates the TTL value for a thread follow after closing, in seconds since epoch.
+ */
+export function threadFollowTtlAfterClose(): number {
+  return Math.floor(Date.now() / 1000) + THREAD_FOLLOW_TTL_AFTER_CLOSE_SECONDS;
+}
+
 function pk(thread: ThreadId): string {
   const stage = process.env.STAGE || 'dev';
   return `${stage}#THREAD#${thread.participantId}#${thread.itemId}#FOLLOW`;
@@ -92,5 +104,38 @@ export class ThreadFollows extends Table {
       userId: z.string(),
       sk: z.number(),
     })).parse(results);
+  }
+
+  /**
+   * Set TTL for all followers of a thread.
+   * Used when a thread is closed to schedule automatic cleanup.
+   */
+  async setTtlForAllFollowers(threadId: ThreadId, ttl: number): Promise<void> {
+    const followers = await this.getFollowers(threadId);
+    if (followers.length === 0) return;
+
+    const pkValue = pk(threadId);
+    await this.sqlWrite(followers.map(f => ({
+      query: `UPDATE "${this.tableName}" SET ttl = ? WHERE pk = ? AND sk = ?`,
+      params: [ ttl, pkValue, f.sk ],
+    })));
+  }
+
+  /**
+   * Remove TTL from all followers of a thread.
+   * Used when a thread is reopened to prevent automatic cleanup.
+   * @returns The list of existing follower userIds
+   */
+  async removeTtlForAllFollowers(threadId: ThreadId): Promise<string[]> {
+    const followers = await this.getFollowers(threadId);
+    if (followers.length === 0) return [];
+
+    const pkValue = pk(threadId);
+    await this.sqlWrite(followers.map(f => ({
+      query: `UPDATE "${this.tableName}" REMOVE ttl WHERE pk = ? AND sk = ?`,
+      params: [ pkValue, f.sk ],
+    })));
+
+    return followers.map(f => f.userId);
   }
 }

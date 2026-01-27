@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
+import { ThreadFollows, threadFollowTtlAfterClose } from '../../dbmodels/forum/thread-follows';
+import { dynamodb } from '../../dynamodb';
 
 const threadStatusValues = [ 'waiting_for_participant', 'waiting_for_trainer', 'closed' ] as const;
 const formerThreadStatusValues = [ ...threadStatusValues, 'not_started' ] as const;
@@ -15,11 +17,29 @@ const threadStatusChangedPayloadSchema = z.object({
 
 export type ThreadStatusChangedPayload = z.infer<typeof threadStatusChangedPayloadSchema>;
 
+const threadFollows = new ThreadFollows(dynamodb);
+
+type ThreadStatus = typeof threadStatusValues[number] | typeof formerThreadStatusValues[number];
+
+/**
+ * Returns true if the status represents an "open" thread (active help request).
+ */
+function isOpen(status: ThreadStatus): boolean {
+  return status === 'waiting_for_participant' || status === 'waiting_for_trainer';
+}
+
 /**
  * Handles the thread_status_changed event from EventBridge.
  * Triggered when a thread's status changes (e.g., waiting_for_trainer, not_started, etc.).
+ *
+ * When a thread opens (not_started/closed -> waiting_for_*):
+ * - Removes TTL from existing followers
+ * - Adds participant and updater as followers (if not already following)
+ *
+ * When a thread closes (waiting_for_* -> closed/not_started):
+ * - Sets a 2-week TTL on all followers for automatic cleanup
  */
-export function handleThreadStatusChanged(envelope: EventEnvelope): void {
+export async function handleThreadStatusChanged(envelope: EventEnvelope): Promise<void> {
   const parseResult = threadStatusChangedPayloadSchema.safeParse(envelope.payload);
 
   if (!parseResult.success) {
@@ -29,6 +49,7 @@ export function handleThreadStatusChanged(envelope: EventEnvelope): void {
   }
 
   const data = parseResult.data;
+  const threadId = { participantId: data.participant_id, itemId: data.item_id };
 
   // eslint-disable-next-line no-console
   console.log('Thread status changed:', {
@@ -40,4 +61,24 @@ export function handleThreadStatusChanged(envelope: EventEnvelope): void {
     instance: envelope.instance,
     requestId: envelope.request_id,
   });
+
+  const wasOpen = isOpen(data.former_status);
+  const isNowOpen = isOpen(data.new_status);
+
+  if (!wasOpen && isNowOpen) {
+    // Thread opened: remove TTL and get existing followers
+    const existingFollowerIds = await threadFollows.removeTtlForAllFollowers(threadId);
+
+    // Add participant if not already following
+    if (!existingFollowerIds.includes(data.participant_id)) {
+      await threadFollows.follow(threadId, data.participant_id);
+    }
+    // Add updater if different from participant and not already following
+    if (data.updated_by !== data.participant_id && !existingFollowerIds.includes(data.updated_by)) {
+      await threadFollows.follow(threadId, data.updated_by);
+    }
+  } else if (wasOpen && !isNowOpen) {
+    // Thread closed: add 2-week TTL
+    await threadFollows.setTtlForAllFollowers(threadId, threadFollowTtlAfterClose());
+  }
 }
