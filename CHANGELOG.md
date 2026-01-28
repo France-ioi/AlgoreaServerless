@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.0 - 2026-01-28
+- backend for the portal which interfaces with Stripe for paid content (still in progress)
+- handle websocket connect/disconnect: keep user<->connectionId binding
+- support for event-bus events
+- implement event-bus events: submission created, grade saved, thread status change
+- authenication via portal token, thread token or identity token, via middlewares
+- async notification system
+- thread following system
+- add clean logging all accross the project
+- complete refactoring of the project
+
 ## v2.0.8 - 2025-11-12
 - make token verification failure a decoding error so that we send a 4xx instead of 5xx
 
