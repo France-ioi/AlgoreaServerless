@@ -21,7 +21,7 @@ export type GradeSavedPayload = z.infer<typeof gradeSavedPayloadSchema>;
  * Triggered when a grade is saved for an answer.
  * Notifies all thread subscribers about the grade update.
  */
-export function handleGradeSaved(envelope: EventEnvelope): void {
+export async function handleGradeSaved(envelope: EventEnvelope): Promise<void> {
   const parseResult = gradeSavedPayloadSchema.safeParse(envelope.payload);
 
   if (!parseResult.success) {
@@ -42,20 +42,16 @@ export function handleGradeSaved(envelope: EventEnvelope): void {
   const threadId = { participantId, itemId };
 
   // Notify all subscribers and clean up gone connections
-  threadSubscriptionsTable.getSubscribers({ threadId }).then(async subscribers => {
-    const wsMessage = {
-      action: ForumMessageAction.GradeUpdate as const,
-      answerId,
-      participantId,
-      itemId,
-      attemptId,
-      score,
-      validated,
-      time,
-    };
-    await broadcastAndCleanup(subscribers, s => s.connectionId, wsMessage);
-  }).catch(err => {
-    // eslint-disable-next-line no-console
-    console.error('Failed to notify subscribers for grade_saved:', err);
-  });
+  const subscribers = await threadSubscriptionsTable.getSubscribers({ threadId });
+  const wsMessage = {
+    action: ForumMessageAction.GradeUpdate as const,
+    answerId,
+    participantId,
+    itemId,
+    attemptId,
+    score,
+    validated,
+    time,
+  };
+  await broadcastAndCleanup(subscribers, s => s.connectionId, wsMessage);
 }

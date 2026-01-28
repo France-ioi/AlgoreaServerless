@@ -18,7 +18,7 @@ export type SubmissionPayload = z.infer<typeof submissionPayloadSchema>;
  * Handles the submission_created event from EventBridge.
  * Notifies all thread subscribers about the new submission.
  */
-export function handleSubmissionCreated(envelope: EventEnvelope): void {
+export async function handleSubmissionCreated(envelope: EventEnvelope): Promise<void> {
   const parseResult = submissionPayloadSchema.safeParse(envelope.payload);
 
   if (!parseResult.success) {
@@ -38,19 +38,15 @@ export function handleSubmissionCreated(envelope: EventEnvelope): void {
   const threadId = { participantId, itemId };
 
   // Notify all subscribers and clean up gone connections
-  threadSubscriptionsTable.getSubscribers({ threadId }).then(async subscribers => {
-    const wsMessage = {
-      action: ForumMessageAction.NewSubmission as const,
-      answerId,
-      participantId,
-      itemId,
-      attemptId,
-      authorId,
-      time,
-    };
-    await broadcastAndCleanup(subscribers, s => s.connectionId, wsMessage);
-  }).catch(err => {
-    // eslint-disable-next-line no-console
-    console.error('Failed to notify subscribers for submission_created:', err);
-  });
+  const subscribers = await threadSubscriptionsTable.getSubscribers({ threadId });
+  const wsMessage = {
+    action: ForumMessageAction.NewSubmission as const,
+    answerId,
+    participantId,
+    itemId,
+    attemptId,
+    authorId,
+    time,
+  };
+  await broadcastAndCleanup(subscribers, s => s.connectionId, wsMessage);
 }
