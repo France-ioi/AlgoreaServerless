@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.1 - 2026-02-02
+- add a service to get the follow status
+
 ## 2.1.0 - 2026-01-28
 - backend for the portal which interfaces with Stripe for paid content (still in progress)
 - handle websocket connect/disconnect: keep user<->connectionId binding
