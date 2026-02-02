@@ -2,7 +2,7 @@ import { clearTable } from '../../testutils/db';
 import { ThreadToken, RequestWithThreadToken } from '../thread-token';
 import { IdentityToken } from '../../auth/identity-token';
 import { RequestWithIdentityToken } from '../../auth/identity-token-middleware';
-import { followThread, unfollowThread } from './thread-follow';
+import { followThread, unfollowThread, getFollowStatus } from './thread-follow';
 import { ThreadFollows } from '../dbmodels/thread-follows';
 import { dynamodb } from '../../dynamodb';
 
@@ -141,6 +141,52 @@ describe('Thread Follow Handlers', () => {
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(1);
       expect(followers[0]?.userId).toBe('user-456');
+    });
+  });
+
+  describe('getFollowStatus', () => {
+    const identityToken: IdentityToken = { userId: 'user-123', exp: 9999999999 };
+
+    it('should return isFollowing: true when user is following', async () => {
+      await threadFollows.insert(threadId, 'user-123');
+
+      const req = mockRequestWithIdentityToken(identityToken, {
+        params: { participantId: 'user123', itemId: 'item456' },
+      });
+      const resp = {} as any;
+
+      const result = await getFollowStatus(req, resp);
+
+      expect(result).toEqual({ isFollowing: true });
+    });
+
+    it('should return isFollowing: false when user is not following', async () => {
+      const req = mockRequestWithIdentityToken(identityToken, {
+        params: { participantId: 'user123', itemId: 'item456' },
+      });
+      const resp = {} as any;
+
+      const result = await getFollowStatus(req, resp);
+
+      expect(result).toEqual({ isFollowing: false });
+    });
+
+    it('should throw DecodingError when participantId is missing', async () => {
+      const req = mockRequestWithIdentityToken(identityToken, {
+        params: { itemId: 'item456' },
+      });
+      const resp = {} as any;
+
+      await expect(getFollowStatus(req, resp)).rejects.toThrow('Missing path parameters');
+    });
+
+    it('should throw DecodingError when itemId is missing', async () => {
+      const req = mockRequestWithIdentityToken(identityToken, {
+        params: { participantId: 'user123' },
+      });
+      const resp = {} as any;
+
+      await expect(getFollowStatus(req, resp)).rejects.toThrow('Missing path parameters');
     });
   });
 });

@@ -39,5 +39,29 @@ async function unfollow(req: RequestWithIdentityToken): Promise<typeof okRespons
   return okResponse;
 }
 
+interface FollowStatusResponse {
+  isFollowing: boolean,
+}
+
+/**
+ * GET /sls/forum/thread/:itemId/:participantId/follows
+ * Requires a valid identity token and path parameters: itemId, participantId.
+ * Returns whether the current user is following the thread.
+ */
+async function getStatus(req: RequestWithIdentityToken): Promise<FollowStatusResponse> {
+  const { userId } = req.identityToken;
+  const { participantId, itemId } = req.params;
+
+  if (!participantId || !itemId) {
+    throw new DecodingError('Missing path parameters: itemId and participantId are required');
+  }
+
+  const threadId = { participantId, itemId };
+  const isFollowing = await threadFollowsTable.exists(threadId, userId);
+
+  return { isFollowing };
+}
+
 export const followThread = follow as unknown as HandlerFunction;
 export const unfollowThread = unfollow as unknown as HandlerFunction;
+export const getFollowStatus = getStatus as unknown as HandlerFunction;

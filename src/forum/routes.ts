@@ -8,11 +8,12 @@ import { handleThreadStatusChanged } from './handlers/thread-status-changed';
 import { handleGradeSaved } from './handlers/grade-saved';
 import { requireThreadToken } from './thread-token';
 import { requireIdentityToken } from '../auth/identity-token-middleware';
-import { followThread, unfollowThread } from './handlers/thread-follow';
+import { followThread, unfollowThread, getFollowStatus } from './handlers/thread-follow';
 
 const restRoutes = (api: API): void => {
   api.get('/thread/:itemId/:participantId/messages', requireThreadToken, getAllMessages);
   api.post('/thread/:itemId/:participantId/messages', requireThreadToken, createMessage);
+  api.get('/thread/:itemId/:participantId/follows', requireIdentityToken, getFollowStatus);
   api.post('/thread/:itemId/:participantId/follows', requireThreadToken, followThread);
   api.delete('/thread/:itemId/:participantId/follows', requireIdentityToken, unfollowThread);
 };

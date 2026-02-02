@@ -39,9 +39,9 @@ export type ThreadFollow = z.infer<typeof threadFollowSchema>;
 export class ThreadFollows extends Table {
 
   /**
-   * Check if a user is following a thread
+   * Check if an entry exists for a user on a thread.
    */
-  async isFollowing(threadId: ThreadId, userId: string): Promise<boolean> {
+  async exists(threadId: ThreadId, userId: string): Promise<boolean> {
     const results = await this.sqlRead({
       query: `SELECT sk FROM "${this.tableName}" WHERE pk = ? AND userId = ?`,
       params: [ pk(threadId), userId ],
@@ -56,8 +56,8 @@ export class ThreadFollows extends Table {
    * @param ttl Optional TTL in seconds since epoch for auto-deletion
    */
   async insert(threadId: ThreadId, userId: string, ttl?: number): Promise<void> {
-    // Check if already following
-    const alreadyFollowing = await this.isFollowing(threadId, userId);
+    // Check if already exists
+    const alreadyFollowing = await this.exists(threadId, userId);
     if (alreadyFollowing) {
       return; // User is already following, ignore
     }

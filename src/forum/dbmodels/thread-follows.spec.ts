@@ -46,17 +46,17 @@ describe('ThreadFollows', () => {
     });
   });
 
-  describe('isFollowing', () => {
-    it('should return true if user is following', async () => {
+  describe('exists', () => {
+    it('should return true if entry exists', async () => {
       const userId = 'user-123';
       await threadFollows.insert(threadId, userId);
 
-      const result = await threadFollows.isFollowing(threadId, userId);
+      const result = await threadFollows.exists(threadId, userId);
       expect(result).toBe(true);
     });
 
-    it('should return false if user is not following', async () => {
-      const result = await threadFollows.isFollowing(threadId, 'user-not-following');
+    it('should return false if entry does not exist', async () => {
+      const result = await threadFollows.exists(threadId, 'user-not-following');
       expect(result).toBe(false);
     });
   });
