@@ -27,6 +27,12 @@ This is an AWS Serverless application using:
 - Use custom error classes from `src/utils/errors.ts` (AuthenticationError, DecodingError, ServerError, etc.)
 - Errors are handled by the error-handling middleware for HTTP, or caught in WsServer for WebSocket
 
+## REST response conventions
+- Use response helpers from `src/utils/rest-responses.ts` for consistent API responses
+- **POST** handlers that create resources: use `created(resp)` (returns 201)
+- **DELETE** handlers: use `deleted(resp)` (returns 200)
+- **GET** handlers: return the data directly (implicit 200)
+
 ## Linting
 - Linting rules are defined in `.eslintrc.js`
 - Use `.editorconfig` for basic editor config

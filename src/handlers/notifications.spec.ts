@@ -20,6 +20,11 @@ function mockRequestWithIdentityToken(
   } as RequestWithIdentityToken;
 }
 
+/** Helper to create a mock response object */
+function mockResponse(): { status: jest.Mock } {
+  return { status: jest.fn() };
+}
+
 describe('Notification Handlers', () => {
   let notifications: Notifications;
   const userId = 'user-123';
@@ -95,11 +100,12 @@ describe('Notification Handlers', () => {
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { sk: sk.toString() },
       });
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      const result = await deleteNotification(req, resp);
+      const result = await deleteNotification(req, resp as any);
 
-      expect(result).toEqual({ status: 'ok' });
+      expect(resp.status).toHaveBeenCalledWith(200);
+      expect(result).toEqual({ message: 'deleted', success: true });
 
       const remaining = await notifications.getNotifications(userId, 10);
       expect(remaining).toHaveLength(0);
@@ -112,11 +118,12 @@ describe('Notification Handlers', () => {
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { sk: 'all' },
       });
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      const result = await deleteNotification(req, resp);
+      const result = await deleteNotification(req, resp as any);
 
-      expect(result).toEqual({ status: 'ok' });
+      expect(resp.status).toHaveBeenCalledWith(200);
+      expect(result).toEqual({ message: 'deleted', success: true });
 
       const remaining = await notifications.getNotifications(userId, 10);
       expect(remaining).toHaveLength(0);
@@ -126,20 +133,21 @@ describe('Notification Handlers', () => {
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { sk: 'invalid' },
       });
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      await expect(deleteNotification(req, resp)).rejects.toThrow('Invalid sk parameter');
+      await expect(deleteNotification(req, resp as any)).rejects.toThrow('Invalid sk parameter');
     });
 
     it('should handle deleting non-existent notification gracefully', async () => {
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { sk: '12345' },
       });
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      const result = await deleteNotification(req, resp);
+      const result = await deleteNotification(req, resp as any);
 
-      expect(result).toEqual({ status: 'ok' });
+      expect(resp.status).toHaveBeenCalledWith(200);
+      expect(result).toEqual({ message: 'deleted', success: true });
     });
   });
 

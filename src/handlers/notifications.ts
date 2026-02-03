@@ -1,8 +1,9 @@
-import { HandlerFunction } from 'lambda-api';
+import { HandlerFunction, Response } from 'lambda-api';
 import { RequestWithIdentityToken } from '../auth/identity-token-middleware';
 import { notificationsTable, Notification } from '../dbmodels/notifications';
 import { DecodingError } from '../utils/errors';
 import { z, ZodError } from 'zod';
+import { deleted } from '../utils/rest-responses';
 
 const okResponse = { status: 'ok' };
 
@@ -25,7 +26,7 @@ async function get(req: RequestWithIdentityToken): Promise<NotificationsResponse
  * Deletes a notification by its sk (sort key).
  * If sk is "all", deletes all notifications for the user.
  */
-async function remove(req: RequestWithIdentityToken): Promise<typeof okResponse> {
+async function remove(req: RequestWithIdentityToken, resp: Response): Promise<ReturnType<typeof deleted>> {
   const { userId } = req.identityToken;
   const skParam = req.params.sk;
 
@@ -43,7 +44,7 @@ async function remove(req: RequestWithIdentityToken): Promise<typeof okResponse>
     await notificationsTable.delete(userId, sk);
   }
 
-  return okResponse;
+  return deleted(resp);
 }
 
 const markAsReadBodySchema = z.object({
