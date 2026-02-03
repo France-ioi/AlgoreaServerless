@@ -1,23 +1,22 @@
 import { threadFollowsTable } from '../dbmodels/thread-follows';
-import { HandlerFunction } from 'lambda-api';
+import { HandlerFunction, Response } from 'lambda-api';
 import { RequestWithThreadToken } from '../thread-token';
 import { RequestWithIdentityToken } from '../../auth/identity-token-middleware';
 import { DecodingError } from '../../utils/errors';
-
-const okResponse = { status: 'ok' };
+import { created, deleted } from '../../utils/rest-responses';
 
 /**
  * POST /sls/forum/thread/:itemId/:participantId/follows
  * Requires a valid thread token that matches the route parameters.
  * Adds the user to the thread followers. Ignores if already following.
  */
-async function follow(req: RequestWithThreadToken): Promise<typeof okResponse> {
+async function follow(req: RequestWithThreadToken, resp: Response): Promise<ReturnType<typeof created>> {
   const { participantId, itemId, userId } = req.threadToken;
   const threadId = { participantId, itemId };
 
   await threadFollowsTable.insert(threadId, userId);
 
-  return okResponse;
+  return created(resp);
 }
 
 /**
@@ -25,7 +24,7 @@ async function follow(req: RequestWithThreadToken): Promise<typeof okResponse> {
  * Requires a valid identity token and path parameters: itemId, participantId.
  * Removes the user from the thread followers. Ignores if not following.
  */
-async function unfollow(req: RequestWithIdentityToken): Promise<typeof okResponse> {
+async function unfollow(req: RequestWithIdentityToken, resp: Response): Promise<ReturnType<typeof deleted>> {
   const { userId } = req.identityToken;
   const { participantId, itemId } = req.params;
 
@@ -36,7 +35,7 @@ async function unfollow(req: RequestWithIdentityToken): Promise<typeof okRespons
   const threadId = { participantId, itemId };
   await threadFollowsTable.deleteByUserId(threadId, userId);
 
-  return okResponse;
+  return deleted(resp);
 }
 
 interface FollowStatusResponse {

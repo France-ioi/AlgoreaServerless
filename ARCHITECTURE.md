@@ -692,6 +692,29 @@ Manual API Gateway configuration required:
 - **No Any**: Avoid `any`, use `unknown` for uncertain types
 - **Explicit Return Types**: Required for all functions
 
+### REST Response Helpers
+
+Use standard response helpers from `src/utils/rest-responses.ts` for consistent API responses:
+
+- **`created(resp)`**: For POST requests that create resources. Sets status 201, returns `{ message: 'created', success: true }`
+- **`deleted(resp)`**: For DELETE requests. Sets status 200, returns `{ message: 'deleted', success: true }`
+
+```typescript
+import { created, deleted } from '../utils/rest-responses';
+
+// POST handler
+async function create(req: Request, resp: Response) {
+  await db.insert(...);
+  return created(resp);
+}
+
+// DELETE handler
+async function remove(req: Request, resp: Response) {
+  await db.delete(...);
+  return deleted(resp);
+}
+```
+
 ### Error Handling
 
 - **Custom Error Classes**: Typed errors for specific failure modes

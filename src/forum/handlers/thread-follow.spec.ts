@@ -33,6 +33,11 @@ function mockRequestWithIdentityToken(
   } as RequestWithIdentityToken;
 }
 
+/** Helper to create a mock response object */
+function mockResponse(): { status: jest.Mock } {
+  return { status: jest.fn() };
+}
+
 describe('Thread Follow Handlers', () => {
   let threadFollows: ThreadFollows;
   const threadId = { participantId: 'user123', itemId: 'item456' };
@@ -51,13 +56,14 @@ describe('Thread Follow Handlers', () => {
       isMine: false,
     };
 
-    it('should add user as follower and return 200', async () => {
+    it('should add user as follower and return 201', async () => {
       const req = mockRequestWithThreadToken(baseToken);
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      const result = await followThread(req, resp);
+      const result = await followThread(req, resp as any);
 
-      expect(result).toEqual({ status: 'ok' });
+      expect(resp.status).toHaveBeenCalledWith(201);
+      expect(result).toEqual({ message: 'created', success: true });
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(1);
@@ -68,11 +74,12 @@ describe('Thread Follow Handlers', () => {
       await threadFollows.insert(threadId, 'user-123');
 
       const req = mockRequestWithThreadToken(baseToken);
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      const result = await followThread(req, resp);
+      const result = await followThread(req, resp as any);
 
-      expect(result).toEqual({ status: 'ok' });
+      expect(resp.status).toHaveBeenCalledWith(201);
+      expect(result).toEqual({ message: 'created', success: true });
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(1);
@@ -88,11 +95,12 @@ describe('Thread Follow Handlers', () => {
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { participantId: 'user123', itemId: 'item456' },
       });
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      const result = await unfollowThread(req, resp);
+      const result = await unfollowThread(req, resp as any);
 
-      expect(result).toEqual({ status: 'ok' });
+      expect(resp.status).toHaveBeenCalledWith(200);
+      expect(result).toEqual({ message: 'deleted', success: true });
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(0);
@@ -102,29 +110,30 @@ describe('Thread Follow Handlers', () => {
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { participantId: 'user123', itemId: 'item456' },
       });
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      const result = await unfollowThread(req, resp);
+      const result = await unfollowThread(req, resp as any);
 
-      expect(result).toEqual({ status: 'ok' });
+      expect(resp.status).toHaveBeenCalledWith(200);
+      expect(result).toEqual({ message: 'deleted', success: true });
     });
 
     it('should throw DecodingError when participantId is missing', async () => {
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { itemId: 'item456' },
       });
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      await expect(unfollowThread(req, resp)).rejects.toThrow('Missing path parameters');
+      await expect(unfollowThread(req, resp as any)).rejects.toThrow('Missing path parameters');
     });
 
     it('should throw DecodingError when itemId is missing', async () => {
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { participantId: 'user123' },
       });
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      await expect(unfollowThread(req, resp)).rejects.toThrow('Missing path parameters');
+      await expect(unfollowThread(req, resp as any)).rejects.toThrow('Missing path parameters');
     });
 
     it('should not affect other followers when unfollowing', async () => {
@@ -134,9 +143,9 @@ describe('Thread Follow Handlers', () => {
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { participantId: 'user123', itemId: 'item456' },
       });
-      const resp = {} as any;
+      const resp = mockResponse();
 
-      await unfollowThread(req, resp);
+      await unfollowThread(req, resp as any);
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(1);
