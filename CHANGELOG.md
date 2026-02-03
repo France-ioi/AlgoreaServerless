@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.2 - 2026-02-03
+- proper REST response for DELETE/POST follow and notification services
+
 ## 2.1.1 - 2026-02-02
 - add a service to get the follow status
 
