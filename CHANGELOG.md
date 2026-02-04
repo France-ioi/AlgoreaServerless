@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.3 - 2026-02-04
+- respond with a 401 instead of a 500 when providing an identity token instead of a thread token
+
 ## 2.1.2 - 2026-02-03
 - proper REST response for DELETE/POST follow and notification services
 
