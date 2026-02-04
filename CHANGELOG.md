@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.1.4 - 2026-02-04
+- fix a bug on the GET follow service
+
 ## 2.1.3 - 2026-02-04
 - respond with a 401 instead of a 500 when providing an identity token instead of a thread token
 

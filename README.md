@@ -106,7 +106,10 @@ If you do global changes (for instance the role permissions), you need to deploy
 In order to create a release:
 - decide of a new version number (using semver)
 - update the changelog (add a new section, with the date of today and listing the fix and new features)
-- commit this change as a commit "Release vx.y.z"
-- tag the current commit "vx.y.z" (`git tag -a -m "Release vx.y.z" vx.y.z`)
-- push everything (`git push origin master; git push origin vx.y.z`)
-- the rest (github release) is done by the CI
+- run the following command with your version number:
+
+```sh
+VERSION=2.1.4; git add CHANGELOG.md && git commit -m "Release $VERSION" && git tag -a -m "Release v$VERSION" v$VERSION && git push origin v$VERSION && git push origin master
+```
+
+The rest (GitHub release) is done by the CI.
