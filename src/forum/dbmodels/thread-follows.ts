@@ -45,7 +45,6 @@ export class ThreadFollows extends Table {
     const results = await this.sqlRead({
       query: `SELECT sk FROM "${this.tableName}" WHERE pk = ? AND userId = ?`,
       params: [ pk(threadId), userId ],
-      limit: 1,
     });
     return results.length > 0;
   }

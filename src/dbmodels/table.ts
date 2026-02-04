@@ -61,6 +61,10 @@ export class Table {
   /**
    * Execute a PartiQL read query.
    *
+   * IMPORTANT: Do NOT use `limit` when filtering by non-key attributes (anything other than pk/sk).
+   * DynamoDB applies the limit BEFORE filtering, so it may return fewer results than expected
+   * or empty results even when matching items exist.
+   *
    * Known DynamoDB Local (used for testing) limitations:
    * - Does not support ORDER BY ... DESC (returns InternalFailure)
    * - Does not support LIMIT with non-key attribute filters (returns ValidationException)
