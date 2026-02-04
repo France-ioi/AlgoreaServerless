@@ -1,6 +1,6 @@
 import { parseThreadToken } from '../thread-token';
 import { generateKeyPair, SignJWT, exportSPKI, KeyLike } from 'jose';
-import { ServerError } from '../../utils/errors';
+import { AuthenticationError, ServerError } from '../../utils/errors';
 
 describe('parseThreadToken', () => {
   let privateKey: KeyLike;
@@ -48,9 +48,10 @@ describe('parseThreadToken', () => {
     await expect(parseThreadToken('invalid-token', publicKeyPem)).rejects.toThrow('Invalid Compact JWS');
   });
 
-  it('should throw an error if the payload is missing fields', async () => {
+  it('should throw AuthenticationError if the payload is missing fields', async () => {
     const token = await new SignJWT({}).setProtectedHeader({ alg: 'ES256' }).setExpirationTime('1h').sign(privateKey);
-    await expect(parseThreadToken(token, publicKeyPem)).rejects.toThrow(); // Zod will throw
+    await expect(parseThreadToken(token, publicKeyPem)).rejects.toThrow(AuthenticationError);
+    await expect(parseThreadToken(token, publicKeyPem)).rejects.toThrow('Invalid thread token payload');
   });
 
   it('should throw an error for an expired token', async () => {

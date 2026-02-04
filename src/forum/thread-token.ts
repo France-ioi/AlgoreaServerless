@@ -29,14 +29,17 @@ export interface RequestWithThreadToken extends Request {
 
 export async function parseThreadToken(token: string, publicKeyPem?: string): Promise<ThreadToken> {
   const payload = await verifyJwt(token, publicKeyPem);
-  const decodedPayload = jwsPayloadSchema.parse(payload);
+  const result = jwsPayloadSchema.safeParse(payload);
+  if (!result.success) {
+    throw new AuthenticationError(`Invalid thread token payload: ${JSON.stringify(result.error.issues)}`);
+  }
   return {
-    participantId: decodedPayload.participant_id,
-    itemId: decodedPayload.item_id,
-    userId: decodedPayload.user_id,
-    isMine: decodedPayload.is_mine,
-    canWatch: decodedPayload.can_watch,
-    canWrite: decodedPayload.can_write,
+    participantId: result.data.participant_id,
+    itemId: result.data.item_id,
+    userId: result.data.user_id,
+    isMine: result.data.is_mine,
+    canWatch: result.data.can_watch,
+    canWrite: result.data.can_write,
   };
 }
 
