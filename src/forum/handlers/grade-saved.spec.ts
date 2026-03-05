@@ -22,6 +22,7 @@ function createMockPayload(overrides?: Partial<GradeSavedPayload>): GradeSavedPa
     validated: true,
     caller_id: '101',
     score: 100,
+    score_improved: true,
     ...overrides,
   };
 }
@@ -80,6 +81,7 @@ describe('handleGradeSaved', () => {
           itemId: defaultPayload.item_id,
           attemptId: defaultPayload.attempt_id,
           score: defaultPayload.score,
+          scoreImproved: defaultPayload.score_improved,
           validated: defaultPayload.validated,
           time: expect.any(Number),
         })
@@ -108,6 +110,7 @@ describe('handleGradeSaved', () => {
       const envelope = createMockEnvelope(createMockPayload({
         validated: false,
         score: 50,
+        score_improved: false,
       }));
       handleGradeSaved(envelope);
 
@@ -119,6 +122,7 @@ describe('handleGradeSaved', () => {
         expect.objectContaining({
           validated: false,
           score: 50,
+          scoreImproved: false,
         })
       );
     });
@@ -216,6 +220,18 @@ describe('handleGradeSaved', () => {
       const envelope = createMockEnvelope({
         ...createMockPayload(),
         score: '100', // should be number
+      });
+
+      handleGradeSaved(envelope);
+
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('should log error for wrong type on score_improved field', () => {
+      const envelope = createMockEnvelope({
+        ...createMockPayload(),
+        score_improved: 'true', // should be boolean
       });
 
       handleGradeSaved(envelope);

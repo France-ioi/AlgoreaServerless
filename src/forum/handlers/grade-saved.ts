@@ -12,6 +12,7 @@ const gradeSavedPayloadSchema = z.object({
   validated: z.boolean(),
   caller_id: z.string(),
   score: z.number(),
+  score_improved: z.boolean(),
 });
 
 export type GradeSavedPayload = z.infer<typeof gradeSavedPayloadSchema>;
@@ -37,6 +38,7 @@ export async function handleGradeSaved(envelope: EventEnvelope): Promise<void> {
     item_id: itemId,
     validated,
     score,
+    score_improved: scoreImproved,
   } = parseResult.data;
   const time = new Date(envelope.time).getTime();
   const threadId = { participantId, itemId };
@@ -50,6 +52,7 @@ export async function handleGradeSaved(envelope: EventEnvelope): Promise<void> {
     itemId,
     attemptId,
     score,
+    scoreImproved,
     validated,
     time,
   };
