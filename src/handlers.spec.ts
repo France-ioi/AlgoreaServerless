@@ -39,12 +39,18 @@ jest.mock('./utils/lambda-ws-server', () => {
 
 // Mock the EventBus server module
 jest.mock('./utils/lambda-eventbus-server', () => {
+  const actual = jest.requireActual('./utils/lambda-eventbus-server');
   const mockEbServer = {
     register: jest.fn(),
     on: jest.fn(),
     handler: jest.fn().mockResolvedValue(undefined),
   };
-  return jest.fn(() => mockEbServer);
+  const factory = jest.fn(() => mockEbServer);
+  return {
+    ...actual,
+    __esModule: true,
+    default: factory,
+  };
 });
 
 // Mock the websocket handlers

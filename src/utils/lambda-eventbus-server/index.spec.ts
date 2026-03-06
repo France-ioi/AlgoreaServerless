@@ -1,5 +1,13 @@
 import { EventBridgeEvent, Context } from 'aws-lambda';
-import { EventBusServer, EventEnvelope } from './index';
+import { z } from 'zod';
+import { EventBusServer, EventEnvelope, defineEvent } from './index';
+import { eventEnvelopeSchema } from './event-envelope';
+
+const testPayloadSchema = z.object({
+  foo: z.string(),
+});
+
+const testEvent = defineEvent('test_event', testPayloadSchema);
 
 function createMockEnvelope(payload: unknown = { foo: 'bar' }, version = '1.0'): EventEnvelope {
   return {
@@ -61,45 +69,46 @@ describe('EventBusServer', () => {
   describe('on()', () => {
     it('should register a handler for a detail-type', () => {
       const handler = jest.fn();
-      server.on('test_event', handler, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler, { supportedMajorVersion: 1 });
 
-      const registered = server.handlers.get('test_event') ?? [];
-      expect(registered).toHaveLength(1);
-      expect(registered[0]?.handler).toBe(handler);
-      expect(registered[0]?.options.supportedMajorVersion).toBe(1);
+      const registered = server.events.get('test_event');
+      expect(registered?.handlers).toHaveLength(1);
+      expect(registered?.handlers[0]?.handler).toBe(handler);
+      expect(registered?.handlers[0]?.options.supportedMajorVersion).toBe(1);
     });
 
     it('should allow multiple handlers for the same detail-type', () => {
       const handler1 = jest.fn();
       const handler2 = jest.fn();
 
-      server.on('test_event', handler1, { supportedMajorVersion: 1 });
-      server.on('test_event', handler2, { supportedMajorVersion: 2 });
+      server.on(testEvent, handler1, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler2, { supportedMajorVersion: 2 });
 
-      const registered = server.handlers.get('test_event') ?? [];
-      expect(registered).toHaveLength(2);
+      const registered = server.events.get('test_event');
+      expect(registered?.handlers).toHaveLength(2);
     });
   });
 
   describe('register()', () => {
     it('should register handlers from a sub-module', () => {
       const handler = jest.fn();
+      const subEvent = defineEvent('sub_event', testPayloadSchema);
       const subHandlers = (eb: EventBusServer): void => {
-        eb.on('sub_event', handler, { supportedMajorVersion: 1 });
+        eb.on(subEvent, handler, { supportedMajorVersion: 1 });
       };
 
       server.register(subHandlers);
 
-      const registered = server.handlers.get('sub_event') ?? [];
-      expect(registered).toHaveLength(1);
-      expect(registered[0]?.handler).toBe(handler);
+      const registered = server.events.get('sub_event');
+      expect(registered?.handlers).toHaveLength(1);
+      expect(registered?.handlers[0]?.handler).toBe(handler);
     });
   });
 
   describe('handler()', () => {
-    it('should call the registered handler with the full envelope', async () => {
+    it('should call the registered handler with the typed payload and envelope', async () => {
       const handler = jest.fn();
-      server.on('test_event', handler, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler, { supportedMajorVersion: 1 });
 
       const payload = { foo: 'bar' };
       const envelope = createMockEnvelope(payload);
@@ -107,6 +116,7 @@ describe('EventBusServer', () => {
       await server.handler(event, mockContext);
 
       expect(handler).toHaveBeenCalledWith(
+        { foo: 'bar' },
         expect.objectContaining({
           version: '1.0',
           type: 'test_event',
@@ -122,8 +132,8 @@ describe('EventBusServer', () => {
       const handler1 = jest.fn();
       const handler2 = jest.fn();
 
-      server.on('test_event', handler1, { supportedMajorVersion: 1 });
-      server.on('test_event', handler2, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler1, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler2, { supportedMajorVersion: 1 });
 
       const event = createMockEvent('test_event');
       await server.handler(event, mockContext);
@@ -142,8 +152,8 @@ describe('EventBusServer', () => {
       const handler1 = jest.fn().mockRejectedValue(new Error('Handler 1 failed'));
       const handler2 = jest.fn().mockResolvedValue(undefined);
 
-      server.on('test_event', handler1, { supportedMajorVersion: 1 });
-      server.on('test_event', handler2, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler1, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler2, { supportedMajorVersion: 1 });
 
       const event = createMockEvent('test_event');
       await server.handler(event, mockContext);
@@ -153,7 +163,7 @@ describe('EventBusServer', () => {
     });
 
     it('should log event received and processing complete', async () => {
-      server.on('test_event', jest.fn(), { supportedMajorVersion: 1 });
+      server.on(testEvent, jest.fn(), { supportedMajorVersion: 1 });
 
       const event = createMockEvent('test_event');
       await server.handler(event, mockContext);
@@ -170,7 +180,7 @@ describe('EventBusServer', () => {
     });
 
     it('should log error if envelope parsing fails', async () => {
-      server.on('test_event', jest.fn(), { supportedMajorVersion: 1 });
+      server.on(testEvent, jest.fn(), { supportedMajorVersion: 1 });
 
       const event = createMockEvent('test_event', { invalid: 'envelope' });
       await server.handler(event, mockContext);
@@ -180,12 +190,24 @@ describe('EventBusServer', () => {
         expect.any(String)
       );
     });
+
+    it('should log error if payload parsing fails', async () => {
+      server.on(testEvent, jest.fn(), { supportedMajorVersion: 1 });
+
+      const event = createMockEvent('test_event', createMockEnvelope({ invalid: 123 }));
+      await server.handler(event, mockContext);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to parse test_event payload:',
+        expect.any(String)
+      );
+    });
   });
 
   describe('version validation', () => {
     it('should call handler when event version equals supported version', async () => {
       const handler = jest.fn();
-      server.on('test_event', handler, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler, { supportedMajorVersion: 1 });
 
       const event = createMockEvent('test_event', createMockEnvelope({ foo: 'bar' }, '1.0'));
       await server.handler(event, mockContext);
@@ -195,7 +217,7 @@ describe('EventBusServer', () => {
 
     it('should call handler when event version is lower than supported', async () => {
       const handler = jest.fn();
-      server.on('test_event', handler, { supportedMajorVersion: 2 });
+      server.on(testEvent, handler, { supportedMajorVersion: 2 });
 
       const event = createMockEvent('test_event', createMockEnvelope({ foo: 'bar' }, '1.5'));
       await server.handler(event, mockContext);
@@ -205,7 +227,7 @@ describe('EventBusServer', () => {
 
     it('should skip handler when event major version is higher than supported', async () => {
       const handler = jest.fn();
-      server.on('test_event', handler, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler, { supportedMajorVersion: 1 });
 
       const event = createMockEvent('test_event', createMockEnvelope({ foo: 'bar' }, '2.0'));
       await server.handler(event, mockContext);
@@ -223,14 +245,45 @@ describe('EventBusServer', () => {
       const handler1 = jest.fn();
       const handler2 = jest.fn();
 
-      server.on('test_event', handler1, { supportedMajorVersion: 1 });
-      server.on('test_event', handler2, { supportedMajorVersion: 2 });
+      server.on(testEvent, handler1, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler2, { supportedMajorVersion: 2 });
 
       const event = createMockEvent('test_event', createMockEnvelope({ foo: 'bar' }, '2.0'));
       await server.handler(event, mockContext);
 
       expect(handler1).not.toHaveBeenCalled(); // supports only v1
       expect(handler2).toHaveBeenCalled(); // supports up to v2
+    });
+  });
+
+  describe('parsing invariants', () => {
+    it('should not parse envelope or payload when no handler is registered', async () => {
+      const envelopeSpy = jest.spyOn(eventEnvelopeSchema, 'safeParse');
+
+      const event = createMockEvent('unknown_event');
+      await server.handler(event, mockContext);
+
+      expect(envelopeSpy).not.toHaveBeenCalled();
+      envelopeSpy.mockRestore();
+    });
+
+    it('should parse payload schema exactly once when multiple handlers are registered', async () => {
+      const schemaSpy = jest.spyOn(testPayloadSchema, 'safeParse');
+      const handler1 = jest.fn();
+      const handler2 = jest.fn();
+
+      server.on(testEvent, handler1, { supportedMajorVersion: 1 });
+      server.on(testEvent, handler2, { supportedMajorVersion: 1 });
+
+      const payload = { foo: 'bar' };
+      const event = createMockEvent('test_event', createMockEnvelope(payload));
+      await server.handler(event, mockContext);
+
+      expect(schemaSpy).toHaveBeenCalledTimes(1);
+      expect(handler1).toHaveBeenCalledWith(payload, expect.any(Object));
+      expect(handler2).toHaveBeenCalledWith(payload, expect.any(Object));
+
+      schemaSpy.mockRestore();
     });
   });
 });

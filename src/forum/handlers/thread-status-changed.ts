@@ -1,22 +1,9 @@
-import { z } from 'zod';
-import { EventEnvelope } from '../../utils/lambda-eventbus-server';
+import { ThreadStatusChangedPayload } from '../../events/thread-status-changed';
 import { threadFollowsTable, threadFollowTtlAfterClose } from '../dbmodels/thread-follows';
 
-const threadStatusValues = [ 'waiting_for_participant', 'waiting_for_trainer', 'closed' ] as const;
-const formerThreadStatusValues = [ ...threadStatusValues, 'not_started' ] as const;
+export { ThreadStatusChangedPayload } from '../../events/thread-status-changed';
 
-const threadStatusChangedPayloadSchema = z.object({
-  participant_id: z.string(),
-  item_id: z.string(),
-  new_status: z.enum(threadStatusValues),
-  former_status: z.enum(formerThreadStatusValues),
-  helper_group_id: z.string(),
-  updated_by: z.string(),
-});
-
-export type ThreadStatusChangedPayload = z.infer<typeof threadStatusChangedPayloadSchema>;
-
-type ThreadStatus = typeof threadStatusValues[number] | typeof formerThreadStatusValues[number];
+type ThreadStatus = ThreadStatusChangedPayload['new_status'] | ThreadStatusChangedPayload['former_status'];
 
 /**
  * Returns true if the status represents an "open" thread (active help request).
@@ -36,35 +23,22 @@ function isOpen(status: ThreadStatus): boolean {
  * When a thread closes (waiting_for_* -> closed/not_started):
  * - Sets a 2-week TTL on all followers for automatic cleanup
  */
-export async function handleThreadStatusChanged(envelope: EventEnvelope): Promise<void> {
-  const parseResult = threadStatusChangedPayloadSchema.safeParse(envelope.payload);
+export async function handleThreadStatusChanged(payload: ThreadStatusChangedPayload): Promise<void> {
+  const threadId = { participantId: payload.participant_id, itemId: payload.item_id };
 
-  if (!parseResult.success) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to parse thread_status_changed payload:', parseResult.error.message);
-    return;
-  }
-
-  const data = parseResult.data;
-  const threadId = { participantId: data.participant_id, itemId: data.item_id };
-
-  const wasOpen = isOpen(data.former_status);
-  const isNowOpen = isOpen(data.new_status);
+  const wasOpen = isOpen(payload.former_status);
+  const isNowOpen = isOpen(payload.new_status);
 
   if (!wasOpen && isNowOpen) {
-    // Thread opened: remove TTL and get existing followers
     const existingFollowerIds = await threadFollowsTable.removeTtlForAllFollowers(threadId);
 
-    // Add participant if not already following
-    if (!existingFollowerIds.includes(data.participant_id)) {
-      await threadFollowsTable.insert(threadId, data.participant_id);
+    if (!existingFollowerIds.includes(payload.participant_id)) {
+      await threadFollowsTable.insert(threadId, payload.participant_id);
     }
-    // Add updater if different from participant and not already following
-    if (data.updated_by !== data.participant_id && !existingFollowerIds.includes(data.updated_by)) {
-      await threadFollowsTable.insert(threadId, data.updated_by);
+    if (payload.updated_by !== payload.participant_id && !existingFollowerIds.includes(payload.updated_by)) {
+      await threadFollowsTable.insert(threadId, payload.updated_by);
     }
   } else if (wasOpen && !isNowOpen) {
-    // Thread closed: add 2-week TTL
     await threadFollowsTable.setTtlForAllFollowers(threadId, threadFollowTtlAfterClose());
   }
 }

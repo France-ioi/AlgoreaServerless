@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: January 27, 2026
+**Last Updated**: March 6, 2026
 
 ## Overview
 
@@ -105,10 +105,12 @@ AlgoreaServerless is a serverless backend application designed to provide forum/
 1. Backend service publishes event to EventBridge
 2. EventBridge rule triggers Lambda function
 3. `globalHandler` detects `detail-type` field and routes to EventBus server
-4. EventBus server parses common envelope (version, type, payload, etc.)
-5. EventBus server validates event version against handler requirements
-6. Matching handlers receive the parsed envelope and process the event
-7. Multiple handlers can react to the same event type (run in parallel)
+4. EventBus server checks for registered handlers (no parsing if none registered)
+5. EventBus server parses common envelope (version, type, payload, etc.)
+6. EventBus server parses the payload once using the schema from the event definition
+7. EventBus server validates event version against handler requirements
+8. Matching handlers receive the typed payload and envelope, and process the event
+9. Multiple handlers can react to the same event type (run in parallel)
 
 ## Project Structure
 
@@ -131,6 +133,10 @@ AlgoreaServerless/
 │   │   ├── notifications.ts  # User notifications model
 │   │   ├── user-connections.ts  # WebSocket user connections model
 │   │   └── table.ts       # Base table class
+│   ├── events/            # Shared event definitions (schema + defineEvent)
+│   │   ├── grade-saved.ts
+│   │   ├── submission-created.ts
+│   │   └── thread-status-changed.ts
 │   ├── handlers/          # App-level request handlers
 │   │   └── notifications.ts  # Notification handlers
 │   ├── routes/            # App-level route registration
@@ -172,6 +178,7 @@ AlgoreaServerless/
 │   │   │   └── request.ts
 │   │   ├── lambda-eventbus-server/  # EventBridge server implementation
 │   │   │   ├── index.ts
+│   │   │   ├── event-definition.ts
 │   │   │   ├── event-envelope.ts
 │   │   │   └── logger.ts
 │   │   ├── errors.ts      # Custom error classes
@@ -239,6 +246,9 @@ Custom implementation inspired by `lambda-api`:
 ### 4. EventBus Server (`src/utils/lambda-eventbus-server/`)
 
 Custom implementation for handling EventBridge events:
+- **Typed Event Definitions**: Events are defined with `defineEvent(detailType, zodSchema)`, binding the Zod payload schema to the event type
+- **Single-Parse Dispatch**: The server parses the payload once per event, then passes the typed result to all handlers
+- **No-Op for Unregistered Events**: Neither envelope nor payload is parsed if no handlers are registered for the event type
 - **Event Envelope Parsing**: Common envelope structure with Zod validation
 - **Version Validation**: Handlers specify supported major version; events with higher versions are skipped
 - **Multiple Handlers**: Unlike REST/WebSocket, multiple handlers can react to the same event type
@@ -259,10 +269,25 @@ Events from the backend follow a common envelope format:
 }
 ```
 
-#### Handler Registration
-Handlers register with a detail-type and supported version:
+#### Typed Event Definitions
+Events are defined in `src/events/` by binding a detail-type string to a Zod payload schema using `defineEvent()`. This ensures the payload is parsed once by the server and handlers receive typed data:
 ```typescript
-eb.on('submission_created', handleSubmissionCreated, { supportedMajorVersion: 1 });
+// src/events/grade-saved.ts -- shared event definition
+const gradeSavedPayloadSchema = z.object({
+  answer_id: z.string(),
+  participant_id: z.string(),
+  // ...
+});
+export type GradeSavedPayload = z.infer<typeof gradeSavedPayloadSchema>;
+export const gradeSavedEvent = defineEvent('grade_saved', gradeSavedPayloadSchema);
+
+// src/forum/routes.ts -- register handler with event definition
+eb.on(gradeSavedEvent, handleGradeSaved, { supportedMajorVersion: 1 });
+
+// src/forum/handlers/grade-saved.ts -- receives typed payload + envelope metadata
+async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvelope): Promise<void> {
+  // payload is already validated and typed
+}
 ```
 
 #### Forum Event Handlers

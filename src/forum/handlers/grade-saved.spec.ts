@@ -42,7 +42,6 @@ function createMockEnvelope(payload: unknown = createMockPayload()): EventEnvelo
 describe('handleGradeSaved', () => {
   let threadSubs: ThreadSubscriptions;
   let userConnections: UserConnections;
-  let consoleErrorSpy: jest.SpyInstance;
 
   const defaultPayload = createMockPayload();
   const threadId = { participantId: defaultPayload.participant_id, itemId: defaultPayload.item_id };
@@ -52,13 +51,8 @@ describe('handleGradeSaved', () => {
     userConnections = new UserConnections(dynamodb);
     await clearTable();
     jest.clearAllMocks();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
     mockSend.mockImplementation((connectionIds) =>
       Promise.resolve(connectionIds.map((id: string) => ({ success: true, connectionId: id }))));
-  });
-
-  afterEach(() => {
-    consoleErrorSpy.mockRestore();
   });
 
   describe('successful handling', () => {
@@ -66,10 +60,10 @@ describe('handleGradeSaved', () => {
       await threadSubs.insert(threadId, 'conn-1', 'user1');
       await threadSubs.insert(threadId, 'conn-2', 'user2');
 
-      const envelope = createMockEnvelope();
-      handleGradeSaved(envelope);
+      const payload = createMockPayload();
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(mockSend).toHaveBeenCalledWith(
@@ -89,32 +83,32 @@ describe('handleGradeSaved', () => {
     });
 
     it('should not call send when no subscribers exist', async () => {
-      const envelope = createMockEnvelope();
-      handleGradeSaved(envelope);
+      const payload = createMockPayload();
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // broadcastAndCleanup returns early when there are no entries
       expect(mockSend).not.toHaveBeenCalled();
     });
 
     it('should handle events with all required fields without throwing', () => {
-      const envelope = createMockEnvelope();
-      expect(() => handleGradeSaved(envelope)).not.toThrow();
+      const payload = createMockPayload();
+      const envelope = createMockEnvelope(payload);
+      expect(() => handleGradeSaved(payload, envelope)).not.toThrow();
     });
 
     it('should handle validated=false and partial score', async () => {
       await threadSubs.insert(threadId, 'conn-1', 'user1');
 
-      const envelope = createMockEnvelope(createMockPayload({
+      const payload = createMockPayload({
         validated: false,
         score: 50,
         score_improved: false,
-      }));
-      handleGradeSaved(envelope);
+      });
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(mockSend).toHaveBeenCalledWith(
@@ -130,13 +124,13 @@ describe('handleGradeSaved', () => {
     it('should handle zero score', async () => {
       await threadSubs.insert(threadId, 'conn-1', 'user1');
 
-      const envelope = createMockEnvelope(createMockPayload({
+      const payload = createMockPayload({
         validated: false,
         score: 0,
-      }));
-      handleGradeSaved(envelope);
+      });
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(mockSend).toHaveBeenCalledWith(
@@ -150,7 +144,6 @@ describe('handleGradeSaved', () => {
 
   describe('cleanup of gone connections', () => {
     it('should remove gone subscribers after sending message', async () => {
-      // Set up user connections with subscriptions (needed for full cleanup)
       await userConnections.insert('conn-1', 'user1');
       await userConnections.insert('conn-gone', 'user2');
       await userConnections.insert('conn-3', 'user3');
@@ -172,81 +165,18 @@ describe('handleGradeSaved', () => {
         return { success: true, connectionId: id };
       })));
 
-      const envelope = createMockEnvelope();
-      handleGradeSaved(envelope);
+      const payload = createMockPayload();
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations and cleanup
       await new Promise(resolve => setTimeout(resolve, 200));
 
       const subscribers = await threadSubs.getSubscribers({ threadId });
       expect(subscribers).toHaveLength(2);
       expect(subscribers.map(s => s.connectionId)).not.toContain('conn-gone');
 
-      // Verify user connection was also cleaned up
       const goneUserConns = await userConnections.getAll('user2');
       expect(goneUserConns).toHaveLength(0);
-    });
-  });
-
-  describe('invalid payload handling', () => {
-    it('should log error for missing required fields', () => {
-      const envelope = createMockEnvelope({
-        answer_id: '123',
-        // missing other required fields
-      });
-
-      handleGradeSaved(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to parse grade_saved payload:',
-        expect.any(String)
-      );
-      expect(mockSend).not.toHaveBeenCalled();
-    });
-
-    it('should log error for wrong type on validated field', () => {
-      const envelope = createMockEnvelope({
-        ...createMockPayload(),
-        validated: 'true', // should be boolean
-      });
-
-      handleGradeSaved(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(mockSend).not.toHaveBeenCalled();
-    });
-
-    it('should log error for wrong type on score field', () => {
-      const envelope = createMockEnvelope({
-        ...createMockPayload(),
-        score: '100', // should be number
-      });
-
-      handleGradeSaved(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(mockSend).not.toHaveBeenCalled();
-    });
-
-    it('should log error for wrong type on score_improved field', () => {
-      const envelope = createMockEnvelope({
-        ...createMockPayload(),
-        score_improved: 'true', // should be boolean
-      });
-
-      handleGradeSaved(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(mockSend).not.toHaveBeenCalled();
-    });
-
-    it('should log error for null payload', () => {
-      const envelope = createMockEnvelope(null);
-
-      handleGradeSaved(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(mockSend).not.toHaveBeenCalled();
     });
   });
 });
