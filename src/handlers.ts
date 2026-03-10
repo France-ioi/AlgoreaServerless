@@ -8,7 +8,7 @@ import { notificationRoutes } from './routes/notifications';
 import { validationRoutes, validationEventHandlers } from './routes/validations';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
-import { liveActivityWsActions } from './routes/live-activity';
+import { liveActivityWsActions, liveActivityEventHandlers } from './routes/live-activity';
 import { handleConnect, handleDisconnect } from './websocket/handlers';
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,6 +59,7 @@ const ebServer = createEventBusServer();
 // Event handlers registration
 ebServer.register(forumEventHandlers);
 ebServer.register(validationEventHandlers);
+ebServer.register(liveActivityEventHandlers);
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////

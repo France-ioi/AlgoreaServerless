@@ -9,3 +9,16 @@ export interface NotificationNewMessage extends WsMessage {
   action: NotificationAction.New,
   notification: Notification,
 }
+
+export enum LiveActivityMessageAction {
+  Validation = 'liveActivity.validation.new',
+}
+
+export interface LiveActivityValidation extends WsMessage {
+  action: LiveActivityMessageAction.Validation,
+  participantId: string,
+  itemId: string,
+  answerId: string,
+  attemptId: string,
+  time: number,
+}
