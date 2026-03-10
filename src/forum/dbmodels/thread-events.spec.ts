@@ -1,5 +1,5 @@
 import { ThreadEvents, ThreadEventLabel } from './thread-events';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { ThreadId } from './thread';
 
@@ -8,7 +8,7 @@ describe('ThreadEvents', () => {
   const threadId: ThreadId = { participantId: 'user123', itemId: 'item456' };
 
   beforeEach(async () => {
-    threadEvents = new ThreadEvents(dynamodb);
+    threadEvents = new ThreadEvents(docClient);
     await clearTable();
   });
 

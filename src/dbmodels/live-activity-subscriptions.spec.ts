@@ -1,12 +1,12 @@
 import { LiveActivitySubscriptions } from './live-activity-subscriptions';
-import { dynamodb } from '../dynamodb';
+import { docClient } from '../dynamodb';
 import { clearTable } from '../testutils/db';
 
 describe('LiveActivitySubscriptions', () => {
   let liveActivitySubs: LiveActivitySubscriptions;
 
   beforeEach(async () => {
-    liveActivitySubs = new LiveActivitySubscriptions(dynamodb);
+    liveActivitySubs = new LiveActivitySubscriptions(docClient);
     await clearTable();
   });
 

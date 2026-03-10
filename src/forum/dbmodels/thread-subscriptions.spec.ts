@@ -1,5 +1,5 @@
 import { ThreadSubscriptions } from './thread-subscriptions';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { ThreadId } from './thread';
 
@@ -8,7 +8,7 @@ describe('ThreadSubscriptions', () => {
   const threadId: ThreadId = { participantId: 'user123', itemId: 'item456' };
 
   beforeEach(async () => {
-    threadSubs = new ThreadSubscriptions(dynamodb);
+    threadSubs = new ThreadSubscriptions(docClient);
     await clearTable();
   });
 

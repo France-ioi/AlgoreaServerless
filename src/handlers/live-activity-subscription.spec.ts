@@ -1,6 +1,6 @@
 import { subscribe, unsubscribe } from './live-activity-subscription';
 import { LiveActivitySubscriptions } from '../dbmodels/live-activity-subscriptions';
-import { dynamodb } from '../dynamodb';
+import { docClient } from '../dynamodb';
 import { clearTable } from '../testutils/db';
 import { WsRequest } from '../utils/lambda-ws-server';
 
@@ -12,7 +12,7 @@ describe('Live Activity Subscription', () => {
   let liveActivitySubs: LiveActivitySubscriptions;
 
   beforeEach(async () => {
-    liveActivitySubs = new LiveActivitySubscriptions(dynamodb);
+    liveActivitySubs = new LiveActivitySubscriptions(docClient);
     await clearTable();
   });
 

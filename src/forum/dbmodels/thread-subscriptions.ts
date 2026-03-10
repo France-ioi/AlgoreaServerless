@@ -2,7 +2,7 @@ import { ConnectionId } from '../../websocket-client';
 import { Table, TableKey, wsConnectionTtl } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
-import { dynamodb } from '../../dynamodb';
+import { dbNumber, docClient } from '../../dynamodb';
 import { safeParseArray } from '../../utils/zod-utils';
 
 /**
@@ -50,7 +50,7 @@ export class ThreadSubscriptions extends Table {
     const results = await this.sqlRead({ query, params });
     const subscriberSchema = z.object({
       connectionId: z.string(),
-      sk: z.number(),
+      sk: dbNumber,
       userId: z.string(),
     });
     return safeParseArray(results as unknown[], subscriberSchema, 'thread subscriber');
@@ -97,4 +97,4 @@ export class ThreadSubscriptions extends Table {
 }
 
 /** Singleton instance for use across the application */
-export const threadSubscriptionsTable = new ThreadSubscriptions(dynamodb);
+export const threadSubscriptionsTable = new ThreadSubscriptions(docClient);

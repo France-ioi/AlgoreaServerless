@@ -1,6 +1,6 @@
 import { handleThreadStatusChanged, ThreadStatusChangedPayload } from './thread-status-changed';
 import { ThreadFollows } from '../dbmodels/thread-follows';
-import { dynamodb } from '../../dynamodb';
+import { docClient, dynamodb } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { ThreadId } from '../dbmodels/thread';
 
@@ -50,7 +50,7 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
   beforeEach(async () => {
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    threadFollows = new ThreadFollows(dynamodb);
+    threadFollows = new ThreadFollows(docClient);
     await clearTable();
   });
 

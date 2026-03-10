@@ -1,12 +1,12 @@
 import { Table } from './table';
-import { dynamodb } from '../dynamodb';
-import { clearTable } from '../testutils/db';
+import { dbNumber, docClient } from '../dynamodb';
+import { clearTable, getAll } from '../testutils/db';
 
 describe('Table', () => {
   let table: Table;
 
   beforeEach(async () => {
-    table = new Table(dynamodb);
+    table = new Table(docClient);
     await clearTable();
   });
 
@@ -15,7 +15,7 @@ describe('Table', () => {
       const originalTableName = process.env.TABLE_NAME;
       delete process.env.TABLE_NAME;
 
-      expect(() => new Table(dynamodb)).toThrow('env variable "TABLE_NAME" not set!');
+      expect(() => new Table(docClient)).toThrow('env variable "TABLE_NAME" not set!');
 
       process.env.TABLE_NAME = originalTableName;
     });
@@ -35,9 +35,8 @@ describe('Table', () => {
 
       await table['batchUpdate'](items);
 
-      // Verify items were inserted
-      const result = await dynamodb.scan({ TableName: process.env.TABLE_NAME! });
-      expect(result.Items?.length).toBe(30);
+      const result = await getAll();
+      expect(result.length).toBe(30);
     });
 
     it('should handle empty array', async () => {
@@ -48,8 +47,8 @@ describe('Table', () => {
       const items = [{ pk: 'test-pk', sk: Date.now(), data: 'test-data' }];
       await expect(table['batchUpdate'](items)).resolves.not.toThrow();
 
-      const result = await dynamodb.scan({ TableName: process.env.TABLE_NAME! });
-      expect(result.Items?.length).toBe(1);
+      const result = await getAll();
+      expect(result.length).toBe(1);
     });
   });
 
@@ -88,7 +87,8 @@ describe('Table', () => {
       });
 
       expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({ pk: 'test-pk-1', sk: 1000 });
+      expect(results[0]?.pk).toBe('test-pk-1');
+      expect(dbNumber.parse(results[0]?.sk)).toBe(1000);
     });
   });
 
@@ -105,7 +105,9 @@ describe('Table', () => {
       });
 
       expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({ pk: 'test-pk', sk: 123, data: 'test-data' });
+      expect(results[0]?.pk).toBe('test-pk');
+      expect(dbNumber.parse(results[0]?.sk)).toBe(123);
+      expect(results[0]?.data).toBe('test-data');
     });
 
     it('should delete item with PartiQL', async () => {
@@ -150,6 +152,3 @@ describe('Table', () => {
     });
   });
 });
-
-
-

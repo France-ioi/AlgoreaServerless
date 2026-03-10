@@ -1,7 +1,7 @@
 import { ConnectionId } from '../websocket-client';
 import { Table, TableKey, wsConnectionTtl } from './table';
 import { z } from 'zod';
-import { dynamodb } from '../dynamodb';
+import { dbNumber, docClient } from '../dynamodb';
 import { safeParseArray } from '../utils/zod-utils';
 
 /**
@@ -43,7 +43,7 @@ export class LiveActivitySubscriptions extends Table {
     const results = await this.sqlRead({ query, params });
     const subscriberSchema = z.object({
       connectionId: z.string(),
-      sk: z.number(),
+      sk: dbNumber,
     });
     return safeParseArray(results as unknown[], subscriberSchema, 'live activity subscriber');
   }
@@ -84,4 +84,4 @@ export class LiveActivitySubscriptions extends Table {
 }
 
 /** Singleton instance for use across the application */
-export const liveActivitySubscriptionsTable = new LiveActivitySubscriptions(dynamodb);
+export const liveActivitySubscriptionsTable = new LiveActivitySubscriptions(docClient);

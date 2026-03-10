@@ -1,5 +1,5 @@
 import { ThreadFollows } from './thread-follows';
-import { dynamodb } from '../../dynamodb';
+import { docClient, dynamodb } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { ThreadId } from './thread';
 
@@ -8,7 +8,7 @@ describe('ThreadFollows', () => {
   const threadId: ThreadId = { participantId: 'user123', itemId: 'item456' };
 
   beforeEach(async () => {
-    threadFollows = new ThreadFollows(dynamodb);
+    threadFollows = new ThreadFollows(docClient);
     await clearTable();
   });
 

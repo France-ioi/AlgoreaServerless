@@ -1,7 +1,7 @@
 import { Table } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
-import { dynamodb } from '../../dynamodb';
+import { dbNumber, docClient } from '../../dynamodb';
 
 /**
  * TTL for thread follows after the thread is closed (2 weeks).
@@ -22,9 +22,9 @@ function pk(thread: ThreadId): string {
 
 const threadFollowSchema = z.object({
   pk: z.string(),
-  sk: z.number(),
+  sk: dbNumber,
   userId: z.string(),
-  ttl: z.number().optional(),
+  ttl: dbNumber.optional(),
 });
 
 export type ThreadFollow = z.infer<typeof threadFollowSchema>;
@@ -85,7 +85,7 @@ export class ThreadFollows extends Table {
     }
 
     // Delete all matching entries (should be only one, but handle edge cases)
-    const sks = z.array(z.object({ sk: z.number() })).parse(results).map(r => r.sk);
+    const sks = z.array(z.object({ sk: dbNumber })).parse(results).map(r => r.sk);
     await this.sqlWrite(sks.map(sk => ({
       query: `DELETE FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
       params: [ pk(threadId), sk ],
@@ -102,7 +102,7 @@ export class ThreadFollows extends Table {
     });
     return z.array(z.object({
       userId: z.string(),
-      sk: z.number(),
+      sk: dbNumber,
     })).parse(results);
   }
 
@@ -141,4 +141,4 @@ export class ThreadFollows extends Table {
 }
 
 /** Singleton instance for use across the application */
-export const threadFollowsTable = new ThreadFollows(dynamodb);
+export const threadFollowsTable = new ThreadFollows(docClient);

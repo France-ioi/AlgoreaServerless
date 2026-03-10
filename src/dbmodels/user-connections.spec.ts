@@ -1,12 +1,13 @@
 import { UserConnections } from './user-connections';
-import { dynamodb } from '../dynamodb';
+import { dbNumber, docClient, dynamodb } from '../dynamodb';
 import { clearTable } from '../testutils/db';
+import { z } from 'zod';
 
 describe('UserConnections', () => {
   let userConnections: UserConnections;
 
   beforeEach(async () => {
-    userConnections = new UserConnections(dynamodb);
+    userConnections = new UserConnections(docClient);
     await clearTable();
   });
 
@@ -246,7 +247,8 @@ describe('UserConnections', () => {
       const result = await userConnections.delete('conn-sub');
 
       expect(result).not.toBeNull();
-      expect(result?.subscriptionKeys).toEqual(subscriptionKeys);
+      const subKeysSchema = z.object({ pk: z.string(), sk: dbNumber });
+      expect(subKeysSchema.parse(result?.subscriptionKeys)).toEqual(subscriptionKeys);
     });
 
     it('should return undefined subscriptionKeys when not set', async () => {

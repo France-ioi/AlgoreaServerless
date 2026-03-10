@@ -10,7 +10,7 @@ jest.mock('../websocket-client', () => ({
 import { notifyUser, notifyUsers } from './notify-user';
 import { UserConnections } from '../dbmodels/user-connections';
 import { Notifications } from '../dbmodels/notifications';
-import { dynamodb } from '../dynamodb';
+import { docClient } from '../dynamodb';
 import { NotificationAction } from '../ws-messages';
 
 describe('notifyUser', () => {
@@ -19,8 +19,8 @@ describe('notifyUser', () => {
   const userId = 'user-123';
 
   beforeEach(async () => {
-    userConnections = new UserConnections(dynamodb);
-    notifications = new Notifications(dynamodb);
+    userConnections = new UserConnections(docClient);
+    notifications = new Notifications(docClient);
     await clearTable();
     jest.clearAllMocks();
     mockSend.mockImplementation((connectionIds) =>
@@ -153,8 +153,8 @@ describe('notifyUsers', () => {
   let notifications: Notifications;
 
   beforeEach(async () => {
-    userConnections = new UserConnections(dynamodb);
-    notifications = new Notifications(dynamodb);
+    userConnections = new UserConnections(docClient);
+    notifications = new Notifications(docClient);
     await clearTable();
     jest.clearAllMocks();
     mockSend.mockImplementation((connectionIds) =>

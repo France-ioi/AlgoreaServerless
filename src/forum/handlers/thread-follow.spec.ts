@@ -4,7 +4,7 @@ import { IdentityToken } from '../../auth/identity-token';
 import { RequestWithIdentityToken } from '../../auth/identity-token-middleware';
 import { followThread, unfollowThread, getFollowStatus } from './thread-follow';
 import { ThreadFollows } from '../dbmodels/thread-follows';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 
 /** Helper to create a mock request with threadToken already set (as middleware would do) */
 function mockRequestWithThreadToken(token: ThreadToken, extras: Partial<RequestWithThreadToken> = {}): RequestWithThreadToken {
@@ -43,7 +43,7 @@ describe('Thread Follow Handlers', () => {
   const threadId = { participantId: 'user123', itemId: 'item456' };
 
   beforeEach(async () => {
-    threadFollows = new ThreadFollows(dynamodb);
+    threadFollows = new ThreadFollows(docClient);
     await clearTable();
   });
 

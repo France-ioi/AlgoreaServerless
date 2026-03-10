@@ -2,7 +2,7 @@ import { generateToken, initializeKeys } from '../../testutils/token-generator';
 import { mockALBEvent, mockWebSocketMessageEvent } from '../../testutils/event-mocks';
 import { clearTable } from '../../testutils/db';
 import { UserConnections } from '../../dbmodels/user-connections';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 
 const mockSend = jest.fn();
 
@@ -166,7 +166,7 @@ describe('E2E: Message Flow', () => {
   });
 
   it('should clean up gone subscribers when posting message', async () => {
-    const userConnections = new UserConnections(dynamodb);
+    const userConnections = new UserConnections(docClient);
 
     const user1Token = await generateToken({ ...threadId, userId: 'user1', canWrite: true });
     const user2Token = await generateToken({ ...threadId, userId: 'user2', canWrite: false });

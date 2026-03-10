@@ -1,6 +1,6 @@
 import { subscribe, unsubscribe } from './thread-subscription';
 import { ThreadSubscriptions } from '../dbmodels/thread-subscriptions';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { generateToken, initializeKeys } from '../../testutils/token-generator';
 import { WsRequest } from '../../utils/lambda-ws-server';
@@ -14,7 +14,7 @@ describe('Thread Subscription Service', () => {
   });
 
   beforeEach(async () => {
-    threadSubs = new ThreadSubscriptions(dynamodb);
+    threadSubs = new ThreadSubscriptions(docClient);
     await clearTable();
   });
 

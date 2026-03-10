@@ -3,6 +3,7 @@ import { userConnectionsTable } from '../dbmodels/user-connections';
 import { liveActivitySubscriptionsTable } from '../dbmodels/live-activity-subscriptions';
 import { threadSubscriptionsTable } from '../forum/dbmodels/thread-subscriptions';
 import { z } from 'zod';
+import { dbNumber } from '../dynamodb';
 
 /**
  * Result of a user connection cleanup.
@@ -20,7 +21,7 @@ export interface BroadcastResult<T> {
   successfulRecipients: T[],
 }
 
-const subKeysSchema = z.object({ pk: z.string(), sk: z.number() });
+const subKeysSchema = z.object({ pk: z.string(), sk: dbNumber });
 
 /**
  * Cleans up a gone WebSocket connection by removing:

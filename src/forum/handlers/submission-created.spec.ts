@@ -11,7 +11,7 @@ import { handleSubmissionCreated, SubmissionPayload } from './submission-created
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
 import { ThreadSubscriptions } from '../dbmodels/thread-subscriptions';
 import { UserConnections } from '../../dbmodels/user-connections';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 
 function createMockPayload(overrides?: Partial<SubmissionPayload>): SubmissionPayload {
   return {
@@ -44,8 +44,8 @@ describe('handleSubmissionCreated', () => {
   const threadId = { participantId: defaultPayload.participant_id, itemId: defaultPayload.item_id };
 
   beforeEach(async () => {
-    threadSubs = new ThreadSubscriptions(dynamodb);
-    userConnections = new UserConnections(dynamodb);
+    threadSubs = new ThreadSubscriptions(docClient);
+    userConnections = new UserConnections(docClient);
     await clearTable();
     jest.clearAllMocks();
     mockSend.mockImplementation((connectionIds) =>

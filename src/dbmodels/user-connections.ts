@@ -1,6 +1,6 @@
 import { Table, wsConnectionTtl } from './table';
 import { z } from 'zod';
-import { dynamodb } from '../dynamodb';
+import { dbNumber, docClient } from '../dynamodb';
 
 export type ConnectionId = string;
 export type UserId = string;
@@ -17,7 +17,7 @@ function u2cPk(userId: UserId): string {
 
 const c2uEntrySchema = z.looseObject({
   userId: z.string(),
-  creationTime: z.number(),
+  creationTime: dbNumber,
 });
 
 type C2uEntry = z.infer<typeof c2uEntrySchema>;
@@ -31,7 +31,7 @@ type ConnectionInfo = Record<string, unknown>;
 
 const u2cEntrySchema = z.object({
   connectionId: z.string(),
-  sk: z.number(),
+  sk: dbNumber,
 });
 
 /**
@@ -157,4 +157,4 @@ export class UserConnections extends Table {
 }
 
 /** Singleton instance for use across the application */
-export const userConnectionsTable = new UserConnections(dynamodb);
+export const userConnectionsTable = new UserConnections(docClient);

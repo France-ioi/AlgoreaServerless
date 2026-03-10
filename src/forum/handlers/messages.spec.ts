@@ -14,7 +14,7 @@ import { ThreadSubscriptions } from '../dbmodels/thread-subscriptions';
 import { ThreadFollows } from '../dbmodels/thread-follows';
 import { Notifications } from '../../dbmodels/notifications';
 import { UserConnections } from '../../dbmodels/user-connections';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 
 /** Helper to create a mock request with threadToken already set (as middleware would do) */
 function mockRequest(token: ThreadToken, extras: Partial<RequestWithThreadToken> = {}): RequestWithThreadToken {
@@ -34,9 +34,9 @@ describe('Forum Messages Service', () => {
   const threadId = { participantId: 'user123', itemId: 'item456' };
 
   beforeEach(async () => {
-    threadEvents = new ThreadEvents(dynamodb);
-    threadSubs = new ThreadSubscriptions(dynamodb);
-    userConnections = new UserConnections(dynamodb);
+    threadEvents = new ThreadEvents(docClient);
+    threadSubs = new ThreadSubscriptions(docClient);
+    userConnections = new UserConnections(docClient);
     await clearTable();
     jest.clearAllMocks();
     mockSend.mockImplementation((connectionIds) =>
@@ -255,9 +255,9 @@ describe('Forum Messages Service', () => {
     const writeToken: ThreadToken = { ...threadId, userId: 'author-user', canWrite: true, canWatch: true, isMine: false };
 
     beforeEach(() => {
-      threadFollows = new ThreadFollows(dynamodb);
-      notifications = new Notifications(dynamodb);
-      userConnections = new UserConnections(dynamodb);
+      threadFollows = new ThreadFollows(docClient);
+      notifications = new Notifications(docClient);
+      userConnections = new UserConnections(docClient);
     });
 
     it('should notify followers who are not subscribers', async () => {
