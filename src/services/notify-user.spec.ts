@@ -13,6 +13,12 @@ import { Notifications } from '../dbmodels/notifications';
 import { docClient } from '../dynamodb';
 import { NotificationAction } from '../ws-messages';
 
+// Valid base64 connectionIds (first byte must be non-zero for number encoding round-trip)
+const conn1 = 'CgsMDQ4PEBE=';
+const conn2 = 'FBYYGhweICI=';
+const connActive = 'HiEkJyotMDM=';
+const connGone = 'KCwwNDg8QEQ=';
+
 describe('notifyUser', () => {
   let userConnections: UserConnections;
   let notifications: Notifications;
@@ -50,8 +56,8 @@ describe('notifyUser', () => {
 
   describe('user with active connections', () => {
     beforeEach(async () => {
-      await userConnections.insert('conn-1', userId);
-      await userConnections.insert('conn-2', userId);
+      await userConnections.insert(conn1, userId);
+      await userConnections.insert(conn2, userId);
     });
 
     it('should create notification in DB and send WS message to all connections', async () => {
@@ -60,14 +66,12 @@ describe('notifyUser', () => {
         payload: { text: 'Hello' },
       });
 
-      // Verify notification was created in DB
       const notifs = await notifications.getNotifications(userId, 10);
       expect(notifs).toHaveLength(1);
       expect(notifs[0]?.sk).toBe(sk);
 
-      // Verify WS message was sent to both connections
       expect(mockSend).toHaveBeenCalledWith(
-        expect.arrayContaining([ 'conn-1', 'conn-2' ]),
+        expect.arrayContaining([ conn1, conn2 ]),
         expect.objectContaining({
           action: NotificationAction.New,
           notification: {
@@ -94,13 +98,13 @@ describe('notifyUser', () => {
 
   describe('user with gone connections', () => {
     beforeEach(async () => {
-      await userConnections.insert('conn-active', userId);
-      await userConnections.insert('conn-gone', userId);
+      await userConnections.insert(connActive, userId);
+      await userConnections.insert(connGone, userId);
     });
 
     it('should clean up gone connections after sending', async () => {
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
-        if (id === 'conn-gone') {
+        if (id === connGone) {
           const error = new Error('Gone');
           error.name = 'GoneException';
           return { success: false, connectionId: id, error };
@@ -113,15 +117,13 @@ describe('notifyUser', () => {
         payload: {},
       });
 
-      // Verify notification was still created in DB
       const notifs = await notifications.getNotifications(userId, 10);
       expect(notifs).toHaveLength(1);
 
-      // Verify gone connection was cleaned up
       const connections = await userConnections.getAll(userId);
       expect(connections).toHaveLength(1);
-      expect(connections).toContain('conn-active');
-      expect(connections).not.toContain('conn-gone');
+      expect(connections).toContain(connActive);
+      expect(connections).not.toContain(connGone);
     });
 
     it('should create notification even if all connections are gone', async () => {
@@ -136,12 +138,10 @@ describe('notifyUser', () => {
         payload: {},
       });
 
-      // Verify notification was created in DB
       const notifs = await notifications.getNotifications(userId, 10);
       expect(notifs).toHaveLength(1);
       expect(notifs[0]?.sk).toBe(sk);
 
-      // Verify all gone connections were cleaned up
       const connections = await userConnections.getAll(userId);
       expect(connections).toHaveLength(0);
     });
@@ -164,10 +164,8 @@ describe('notifyUsers', () => {
   it('should notify multiple users in parallel', async () => {
     const userIds = [ 'user-1', 'user-2', 'user-3' ];
 
-    // Add connections for some users
-    await userConnections.insert('conn-1', 'user-1');
-    await userConnections.insert('conn-2', 'user-2');
-    // user-3 has no connections
+    await userConnections.insert(conn1, 'user-1');
+    await userConnections.insert(conn2, 'user-2');
 
     const sks = await notifyUsers(userIds, {
       notificationType: 'forum.new_message',

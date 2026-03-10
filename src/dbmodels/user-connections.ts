@@ -1,6 +1,8 @@
 import { Table, wsConnectionTtl } from './table';
 import { z } from 'zod';
 import { dbNumber, docClient } from '../dynamodb';
+import { connectionIdToNumberValue, dbConnectionId } from '../utils/connection-id-number';
+import { safeParseArray } from '../utils/zod-utils';
 
 export type ConnectionId = string;
 export type UserId = string;
@@ -29,19 +31,15 @@ type C2uEntry = z.infer<typeof c2uEntrySchema>;
  */
 type ConnectionInfo = Record<string, unknown>;
 
-const u2cEntrySchema = z.object({
-  connectionId: z.string(),
-  sk: dbNumber,
-});
-
 /**
  * UserConnections tracks WebSocket connections per user.
  *
  * Two entry types are stored:
  * - c2u (connection to user): pk: `${stage}#CONN#${connectionId}#USER`, sk: 0
  *   Contains: userId, creationTime (ms since epoch), ttl (seconds since epoch, DynamoDB TTL format)
- * - u2c (user to connection): pk: `${stage}#USER#${userId}#CONN`, sk: creationTime (ms since epoch)
- *   Contains: connectionId, ttl (seconds since epoch, DynamoDB TTL format)
+ * - u2c (user to connection): pk: `${stage}#USER#${userId}#CONN`,
+ *   sk: connectionId encoded as a number (base64 → big-endian unsigned integer)
+ *   Contains: connectionId (for debugging), ttl (seconds since epoch, DynamoDB TTL format)
  */
 export class UserConnections extends Table {
 
@@ -59,7 +57,7 @@ export class UserConnections extends Table {
       },
       {
         query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'sk': ?, 'ttl': ?, 'connectionId': ? }`,
-        params: [ u2cPk(userId), creationTime, ttl, connectionId ],
+        params: [ u2cPk(userId), connectionIdToNumberValue(connectionId), ttl, connectionId ],
       },
     ]);
   }
@@ -70,6 +68,7 @@ export class UserConnections extends Table {
    * @returns The deleted connection entry (core fields + any extra metadata), or null if not found
    */
   async delete(connectionId: ConnectionId): Promise<C2uEntry | null> {
+    // Get the c2u entry to know the userId to delete the u2c entry
     const c2uResults = await this.sqlRead({
       query: `SELECT * FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
       params: [ c2uPk(connectionId), 0 ],
@@ -82,7 +81,7 @@ export class UserConnections extends Table {
 
     const entry = c2uEntrySchema.parse(c2uResults[0]);
 
-    // 2) Delete both entries in a transaction
+    // Delete both entries in a transaction
     await this.sqlWrite([
       {
         query: `DELETE FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
@@ -90,7 +89,7 @@ export class UserConnections extends Table {
       },
       {
         query: `DELETE FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
-        params: [ u2cPk(entry.userId), entry.creationTime ],
+        params: [ u2cPk(entry.userId), connectionIdToNumberValue(connectionId) ],
       },
     ]);
 
@@ -148,11 +147,11 @@ export class UserConnections extends Table {
    */
   async getAll(userId: UserId): Promise<ConnectionId[]> {
     const results = await this.sqlRead({
-      query: `SELECT connectionId, sk FROM "${this.tableName}" WHERE pk = ?`,
+      query: `SELECT sk FROM "${this.tableName}" WHERE pk = ?`,
       params: [ u2cPk(userId) ],
     });
-
-    return z.array(u2cEntrySchema).parse(results).map(entry => entry.connectionId);
+    const connectionSchema = z.object({ sk: dbConnectionId }).transform(({ sk }) => sk);
+    return safeParseArray(results, connectionSchema, 'user connection');
   }
 }
 
