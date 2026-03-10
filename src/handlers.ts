@@ -7,6 +7,7 @@ import { portalRoutes } from './portal/routes';
 import { notificationRoutes } from './routes/notifications';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
+import { liveActivityWsActions } from './routes/live-activity';
 import { handleConnect, handleDisconnect } from './websocket/handlers';
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,6 +44,7 @@ wsServer.onDisconnect(handleDisconnect);
 
 // Action handlers
 wsServer.register(forumWsActions, { prefix: 'forum' });
+wsServer.register(liveActivityWsActions, { prefix: 'liveActivity' });
 wsServer.on('heartbeat', () => {});
 
 

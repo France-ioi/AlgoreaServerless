@@ -190,14 +190,13 @@ describe('UserConnections', () => {
       expect(storedKeys?.sk?.N).toBe(String(subscriptionKeys.sk));
     });
 
-    it('should remove subscriptionKeys when not provided', async () => {
+    it('should remove subscriptionKeys when explicitly set to undefined', async () => {
       await userConnections.insert('conn-remove', 'user-remove');
       await userConnections.updateConnectionInfo('conn-remove', {
         subscriptionKeys: { pk: 'dev#THREAD#p#i#SUB', sk: 123 },
       });
 
-      // Now remove it by passing empty info
-      await userConnections.updateConnectionInfo('conn-remove', {});
+      await userConnections.updateConnectionInfo('conn-remove', { subscriptionKeys: undefined });
 
       const result = await dynamodb.executeStatement({
         Statement: `SELECT subscriptionKeys FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
@@ -207,6 +206,24 @@ describe('UserConnections', () => {
         ],
       });
       expect(result.Items?.[0]?.subscriptionKeys).toBeUndefined();
+    });
+
+    it('should be a no-op when no fields are specified', async () => {
+      await userConnections.insert('conn-noop', 'user-noop');
+      await userConnections.updateConnectionInfo('conn-noop', {
+        subscriptionKeys: { pk: 'dev#THREAD#p#i#SUB', sk: 123 },
+      });
+
+      await userConnections.updateConnectionInfo('conn-noop', {});
+
+      const result = await dynamodb.executeStatement({
+        Statement: `SELECT subscriptionKeys FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
+        Parameters: [
+          { S: `${process.env.STAGE}#CONN#conn-noop#USER` },
+          { N: '0' },
+        ],
+      });
+      expect(result.Items?.[0]?.subscriptionKeys).toBeDefined();
     });
 
     it('should not throw when connection does not exist', async () => {

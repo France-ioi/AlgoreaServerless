@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: March 6, 2026
+**Last Updated**: March 9, 2026
 
 ## Overview
 
@@ -130,6 +130,7 @@ AlgoreaServerless/
 │   │   ├── identity-token-middleware.ts  # Identity token middleware
 │   │   └── *.spec.ts      # Authentication tests
 │   ├── dbmodels/          # Shared database models and base classes
+│   │   ├── live-activity-subscriptions.ts  # Live activity subscription model
 │   │   ├── notifications.ts  # User notifications model
 │   │   ├── user-connections.ts  # WebSocket user connections model
 │   │   └── table.ts       # Base table class
@@ -138,8 +139,10 @@ AlgoreaServerless/
 │   │   ├── submission-created.ts
 │   │   └── thread-status-changed.ts
 │   ├── handlers/          # App-level request handlers
+│   │   ├── live-activity-subscription.ts  # Live activity WS handlers
 │   │   └── notifications.ts  # Notification handlers
 │   ├── routes/            # App-level route registration
+│   │   ├── live-activity.ts  # Live activity WS action registration
 │   │   └── notifications.ts  # Notification routes
 │   ├── forum/             # Forum feature module
 │   │   ├── routes.ts      # Route and action registration
@@ -241,6 +244,10 @@ Custom implementation inspired by `lambda-api`:
 - **Forum Actions**:
   - `forum.subscribe` - Subscribe to thread updates
   - `forum.unsubscribe` - Unsubscribe from thread
+- **Live Activity Actions**:
+  - `liveActivity.subscribe` - Subscribe to live activity updates
+  - `liveActivity.unsubscribe` - Unsubscribe from live activity updates
+- **Common Actions**:
   - `heartbeat` - Connection keep-alive
 
 ### 4. EventBus Server (`src/utils/lambda-eventbus-server/`)
@@ -322,6 +329,7 @@ export const userConnectionsTable = new UserConnections(dynamodb);
 
 **Available singletons**:
 - `userConnectionsTable` - User WebSocket connections
+- `liveActivitySubscriptionsTable` - Live activity subscription management
 - `threadSubscriptionsTable` - Thread subscription management
 - `threadFollowsTable` - Thread follow management
 - `threadEventsTable` - Thread messages and events
@@ -358,6 +366,13 @@ await userConnectionsTable.insert(connectionId, userId);
 - Schema: `pk` (thread identifier + #FOLLOW), `sk` (follow time), `userId`
 - Unlike subscriptions, follows persist across sessions
 - Used to determine who should receive notifications about thread activity
+
+**LiveActivitySubscriptions** (`src/dbmodels/live-activity-subscriptions.ts`)
+- Manages WebSocket connection subscriptions to live activity updates
+- Schema: `pk` (`{stage}#LIVE_ACTIVITY#SUB`), `sk` (subscription time), `connectionId`, `ttl` (2 hours)
+- No userId stored; the connection is already authenticated on `$connect`
+- Single partition key for all subscribers (global, not scoped to a thread)
+- Auto-cleanup via DynamoDB TTL
 
 **Notifications** (`src/dbmodels/notifications.ts`)
 - Stores per-user notifications with auto-expiration
@@ -519,6 +534,14 @@ pk: {STAGE}#THREAD#{participantId}#{itemId}#SUB
 sk: {timestamp}
 connectionId: string
 userId: string
+ttl: {timestamp + 7200} (2 hours)
+```
+
+#### Live Activity Subscriptions
+```
+pk: {STAGE}#LIVE_ACTIVITY#SUB
+sk: {timestamp}
+connectionId: string
 ttl: {timestamp + 7200} (2 hours)
 ```
 

@@ -35,5 +35,5 @@ export async function unsubscribe(request: WsRequest): Promise<void> {
   const token = await extractThreadTokenFromWs(request.body);
   await threadSubscriptionsTable.deleteByConnectionId(token, request.connectionId());
   // Clear the subscription info from the connection
-  await userConnectionsTable.updateConnectionInfo(request.connectionId(), {});
+  await userConnectionsTable.updateConnectionInfo(request.connectionId(), { subscriptionKeys: undefined });
 }
