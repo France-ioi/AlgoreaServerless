@@ -4,13 +4,13 @@ import { ZodType } from 'zod';
  * Safely parses an array of items, filtering out those that don't match the schema.
  * Logs a warning for each item that fails parsing.
  *
- * @param items - The array of unknown items to parse
+ * @param items - The array of DynamoDB records to parse (attribute name → value)
  * @param schema - The Zod schema for a single item
  * @param context - A descriptive context string for logging (e.g., "thread subscription")
  * @returns An array of successfully parsed items
  */
 export function safeParseArray<T>(
-  items: unknown[],
+  items: Record<string, unknown>[],
   schema: ZodType<T>,
   context: string
 ): T[] {

@@ -57,7 +57,7 @@ export class Notifications extends Table {
       limit,
       scanIndexForward: false, // false = DESC order (newest first)
     });
-    return safeParseArray(results as unknown[], notificationSchema, 'notification');
+    return safeParseArray(results, notificationSchema, 'notification');
   }
 
   async insert(userId: string, notification: NotificationInput): Promise<number> {
@@ -95,7 +95,7 @@ export class Notifications extends Table {
 
     // Delete them in batches
     const skSchema = z.object({ sk: dbNumber });
-    const keys: TableKey[] = safeParseArray(results as unknown[], skSchema, 'notification sk')
+    const keys: TableKey[] = safeParseArray(results, skSchema, 'notification sk')
       .map(r => ({ pk: pk(userId), sk: r.sk }));
 
     if (keys.length === 0) return;

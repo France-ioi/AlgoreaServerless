@@ -65,7 +65,7 @@ export class ThreadEvents extends Table {
       limit: options.limit,
       scanIndexForward: false, // false = DESC order
     });
-    return safeParseArray(results as unknown[], threadEventSchema, 'thread event');
+    return safeParseArray(results, threadEventSchema, 'thread event');
   }
 }
 

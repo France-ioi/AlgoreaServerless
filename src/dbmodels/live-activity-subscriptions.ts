@@ -31,7 +31,7 @@ export class LiveActivitySubscriptions extends Table {
     const subscriberSchema = z.object({
       sk: dbConnectionId,
     }).transform(({ sk }) => ({ connectionId: sk }));
-    return safeParseArray(results as unknown[], subscriberSchema, 'live activity subscriber');
+    return safeParseArray(results, subscriberSchema, 'live activity subscriber');
   }
 
   async insert(connectionId: ConnectionId): Promise<void> {

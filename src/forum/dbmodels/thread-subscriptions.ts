@@ -53,7 +53,7 @@ export class ThreadSubscriptions extends Table {
       sk: dbNumber,
       userId: z.string(),
     });
-    return safeParseArray(results as unknown[], subscriberSchema, 'thread subscriber');
+    return safeParseArray(results, subscriberSchema, 'thread subscriber');
   }
 
   async insert(thread: ThreadId, connectionId: ConnectionId, userId: string): Promise<SubscriptionKeys> {
