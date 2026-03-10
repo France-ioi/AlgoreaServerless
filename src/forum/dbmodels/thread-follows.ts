@@ -2,7 +2,9 @@ import { Table } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
 import { dbNumber, docClient } from '../../dynamodb';
-
+import { NumberValue } from '@aws-sdk/lib-dynamodb';
+import { id64 } from '../../utils/id64';
+import { DBError } from '../../utils/errors';
 /**
  * TTL for thread follows after the thread is closed (2 weeks).
  */
@@ -22,8 +24,7 @@ function pk(thread: ThreadId): string {
 
 const threadFollowSchema = z.object({
   pk: z.string(),
-  sk: dbNumber,
-  userId: z.string(),
+  sk: id64,
   ttl: dbNumber.optional(),
 });
 
@@ -32,8 +33,7 @@ export type ThreadFollow = z.infer<typeof threadFollowSchema>;
 /**
  * Thread follows are stored in the database with the following schema:
  * - pk: ${stage}#THREAD#${participantId}#${itemId}#FOLLOW
- * - sk: insertion timestamp (milliseconds since epoch)
- * - userId: the user id of the follower
+ * - sk: userId as a number (64-bit integer via NumberValue)
  * - ttl: optional auto-deletion time (seconds since epoch, DynamoDB TTL format)
  */
 export class ThreadFollows extends Table {
@@ -43,8 +43,8 @@ export class ThreadFollows extends Table {
    */
   async exists(threadId: ThreadId, userId: string): Promise<boolean> {
     const results = await this.sqlRead({
-      query: `SELECT sk FROM "${this.tableName}" WHERE pk = ? AND userId = ?`,
-      params: [ pk(threadId), userId ],
+      query: `SELECT sk FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
+      params: [ pk(threadId), NumberValue.from(userId) ],
     });
     return results.length > 0;
   }
@@ -55,18 +55,17 @@ export class ThreadFollows extends Table {
    * @param ttl Optional TTL in seconds since epoch for auto-deletion
    */
   async insert(threadId: ThreadId, userId: string, ttl?: number): Promise<void> {
-    // Check if already exists
-    const alreadyFollowing = await this.exists(threadId, userId);
-    if (alreadyFollowing) {
-      return; // User is already following, ignore
+    try {
+      await this.sqlWrite({
+        query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'sk': ?${ttl !== undefined ? ", 'ttl': ?" : ''} }`,
+        params: ttl !== undefined
+          ? [ pk(threadId), NumberValue.from(userId), ttl ]
+          : [ pk(threadId), NumberValue.from(userId) ],
+      });
+    } catch (err) {
+      if (err instanceof DBError && err.cause instanceof Error && err.cause.name.includes('DuplicateItem')) return;
+      throw err;
     }
-
-    const sk = Date.now();
-
-    await this.sqlWrite({
-      query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'sk': ?, 'userId': ?${ttl !== undefined ? ", 'ttl': ?" : ''} }`,
-      params: ttl !== undefined ? [ pk(threadId), sk, userId, ttl ] : [ pk(threadId), sk, userId ],
-    });
   }
 
   /**
@@ -74,36 +73,23 @@ export class ThreadFollows extends Table {
    * If the user is not following, this is a no-op.
    */
   async deleteByUserId(threadId: ThreadId, userId: string): Promise<void> {
-    // Find the user's follow entry
-    const results = await this.sqlRead({
-      query: `SELECT sk FROM "${this.tableName}" WHERE pk = ? AND userId = ?`,
-      params: [ pk(threadId), userId ],
-    });
-
-    if (results.length === 0) {
-      return; // User is not following, ignore
-    }
-
-    // Delete all matching entries (should be only one, but handle edge cases)
-    const sks = z.array(z.object({ sk: dbNumber })).parse(results).map(r => r.sk);
-    await this.sqlWrite(sks.map(sk => ({
+    await this.sqlWrite({
       query: `DELETE FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
-      params: [ pk(threadId), sk ],
-    })));
+      params: [ pk(threadId), NumberValue.from(userId) ],
+    });
   }
 
   /**
-   * Get all followers of a thread
+   * Get all followers of a thread.
    */
-  async getFollowers(threadId: ThreadId): Promise<{ userId: string, sk: number }[]> {
+  async getFollowers(threadId: ThreadId): Promise<{ userId: string }[]> {
     const results = await this.sqlRead({
-      query: `SELECT userId, sk FROM "${this.tableName}" WHERE pk = ?`,
+      query: `SELECT sk FROM "${this.tableName}" WHERE pk = ?`,
       params: [ pk(threadId) ],
     });
-    return z.array(z.object({
-      userId: z.string(),
-      sk: dbNumber,
-    })).parse(results);
+    return z.array(z.object({ sk: id64 }))
+      .parse(results)
+      .map(({ sk }) => ({ userId: sk }));
   }
 
   /**
@@ -117,7 +103,7 @@ export class ThreadFollows extends Table {
     const pkValue = pk(threadId);
     await this.sqlWrite(followers.map(f => ({
       query: `UPDATE "${this.tableName}" SET ttl = ? WHERE pk = ? AND sk = ?`,
-      params: [ ttl, pkValue, f.sk ],
+      params: [ ttl, pkValue, NumberValue.from(f.userId) ],
     })));
   }
 
@@ -133,7 +119,7 @@ export class ThreadFollows extends Table {
     const pkValue = pk(threadId);
     await this.sqlWrite(followers.map(f => ({
       query: `UPDATE "${this.tableName}" REMOVE ttl WHERE pk = ? AND sk = ?`,
-      params: [ pkValue, f.sk ],
+      params: [ pkValue, NumberValue.from(f.userId) ],
     })));
 
     return followers.map(f => f.userId);

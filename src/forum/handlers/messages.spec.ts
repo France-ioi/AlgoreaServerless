@@ -261,7 +261,7 @@ describe('Forum Messages Service', () => {
     let threadFollows: ThreadFollows;
     let notifications: Notifications;
     let userConnections: UserConnections;
-    const writeToken: ThreadToken = { ...threadId, userId: 'author-user', canWrite: true, canWatch: true, isMine: false };
+    const writeToken: ThreadToken = { ...threadId, userId: '900', canWrite: true, canWatch: true, isMine: false };
 
     beforeEach(() => {
       threadFollows = new ThreadFollows(docClient);
@@ -271,9 +271,9 @@ describe('Forum Messages Service', () => {
 
     it('should notify followers who are not subscribers', async () => {
       // Follower with no active subscription
-      await threadFollows.insert(threadId, 'follower-user');
+      await threadFollows.insert(threadId, '601');
       // Also add a connection for the follower so we can verify the WS notification
-      await userConnections.insert(connFollower, 'follower-user');
+      await userConnections.insert(connFollower, '601');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -286,13 +286,13 @@ describe('Forum Messages Service', () => {
       await createMessage(req, resp);
 
       // Verify notification was created for follower
-      const followerNotifs = await notifications.getNotifications('follower-user', 10);
+      const followerNotifs = await notifications.getNotifications('601', 10);
       expect(followerNotifs).toHaveLength(1);
       expect(followerNotifs[0]?.notificationType).toBe('forum.new_message');
       expect(followerNotifs[0]?.payload).toMatchObject({
         participantId: threadId.participantId,
         itemId: threadId.itemId,
-        authorId: 'author-user',
+        authorId: '900',
         text: 'New message',
         uuid: 'msg-uuid-1',
       });
@@ -300,7 +300,7 @@ describe('Forum Messages Service', () => {
 
     it('should exclude author from follower notifications', async () => {
       // Author is also a follower
-      await threadFollows.insert(threadId, 'author-user');
+      await threadFollows.insert(threadId, '900');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -313,14 +313,14 @@ describe('Forum Messages Service', () => {
       await createMessage(req, resp);
 
       // Verify no notification was created for the author
-      const authorNotifs = await notifications.getNotifications('author-user', 10);
+      const authorNotifs = await notifications.getNotifications('900', 10);
       expect(authorNotifs).toHaveLength(0);
     });
 
     it('should exclude successful subscribers from follower notifications', async () => {
       // User is both a follower and an active subscriber
-      await threadFollows.insert(threadId, 'subscriber-user');
-      await threadSubs.insert(threadId, connSub, 'subscriber-user');
+      await threadFollows.insert(threadId, '602');
+      await threadSubs.insert(threadId, connSub, '602');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -333,15 +333,15 @@ describe('Forum Messages Service', () => {
       await createMessage(req, resp);
 
       // Verify no notification was created (they received WS message via subscription)
-      const userNotifs = await notifications.getNotifications('subscriber-user', 10);
+      const userNotifs = await notifications.getNotifications('602', 10);
       expect(userNotifs).toHaveLength(0);
     });
 
     it('should notify followers whose subscription connection was gone', async () => {
       // User is both a follower and a subscriber, but their connection is gone
-      await threadFollows.insert(threadId, 'gone-subscriber');
-      await threadSubs.insert(threadId, connGoneSub, 'gone-subscriber');
-      await userConnections.insert(connOther, 'gone-subscriber');
+      await threadFollows.insert(threadId, '603');
+      await threadSubs.insert(threadId, connGoneSub, '603');
+      await userConnections.insert(connOther, '603');
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
         if (id === connGoneSub) {
@@ -363,19 +363,19 @@ describe('Forum Messages Service', () => {
       await createMessage(req, resp);
 
       // Verify notification was created (their subscription WS failed)
-      const userNotifs = await notifications.getNotifications('gone-subscriber', 10);
+      const userNotifs = await notifications.getNotifications('603', 10);
       expect(userNotifs).toHaveLength(1);
       expect(userNotifs[0]?.notificationType).toBe('forum.new_message');
     });
 
     it('should notify multiple followers correctly', async () => {
       // Set up various scenarios
-      await threadFollows.insert(threadId, 'follower-only');
-      await threadFollows.insert(threadId, 'subscriber-and-follower');
-      await threadFollows.insert(threadId, 'author-user'); // author is also a follower
+      await threadFollows.insert(threadId, '604');
+      await threadFollows.insert(threadId, '605');
+      await threadFollows.insert(threadId, '900'); // author is also a follower
 
-      // subscriber-and-follower has an active subscription
-      await threadSubs.insert(threadId, connSub, 'subscriber-and-follower');
+      // 605 has an active subscription
+      await threadSubs.insert(threadId, connSub, '605');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -387,10 +387,10 @@ describe('Forum Messages Service', () => {
 
       await createMessage(req, resp);
 
-      // Only follower-only should get a notification
-      const followerOnlyNotifs = await notifications.getNotifications('follower-only', 10);
-      const subscriberNotifs = await notifications.getNotifications('subscriber-and-follower', 10);
-      const authorNotifs = await notifications.getNotifications('author-user', 10);
+      // Only follower-only (604) should get a notification
+      const followerOnlyNotifs = await notifications.getNotifications('604', 10);
+      const subscriberNotifs = await notifications.getNotifications('605', 10);
+      const authorNotifs = await notifications.getNotifications('900', 10);
 
       expect(followerOnlyNotifs).toHaveLength(1);
       expect(subscriberNotifs).toHaveLength(0); // Got WS message via subscription

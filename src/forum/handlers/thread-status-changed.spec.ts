@@ -11,7 +11,7 @@ function createMockPayload(overrides?: Partial<ThreadStatusChangedPayload>): Thr
     new_status: 'waiting_for_trainer',
     former_status: 'not_started',
     helper_group_id: '100',
-    updated_by: 'trainer-1',
+    updated_by: '301',
     ...overrides,
   };
 }
@@ -61,43 +61,43 @@ describe('handleThreadStatusChanged - follower behavior', () => {
   describe('thread opening (not-open -> open)', () => {
     it('should add participant and updater as followers when thread opens', async () => {
       const payload = createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'not_started',
         new_status: 'waiting_for_trainer',
       });
 
       await handleThreadStatusChanged(payload);
 
-      const followers = await threadFollows.getFollowers({ participantId: 'participant-1', itemId: '1000' });
-      expect(followers.map(f => f.userId).sort()).toEqual([ 'participant-1', 'trainer-1' ]);
+      const followers = await threadFollows.getFollowers({ participantId: '201', itemId: '1000' });
+      expect(followers.map(f => f.userId).sort()).toEqual([ '201', '301' ]);
     });
 
     it('should only add participant once when updater is the same as participant', async () => {
       const payload = createMockPayload({
-        participant_id: 'user-1',
-        updated_by: 'user-1',
+        participant_id: '201',
+        updated_by: '201',
         former_status: 'closed',
         new_status: 'waiting_for_participant',
       });
 
       await handleThreadStatusChanged(payload);
 
-      const followers = await threadFollows.getFollowers({ participantId: 'user-1', itemId: '1000' });
+      const followers = await threadFollows.getFollowers({ participantId: '201', itemId: '1000' });
       expect(followers).toHaveLength(1);
-      expect(followers[0]?.userId).toBe('user-1');
+      expect(followers[0]?.userId).toBe('201');
     });
 
     it('should remove TTL from existing followers and not create duplicates', async () => {
       const ttl = Math.floor(Date.now() / 1000) + 3600;
-      const testThreadId = { participantId: 'participant-1', itemId: '1000' };
+      const testThreadId = { participantId: '201', itemId: '1000' };
 
-      await threadFollows.insert(testThreadId, 'participant-1', ttl);
-      await threadFollows.insert(testThreadId, 'existing-follower', ttl);
+      await threadFollows.insert(testThreadId, '201', ttl);
+      await threadFollows.insert(testThreadId, '401', ttl);
 
       const payload = createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'not_started',
         new_status: 'waiting_for_trainer',
       });
@@ -105,9 +105,9 @@ describe('handleThreadStatusChanged - follower behavior', () => {
       await handleThreadStatusChanged(payload);
 
       const followers = await threadFollows.getFollowers(testThreadId);
-      expect(followers.map(f => f.userId).sort()).toEqual([ 'existing-follower', 'participant-1', 'trainer-1' ]);
+      expect(followers.map(f => f.userId).sort()).toEqual([ '201', '301', '401' ]);
 
-      const pk = `${process.env.STAGE}#THREAD#participant-1#1000#FOLLOW`;
+      const pk = `${process.env.STAGE}#THREAD#201#1000#FOLLOW`;
       const result = await dynamodb.executeStatement({
         Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
@@ -120,21 +120,21 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
   describe('thread closing (open -> not-open)', () => {
     it('should set TTL on all followers when thread closes', async () => {
-      const testThreadId = { participantId: 'participant-1', itemId: '1000' };
+      const testThreadId = { participantId: '201', itemId: '1000' };
 
-      await threadFollows.insert(testThreadId, 'user-1');
-      await threadFollows.insert(testThreadId, 'user-2');
+      await threadFollows.insert(testThreadId, '100');
+      await threadFollows.insert(testThreadId, '200');
 
       const payload = createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'waiting_for_trainer',
         new_status: 'closed',
       });
 
       await handleThreadStatusChanged(payload);
 
-      const pk = `${process.env.STAGE}#THREAD#participant-1#1000#FOLLOW`;
+      const pk = `${process.env.STAGE}#THREAD#201#1000#FOLLOW`;
       const result = await dynamodb.executeStatement({
         Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
@@ -151,8 +151,8 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
     it('should handle closing thread with no followers gracefully', async () => {
       const payload = createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'waiting_for_participant',
         new_status: 'closed',
       });
@@ -163,12 +163,12 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
   describe('no-op transitions', () => {
     it('should not modify followers for open -> open transitions', async () => {
-      const testThreadId = { participantId: 'participant-1', itemId: '1000' };
-      await threadFollows.insert(testThreadId, 'existing-user');
+      const testThreadId = { participantId: '201', itemId: '1000' };
+      await threadFollows.insert(testThreadId, '501');
 
       const payload = createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'waiting_for_participant',
         new_status: 'waiting_for_trainer',
       });
@@ -177,24 +177,24 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
       const followers = await threadFollows.getFollowers(testThreadId);
       expect(followers).toHaveLength(1);
-      expect(followers[0]?.userId).toBe('existing-user');
+      expect(followers[0]?.userId).toBe('501');
     });
 
     it('should not modify followers for closed -> closed transitions', async () => {
-      const testThreadId = { participantId: 'participant-1', itemId: '1000' };
+      const testThreadId = { participantId: '201', itemId: '1000' };
       const ttl = Math.floor(Date.now() / 1000) + 3600;
-      await threadFollows.insert(testThreadId, 'existing-user', ttl);
+      await threadFollows.insert(testThreadId, '501', ttl);
 
       const payload = createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'closed',
         new_status: 'closed',
       });
 
       await handleThreadStatusChanged(payload);
 
-      const pk = `${process.env.STAGE}#THREAD#participant-1#1000#FOLLOW`;
+      const pk = `${process.env.STAGE}#THREAD#201#1000#FOLLOW`;
       const result = await dynamodb.executeStatement({
         Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
