@@ -133,17 +133,21 @@ AlgoreaServerless/
 │   │   ├── live-activity-subscriptions.ts  # Live activity subscription model
 │   │   ├── notifications.ts  # User notifications model
 │   │   ├── user-connections.ts  # WebSocket user connections model
+│   │   ├── validations.ts  # Live activity validations model
 │   │   └── table.ts       # Base table class
 │   ├── events/            # Shared event definitions (schema + defineEvent)
 │   │   ├── grade-saved.ts
 │   │   ├── submission-created.ts
 │   │   └── thread-status-changed.ts
 │   ├── handlers/          # App-level request handlers
+│   │   ├── grade-saved.ts  # Root-level grade_saved event handler (validations)
 │   │   ├── live-activity-subscription.ts  # Live activity WS handlers
-│   │   └── notifications.ts  # Notification handlers
+│   │   ├── notifications.ts  # Notification handlers
+│   │   └── validations.ts  # Validation REST handlers
 │   ├── routes/            # App-level route registration
 │   │   ├── live-activity.ts  # Live activity WS action registration
-│   │   └── notifications.ts  # Notification routes
+│   │   ├── notifications.ts  # Notification routes
+│   │   └── validations.ts  # Validation routes + event handler registration
 │   ├── forum/             # Forum feature module
 │   │   ├── routes.ts      # Route and action registration
 │   │   ├── dbmodels/      # Forum-specific database models
@@ -233,6 +237,8 @@ Built on the `lambda-api` library with:
   - `GET /` - List user notifications (last 20)
   - `DELETE /:sk` - Delete notification by sk, or all if sk="all"
   - `PUT /:sk/mark-as-read` - Mark notification as read/unread
+- **Validation Routes** (`/sls/validations`):
+  - `GET /` - List latest 30 validations (newest first, requires identity token)
 - **Common Routes**:
   - `OPTIONS /*` - CORS preflight handling
 
@@ -303,6 +309,9 @@ async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvel
 - `thread_status_changed` - Triggered when a thread's status changes (e.g., waiting_for_trainer)
 - `grade_saved` - Triggered when a grade is saved for an answer
 
+#### Root-Level Event Handlers
+- `grade_saved` - Persists a validation record when both `validated=true` and `score_improved=true`
+
 ### 5. Database Layer
 
 #### DynamoDB Configuration (`src/dynamodb.ts`)
@@ -335,6 +344,7 @@ export const userConnectionsTable = new UserConnections(dynamodb);
 - `threadFollowsTable` - Thread follow management
 - `threadEventsTable` - Thread messages and events
 - `notificationsTable` - User notifications
+- `validationsTable` - Live activity validations
 
 **Rationale**: Table classes are stateless (only hold a reference to the shared `dynamodb` client). Singletons eliminate redundant instantiation and simplify function signatures by removing dependency injection parameters.
 
@@ -375,6 +385,12 @@ await userConnectionsTable.insert(connectionId, userId);
 - No userId stored; the connection is already authenticated on `$connect`
 - Single partition key for all subscribers (global, not scoped to a thread)
 - Auto-cleanup via DynamoDB TTL
+
+**Validations** (`src/dbmodels/validations.ts`)
+- Stores successful item validations from grade_saved events (where validated=true and score_improved=true)
+- Schema: `pk` (`{stage}#VALIDATIONS`), `sk` (envelope time in milliseconds), `participantId`, `itemId`, `answerId`, `ttl` (2 weeks)
+- Single global partition key (not scoped to a user or thread)
+- Used by the REST endpoint to return the latest validations
 
 **Notifications** (`src/dbmodels/notifications.ts`)
 - Stores per-user notifications with auto-expiration
@@ -552,6 +568,16 @@ ttl: {timestamp + 7200} (2 hours)
 pk: {STAGE}#THREAD#{participantId}#{itemId}#FOLLOW
 sk: {timestamp}
 userId: string
+```
+
+#### Validations
+```
+pk: {STAGE}#VALIDATIONS
+sk: {envelope time in milliseconds}
+participantId: string
+itemId: string
+answerId: string
+ttl: {current time + 2 weeks} (seconds since epoch)
 ```
 
 #### User Notifications

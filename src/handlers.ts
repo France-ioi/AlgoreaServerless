@@ -5,6 +5,7 @@ import createEventBusServer from './utils/lambda-eventbus-server';
 import { forumRoutes, forumWsActions, forumEventHandlers } from './forum/routes';
 import { portalRoutes } from './portal/routes';
 import { notificationRoutes } from './routes/notifications';
+import { validationRoutes, validationEventHandlers } from './routes/validations';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
 import { liveActivityWsActions } from './routes/live-activity';
@@ -30,6 +31,7 @@ api.options('/*', () => ({}));
 api.register(forumRoutes, { prefix: '/forum' });
 api.register(portalRoutes, { prefix: '/portal' });
 api.register(notificationRoutes, { prefix: '/notifications' });
+api.register(validationRoutes, { prefix: '/validations' });
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,6 +58,7 @@ const ebServer = createEventBusServer();
 
 // Event handlers registration
 ebServer.register(forumEventHandlers);
+ebServer.register(validationEventHandlers);
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////
