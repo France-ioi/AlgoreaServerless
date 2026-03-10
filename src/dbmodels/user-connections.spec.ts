@@ -80,6 +80,14 @@ describe('UserConnections', () => {
       expect(connections).toContain(connC);
     });
 
+    it('should round-trip short connectionIds that encode to JS-safe numbers', async () => {
+      const shortConn = 'Aw=='; // 1 byte [3] → sk = 3
+      await userConnections.insert(shortConn, 'user-short');
+
+      const connections = await userConnections.getAll('user-short');
+      expect(connections).toEqual([ shortConn ]);
+    });
+
   });
 
   describe('delete', () => {
