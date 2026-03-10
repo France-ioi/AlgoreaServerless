@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: March 9, 2026
+**Last Updated**: March 10, 2026
 
 ## Overview
 
@@ -184,6 +184,7 @@ AlgoreaServerless/
 │   │   │   ├── event-definition.ts
 │   │   │   ├── event-envelope.ts
 │   │   │   └── logger.ts
+│   │   ├── connection-id-number.ts  # ConnectionId ↔ DynamoDB NumberValue conversion
 │   │   ├── errors.ts      # Custom error classes
 │   │   ├── predicates.ts  # Type guards and validators
 │   │   └── rest-responses.ts
@@ -369,7 +370,8 @@ await userConnectionsTable.insert(connectionId, userId);
 
 **LiveActivitySubscriptions** (`src/dbmodels/live-activity-subscriptions.ts`)
 - Manages WebSocket connection subscriptions to live activity updates
-- Schema: `pk` (`{stage}#LIVE_ACTIVITY#SUB`), `sk` (subscription time), `connectionId`, `ttl` (2 hours)
+- Schema: `pk` (`{stage}#LIVE_ACTIVITY#SUB`), `sk` (connectionId encoded as number), `connectionId` (string, debugging only), `ttl` (2 hours)
+- The sk is the connectionId base64 bytes interpreted as a big-endian unsigned integer (via `connectionIdToNumberValue`), enabling direct delete by connectionId without a query
 - No userId stored; the connection is already authenticated on `$connect`
 - Single partition key for all subscribers (global, not scoped to a thread)
 - Auto-cleanup via DynamoDB TTL
@@ -540,8 +542,8 @@ ttl: {timestamp + 7200} (2 hours)
 #### Live Activity Subscriptions
 ```
 pk: {STAGE}#LIVE_ACTIVITY#SUB
-sk: {timestamp}
-connectionId: string
+sk: {connectionId as number} (base64 → big-endian unsigned integer, stored as DynamoDB Number)
+connectionId: string (debugging only, not read back)
 ttl: {timestamp + 7200} (2 hours)
 ```
 

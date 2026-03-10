@@ -26,14 +26,8 @@ const subKeysSchema = z.object({ pk: z.string(), sk: dbNumber });
 /**
  * Cleans up a gone WebSocket connection by removing:
  * 1. The user connection entry
- * 2. The thread subscription (if any)
- * 3. The live activity subscription (if any)
- *
- * This is the single cleanup function used for all gone connection scenarios.
- * Even when subscription keys are already known by the caller, this function
- * doesn't benefit from them because userConnections.delete() must read the
- * connection entry anyway (to get userId and creationTime), and that read
- * returns subscriptionKeys for free.
+ * 2. The thread subscription (if any, via stored keys)
+ * 3. The live activity subscription (if any, via direct connectionId delete)
  *
  * @param connectionId - The connection to clean up
  * @returns The userId if the connection was found, undefined otherwise
@@ -47,10 +41,7 @@ export async function cleanupGoneConnection(connectionId: ConnectionId): Promise
     await threadSubscriptionsTable.deleteByKeys(threadSubKeys.data);
   }
 
-  const liveActivitySubKeys = subKeysSchema.safeParse(connInfo['liveActivitySubscriptionKeys']);
-  if (liveActivitySubKeys.success) {
-    await liveActivitySubscriptionsTable.deleteByKeys(liveActivitySubKeys.data);
-  }
+  await liveActivitySubscriptionsTable.deleteByConnectionId(connectionId); // no-op if not subscribed
 
   return { userId: connInfo.userId };
 }
