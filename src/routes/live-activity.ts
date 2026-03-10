@@ -1,7 +1,7 @@
 import { WsServer } from '../utils/lambda-ws-server';
 import { EventBusServer } from '../utils/lambda-eventbus-server';
 import { subscribe, unsubscribe } from '../handlers/live-activity-subscription';
-import { handleGradeSaved } from '../handlers/live-activity-grade-saved';
+import { handleGradeSaved } from '../handlers/task-validation-broadcast';
 import { gradeSavedEvent } from '../events/grade-saved';
 
 const wsActions = (ws: WsServer): void => {

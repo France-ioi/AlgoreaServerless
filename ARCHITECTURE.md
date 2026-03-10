@@ -140,7 +140,8 @@ AlgoreaServerless/
 │   │   ├── submission-created.ts
 │   │   └── thread-status-changed.ts
 │   ├── handlers/          # App-level request handlers
-│   │   ├── grade-saved.ts  # Root-level grade_saved event handler (validations)
+│   │   ├── task-validation-storage.ts  # Root-level grade_saved event handler (validations)
+│   │   ├── task-validation-broadcast.ts  # Broadcasts validations to live activity subscribers
 │   │   ├── live-activity-subscription.ts  # Live activity WS handlers
 │   │   ├── notifications.ts  # Notification handlers
 │   │   └── validations.ts  # Validation REST handlers

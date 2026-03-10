@@ -7,7 +7,7 @@ jest.mock('../websocket-client', () => ({
   wsClient: { send: mockSend },
 }));
 
-import { handleGradeSaved } from './live-activity-grade-saved';
+import { handleGradeSaved } from './task-validation-broadcast';
 import { GradeSavedPayload } from '../events/grade-saved';
 import { EventEnvelope } from '../utils/lambda-eventbus-server';
 import { LiveActivitySubscriptions } from '../dbmodels/live-activity-subscriptions';

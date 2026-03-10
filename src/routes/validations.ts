@@ -2,7 +2,7 @@ import { API } from 'lambda-api';
 import { EventBusServer } from '../utils/lambda-eventbus-server';
 import { requireIdentityToken } from '../auth/identity-token-middleware';
 import { getLatestValidations } from '../handlers/validations';
-import { handleGradeSaved } from '../handlers/grade-saved';
+import { handleGradeSaved } from '../handlers/task-validation-storage';
 import { gradeSavedEvent } from '../events/grade-saved';
 
 const restRoutes = (api: API): void => {

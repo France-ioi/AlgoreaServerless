@@ -1,4 +1,4 @@
-import { handleGradeSaved } from './grade-saved';
+import { handleGradeSaved } from './task-validation-storage';
 import { EventEnvelope } from '../utils/lambda-eventbus-server';
 import { GradeSavedPayload } from '../events/grade-saved';
 import { Validations } from '../dbmodels/validations';
