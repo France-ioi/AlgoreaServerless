@@ -58,7 +58,7 @@ export class Table {
         }));
       }
     } catch (err) {
-      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(statements));
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(statements), { cause: err });
       else throw err;
     }
   }
@@ -87,7 +87,7 @@ export class Table {
       return output.Items as Record<string, unknown>[];
     } catch (err) {
       if (err instanceof DBError) throw err;
-      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(statement));
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(statement), { cause: err });
       else throw err;
     }
   }
@@ -160,7 +160,7 @@ export class Table {
       if (!output.Items) return [];
       return output.Items as Record<string, unknown>[];
     } catch (err) {
-      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(params));
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(params), { cause: err });
       else throw err;
     }
   }

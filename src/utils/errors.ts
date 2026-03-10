@@ -27,8 +27,8 @@ export function errorToString(err: unknown): string {
 
 export class DBError extends Error {
   details: string;
-  constructor(message: string /* error description */, details: string /* statement details */) {
-    super(message);
+  constructor(message: string /* error description */, details: string /* statement details */, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'DBError';
     this.details = details;
   }

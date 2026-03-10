@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { dbNumber, docClient } from '../dynamodb';
 import { connectionIdToNumberValue, dbConnectionId } from '../utils/connection-id-number';
 import { safeParseArray } from '../utils/zod-utils';
+import { DBError } from '../utils/errors';
 
 export type ConnectionId = string;
 export type UserId = string;
@@ -134,10 +135,7 @@ export class UserConnections extends Table {
     try {
       await this.sqlWrite({ query, params });
     } catch (err) {
-      // Ignore ConditionalCheckFailedException - connection might have been deleted or TTL'd
-      if (err instanceof Error && err.message.includes('ConditionalCheckFailedException')) {
-        return;
-      }
+      if (err instanceof DBError && err.cause instanceof Error && err.cause.name.includes('ConditionalCheckFailed')) return;
       throw err;
     }
   }
