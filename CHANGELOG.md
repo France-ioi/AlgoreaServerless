@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.2.0 - 2026-03-10
+
+- new rest service to get latest activities (global)
+- new WS messages to (un)subscribe to live activities (received by WS)
+- remove unused GitHub Actions
+
 ## 2.1.4 - 2026-02-04
 - fix a bug on the GET follow service
 
