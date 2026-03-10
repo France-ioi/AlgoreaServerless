@@ -11,11 +11,11 @@ describe('dbNumber', () => {
   });
 
   it('should convert NumberValue to a JS number', () => {
-    expect(dbNumber.parse(new NumberValue(123))).toBe(123);
-    expect(dbNumber.parse(new NumberValue('456'))).toBe(456);
-    expect(dbNumber.parse(new NumberValue('0'))).toBe(0);
-    expect(dbNumber.parse(new NumberValue('-42'))).toBe(-42);
-    expect(dbNumber.parse(new NumberValue('3.14'))).toBe(3.14);
+    expect(dbNumber.parse(NumberValue.from(123))).toBe(123);
+    expect(dbNumber.parse(NumberValue.from('456'))).toBe(456);
+    expect(dbNumber.parse(NumberValue.from('0'))).toBe(0);
+    expect(dbNumber.parse(NumberValue.from('-42'))).toBe(-42);
+    expect(dbNumber.parse(NumberValue.from('3.14'))).toBe(3.14);
   });
 
   it('should reject non-number values', () => {

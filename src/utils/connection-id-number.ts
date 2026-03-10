@@ -16,7 +16,7 @@ export function connectionIdToNumberValue(connectionId: string): NumberValue {
   for (const byte of bytes) {
     n = (n << BIGINT_8) | BigInt(byte);
   }
-  return new NumberValue(n.toString());
+  return NumberValue.from(n.toString());
 }
 
 function numberValueToConnectionId(nv: NumberValue): string {
