@@ -1,7 +1,7 @@
 import { Table } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
-import { dbNumber, docClient } from '../../dynamodb';
+import { safeNumber, docClient } from '../../dynamodb';
 import { NumberValue } from '@aws-sdk/lib-dynamodb';
 import { id64 } from '../../utils/id64';
 import { DBError } from '../../utils/errors';
@@ -25,7 +25,7 @@ function pk(thread: ThreadId): string {
 const threadFollowSchema = z.object({
   pk: z.string(),
   sk: id64,
-  ttl: dbNumber.optional(),
+  ttl: safeNumber.optional(),
 });
 
 export type ThreadFollow = z.infer<typeof threadFollowSchema>;

@@ -1,5 +1,5 @@
 import { Table } from './table';
-import { dbNumber, docClient } from '../dynamodb';
+import { safeNumber, docClient } from '../dynamodb';
 import { clearTable, getAll } from '../testutils/db';
 
 describe('Table', () => {
@@ -88,7 +88,7 @@ describe('Table', () => {
 
       expect(results).toHaveLength(1);
       expect(results[0]?.pk).toBe('test-pk-1');
-      expect(dbNumber.parse(results[0]?.sk)).toBe(1000);
+      expect(safeNumber.parse(results[0]?.sk)).toBe(1000);
     });
   });
 
@@ -106,7 +106,7 @@ describe('Table', () => {
 
       expect(results).toHaveLength(1);
       expect(results[0]?.pk).toBe('test-pk');
-      expect(dbNumber.parse(results[0]?.sk)).toBe(123);
+      expect(safeNumber.parse(results[0]?.sk)).toBe(123);
       expect(results[0]?.data).toBe('test-data');
     });
 

@@ -39,7 +39,7 @@ export const dynamodb = dynamodbClient;
  * DynamoDB Document Client with automatic marshalling/unmarshalling.
  * Numbers are returned as NumberValue (wrapNumbers: true) to preserve precision
  * for large numbers (e.g. int64 IDs, base64-encoded connection IDs used as sort keys).
- * Use `dbNumber` Zod schema to parse NumberValue back to JS number when safe.
+ * Use `safeNumber` Zod schema to parse NumberValue back to JS number when safe.
  */
 export const docClient = DynamoDBDocumentClient.from(dynamodbClient, {
   marshallOptions: {
@@ -55,7 +55,7 @@ export const docClient = DynamoDBDocumentClient.from(dynamodbClient, {
  * Zod schema that parses DynamoDB NumberValue (from wrapNumbers: true) into a JS number.
  * Use this in all Zod schemas for number fields returned from DynamoDB.
  */
-export const dbNumber = z.union([
+export const safeNumber = z.union([
   z.number(),
   z.instanceof(NumberValue).transform(n => Number(n.value)),
 ]);

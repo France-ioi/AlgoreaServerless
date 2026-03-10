@@ -1,6 +1,6 @@
 import { Table, wsConnectionTtl } from './table';
 import { z } from 'zod';
-import { dbNumber, docClient } from '../dynamodb';
+import { safeNumber, docClient } from '../dynamodb';
 import { connectionIdToNumberValue, dbConnectionId } from '../utils/connection-id-number';
 import { safeParseArray } from '../utils/zod-utils';
 import { DBError } from '../utils/errors';
@@ -20,7 +20,7 @@ function u2cPk(userId: UserId): string {
 
 const c2uEntrySchema = z.looseObject({
   userId: z.string(),
-  creationTime: dbNumber,
+  creationTime: safeNumber,
 });
 
 type C2uEntry = z.infer<typeof c2uEntrySchema>;

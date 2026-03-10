@@ -3,11 +3,11 @@ import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { ExecuteStatementCommand, ExecuteTransactionCommand, BatchWriteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { DBError } from '../utils/errors';
 import { z } from 'zod';
-import { dbNumber } from '../dynamodb';
+import { safeNumber } from '../dynamodb';
 
 export const tableKeySchema = z.object({
   pk: z.string(),
-  sk: dbNumber,
+  sk: safeNumber,
 });
 
 export type TableKey = z.infer<typeof tableKeySchema>;

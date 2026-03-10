@@ -1,6 +1,6 @@
 import { Table, TableKey } from './table';
 import { z } from 'zod';
-import { dbNumber, docClient } from '../dynamodb';
+import { safeNumber, docClient } from '../dynamodb';
 import { safeParseArray } from '../utils/zod-utils';
 
 /**
@@ -21,10 +21,10 @@ function pk(userId: string): string {
 }
 
 export const notificationSchema = z.object({
-  sk: dbNumber,
+  sk: safeNumber,
   notificationType: z.string(),
   payload: z.record(z.string(), z.unknown()),
-  readTime: dbNumber.optional(),
+  readTime: safeNumber.optional(),
 });
 
 export type Notification = z.infer<typeof notificationSchema>;
@@ -94,7 +94,7 @@ export class Notifications extends Table {
     if (results.length === 0) return;
 
     // Delete them in batches
-    const skSchema = z.object({ sk: dbNumber });
+    const skSchema = z.object({ sk: safeNumber });
     const keys: TableKey[] = safeParseArray(results, skSchema, 'notification sk')
       .map(r => ({ pk: pk(userId), sk: r.sk }));
 

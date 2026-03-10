@@ -1,5 +1,5 @@
 import { UserConnections } from './user-connections';
-import { dbNumber, docClient, dynamodb } from '../dynamodb';
+import { safeNumber, docClient, dynamodb } from '../dynamodb';
 import { clearTable } from '../testutils/db';
 import { connectionIdToNumberValue } from '../utils/connection-id-number';
 import { z } from 'zod';
@@ -256,7 +256,7 @@ describe('UserConnections', () => {
       const result = await userConnections.delete(connG);
 
       expect(result).not.toBeNull();
-      const subKeysSchema = z.object({ pk: z.string(), sk: dbNumber });
+      const subKeysSchema = z.object({ pk: z.string(), sk: safeNumber });
       expect(subKeysSchema.parse(result?.subscriptionKeys)).toEqual(subscriptionKeys);
     });
 
