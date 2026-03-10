@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: January 27, 2026
+**Last Updated**: March 10, 2026
 
 ## Overview
 
@@ -105,10 +105,12 @@ AlgoreaServerless is a serverless backend application designed to provide forum/
 1. Backend service publishes event to EventBridge
 2. EventBridge rule triggers Lambda function
 3. `globalHandler` detects `detail-type` field and routes to EventBus server
-4. EventBus server parses common envelope (version, type, payload, etc.)
-5. EventBus server validates event version against handler requirements
-6. Matching handlers receive the parsed envelope and process the event
-7. Multiple handlers can react to the same event type (run in parallel)
+4. EventBus server checks for registered handlers (no parsing if none registered)
+5. EventBus server parses common envelope (version, type, payload, etc.)
+6. EventBus server parses the payload once using the schema from the event definition
+7. EventBus server validates event version against handler requirements
+8. Matching handlers receive the typed payload and envelope, and process the event
+9. Multiple handlers can react to the same event type (run in parallel)
 
 ## Project Structure
 
@@ -128,13 +130,25 @@ AlgoreaServerless/
 │   │   ├── identity-token-middleware.ts  # Identity token middleware
 │   │   └── *.spec.ts      # Authentication tests
 │   ├── dbmodels/          # Shared database models and base classes
+│   │   ├── live-activity-subscriptions.ts  # Live activity subscription model
 │   │   ├── notifications.ts  # User notifications model
 │   │   ├── user-connections.ts  # WebSocket user connections model
+│   │   ├── validations.ts  # Live activity validations model
 │   │   └── table.ts       # Base table class
+│   ├── events/            # Shared event definitions (schema + defineEvent)
+│   │   ├── grade-saved.ts
+│   │   ├── submission-created.ts
+│   │   └── thread-status-changed.ts
 │   ├── handlers/          # App-level request handlers
-│   │   └── notifications.ts  # Notification handlers
+│   │   ├── task-validation-storage.ts  # Root-level grade_saved event handler (validations)
+│   │   ├── task-validation-broadcast.ts  # Broadcasts validations to live activity subscribers
+│   │   ├── live-activity-subscription.ts  # Live activity WS handlers
+│   │   ├── notifications.ts  # Notification handlers
+│   │   └── validations.ts  # Validation REST handlers
 │   ├── routes/            # App-level route registration
-│   │   └── notifications.ts  # Notification routes
+│   │   ├── live-activity.ts  # Live activity WS action registration
+│   │   ├── notifications.ts  # Notification routes
+│   │   └── validations.ts  # Validation routes + event handler registration
 │   ├── forum/             # Forum feature module
 │   │   ├── routes.ts      # Route and action registration
 │   │   ├── dbmodels/      # Forum-specific database models
@@ -172,8 +186,10 @@ AlgoreaServerless/
 │   │   │   └── request.ts
 │   │   ├── lambda-eventbus-server/  # EventBridge server implementation
 │   │   │   ├── index.ts
+│   │   │   ├── event-definition.ts
 │   │   │   ├── event-envelope.ts
 │   │   │   └── logger.ts
+│   │   ├── connection-id-number.ts  # ConnectionId ↔ DynamoDB NumberValue conversion
 │   │   ├── errors.ts      # Custom error classes
 │   │   ├── predicates.ts  # Type guards and validators
 │   │   └── rest-responses.ts
@@ -222,6 +238,8 @@ Built on the `lambda-api` library with:
   - `GET /` - List user notifications (last 20)
   - `DELETE /:sk` - Delete notification by sk, or all if sk="all"
   - `PUT /:sk/mark-as-read` - Mark notification as read/unread
+- **Validation Routes** (`/sls/validations`):
+  - `GET /` - List latest 30 validations (newest first, requires identity token)
 - **Common Routes**:
   - `OPTIONS /*` - CORS preflight handling
 
@@ -234,11 +252,18 @@ Custom implementation inspired by `lambda-api`:
 - **Forum Actions**:
   - `forum.subscribe` - Subscribe to thread updates
   - `forum.unsubscribe` - Unsubscribe from thread
+- **Live Activity Actions**:
+  - `liveActivity.subscribe` - Subscribe to live activity updates
+  - `liveActivity.unsubscribe` - Unsubscribe from live activity updates
+- **Common Actions**:
   - `heartbeat` - Connection keep-alive
 
 ### 4. EventBus Server (`src/utils/lambda-eventbus-server/`)
 
 Custom implementation for handling EventBridge events:
+- **Typed Event Definitions**: Events are defined with `defineEvent(detailType, zodSchema)`, binding the Zod payload schema to the event type
+- **Single-Parse Dispatch**: The server parses the payload once per event, then passes the typed result to all handlers
+- **No-Op for Unregistered Events**: Neither envelope nor payload is parsed if no handlers are registered for the event type
 - **Event Envelope Parsing**: Common envelope structure with Zod validation
 - **Version Validation**: Handlers specify supported major version; events with higher versions are skipped
 - **Multiple Handlers**: Unlike REST/WebSocket, multiple handlers can react to the same event type
@@ -259,16 +284,34 @@ Events from the backend follow a common envelope format:
 }
 ```
 
-#### Handler Registration
-Handlers register with a detail-type and supported version:
+#### Typed Event Definitions
+Events are defined in `src/events/` by binding a detail-type string to a Zod payload schema using `defineEvent()`. This ensures the payload is parsed once by the server and handlers receive typed data:
 ```typescript
-eb.on('submission_created', handleSubmissionCreated, { supportedMajorVersion: 1 });
+// src/events/grade-saved.ts -- shared event definition
+const gradeSavedPayloadSchema = z.object({
+  answer_id: z.string(),
+  participant_id: z.string(),
+  // ...
+});
+export type GradeSavedPayload = z.infer<typeof gradeSavedPayloadSchema>;
+export const gradeSavedEvent = defineEvent('grade_saved', gradeSavedPayloadSchema);
+
+// src/forum/routes.ts -- register handler with event definition
+eb.on(gradeSavedEvent, handleGradeSaved, { supportedMajorVersion: 1 });
+
+// src/forum/handlers/grade-saved.ts -- receives typed payload + envelope metadata
+async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvelope): Promise<void> {
+  // payload is already validated and typed
+}
 ```
 
 #### Forum Event Handlers
 - `submission_created` - Triggered when a new submission is created
 - `thread_status_changed` - Triggered when a thread's status changes (e.g., waiting_for_trainer)
 - `grade_saved` - Triggered when a grade is saved for an answer
+
+#### Root-Level Event Handlers
+- `grade_saved` - Persists a validation record when both `validated=true` and `score_improved=true`
 
 ### 5. Database Layer
 
@@ -297,10 +340,12 @@ export const userConnectionsTable = new UserConnections(dynamodb);
 
 **Available singletons**:
 - `userConnectionsTable` - User WebSocket connections
+- `liveActivitySubscriptionsTable` - Live activity subscription management
 - `threadSubscriptionsTable` - Thread subscription management
 - `threadFollowsTable` - Thread follow management
 - `threadEventsTable` - Thread messages and events
 - `notificationsTable` - User notifications
+- `validationsTable` - Live activity validations
 
 **Rationale**: Table classes are stateless (only hold a reference to the shared `dynamodb` client). Singletons eliminate redundant instantiation and simplify function signatures by removing dependency injection parameters.
 
@@ -333,6 +378,20 @@ await userConnectionsTable.insert(connectionId, userId);
 - Schema: `pk` (thread identifier + #FOLLOW), `sk` (follow time), `userId`
 - Unlike subscriptions, follows persist across sessions
 - Used to determine who should receive notifications about thread activity
+
+**LiveActivitySubscriptions** (`src/dbmodels/live-activity-subscriptions.ts`)
+- Manages WebSocket connection subscriptions to live activity updates
+- Schema: `pk` (`{stage}#LIVE_ACTIVITY#SUB`), `sk` (connectionId encoded as number), `connectionId` (string, debugging only), `ttl` (2 hours)
+- The sk is the connectionId base64 bytes interpreted as a big-endian unsigned integer (via `connectionIdToNumberValue`), enabling direct delete by connectionId without a query
+- No userId stored; the connection is already authenticated on `$connect`
+- Single partition key for all subscribers (global, not scoped to a thread)
+- Auto-cleanup via DynamoDB TTL
+
+**Validations** (`src/dbmodels/validations.ts`)
+- Stores successful item validations from grade_saved events (where validated=true and score_improved=true)
+- Schema: `pk` (`{stage}#VALIDATIONS`), `sk` (envelope time in milliseconds), `participantId`, `itemId`, `answerId`, `ttl` (2 weeks)
+- Single global partition key (not scoped to a user or thread)
+- Used by the REST endpoint to return the latest validations
 
 **Notifications** (`src/dbmodels/notifications.ts`)
 - Stores per-user notifications with auto-expiration
@@ -497,11 +556,29 @@ userId: string
 ttl: {timestamp + 7200} (2 hours)
 ```
 
+#### Live Activity Subscriptions
+```
+pk: {STAGE}#LIVE_ACTIVITY#SUB
+sk: {connectionId as number} (base64 → big-endian unsigned integer, stored as DynamoDB Number)
+connectionId: string (debugging only, not read back)
+ttl: {timestamp + 7200} (2 hours)
+```
+
 #### Thread Follows
 ```
 pk: {STAGE}#THREAD#{participantId}#{itemId}#FOLLOW
 sk: {timestamp}
 userId: string
+```
+
+#### Validations
+```
+pk: {STAGE}#VALIDATIONS
+sk: {envelope time in milliseconds}
+participantId: string
+itemId: string
+answerId: string
+ttl: {current time + 2 weeks} (seconds since epoch)
 ```
 
 #### User Notifications

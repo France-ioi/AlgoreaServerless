@@ -1,35 +1,17 @@
-import { z } from 'zod';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
+import { GradeSavedPayload } from '../../events/grade-saved';
 import { threadSubscriptionsTable } from '../dbmodels/thread-subscriptions';
 import { ForumMessageAction } from '../ws-messages';
 import { broadcastAndCleanup } from '../../services/ws-broadcast';
 
-const gradeSavedPayloadSchema = z.object({
-  answer_id: z.string(),
-  participant_id: z.string(),
-  attempt_id: z.string(),
-  item_id: z.string(),
-  validated: z.boolean(),
-  caller_id: z.string(),
-  score: z.number(),
-});
-
-export type GradeSavedPayload = z.infer<typeof gradeSavedPayloadSchema>;
+export { GradeSavedPayload } from '../../events/grade-saved';
 
 /**
  * Handles the grade_saved event from EventBridge.
  * Triggered when a grade is saved for an answer.
  * Notifies all thread subscribers about the grade update.
  */
-export async function handleGradeSaved(envelope: EventEnvelope): Promise<void> {
-  const parseResult = gradeSavedPayloadSchema.safeParse(envelope.payload);
-
-  if (!parseResult.success) {
-    // eslint-disable-next-line no-console
-    console.error('Failed to parse grade_saved payload:', parseResult.error.message);
-    return;
-  }
-
+export async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvelope): Promise<void> {
   const {
     answer_id: answerId,
     participant_id: participantId,
@@ -37,12 +19,12 @@ export async function handleGradeSaved(envelope: EventEnvelope): Promise<void> {
     item_id: itemId,
     validated,
     score,
-  } = parseResult.data;
+    score_improved: scoreImproved,
+  } = payload;
   const time = new Date(envelope.time).getTime();
   const threadId = { participantId, itemId };
 
-  // Notify all subscribers and clean up gone connections
-  const subscribers = await threadSubscriptionsTable.getSubscribers({ threadId });
+  const subscribers = await threadSubscriptionsTable.getSubscribers(threadId);
   const wsMessage = {
     action: ForumMessageAction.GradeUpdate as const,
     answerId,
@@ -50,6 +32,7 @@ export async function handleGradeSaved(envelope: EventEnvelope): Promise<void> {
     itemId,
     attemptId,
     score,
+    scoreImproved,
     validated,
     time,
   };

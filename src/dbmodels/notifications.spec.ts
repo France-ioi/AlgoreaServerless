@@ -1,5 +1,5 @@
 import { Notifications } from './notifications';
-import { dynamodb } from '../dynamodb';
+import { docClient } from '../dynamodb';
 import { clearTable } from '../testutils/db';
 
 describe('Notifications', () => {
@@ -7,7 +7,7 @@ describe('Notifications', () => {
   const userId = 'user-123';
 
   beforeEach(async () => {
-    notifications = new Notifications(dynamodb);
+    notifications = new Notifications(docClient);
     await clearTable();
   });
 

@@ -5,8 +5,10 @@ import createEventBusServer from './utils/lambda-eventbus-server';
 import { forumRoutes, forumWsActions, forumEventHandlers } from './forum/routes';
 import { portalRoutes } from './portal/routes';
 import { notificationRoutes } from './routes/notifications';
+import { validationRoutes, validationEventHandlers } from './routes/validations';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
+import { liveActivityWsActions, liveActivityEventHandlers } from './routes/live-activity';
 import { handleConnect, handleDisconnect } from './websocket/handlers';
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +31,7 @@ api.options('/*', () => ({}));
 api.register(forumRoutes, { prefix: '/forum' });
 api.register(portalRoutes, { prefix: '/portal' });
 api.register(notificationRoutes, { prefix: '/notifications' });
+api.register(validationRoutes, { prefix: '/validations' });
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,6 +46,7 @@ wsServer.onDisconnect(handleDisconnect);
 
 // Action handlers
 wsServer.register(forumWsActions, { prefix: 'forum' });
+wsServer.register(liveActivityWsActions, { prefix: 'liveActivity' });
 wsServer.on('heartbeat', () => {});
 
 
@@ -54,6 +58,8 @@ const ebServer = createEventBusServer();
 
 // Event handlers registration
 ebServer.register(forumEventHandlers);
+ebServer.register(validationEventHandlers);
+ebServer.register(liveActivityEventHandlers);
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////

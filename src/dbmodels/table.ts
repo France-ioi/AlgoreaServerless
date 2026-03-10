@@ -1,11 +1,13 @@
-import { AttributeValue, DynamoDB, ExecuteStatementCommandOutput, QueryCommandOutput } from '@aws-sdk/client-dynamodb';
-import { fromDBItem, toDBItem, toDBParameters } from '../dynamodb';
+/* eslint-disable @typescript-eslint/naming-convention */
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { ExecuteStatementCommand, ExecuteTransactionCommand, BatchWriteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { DBError } from '../utils/errors';
 import { z } from 'zod';
+import { safeNumber } from '../dynamodb';
 
 export const tableKeySchema = z.object({
   pk: z.string(),
-  sk: z.number(),
+  sk: safeNumber,
 });
 
 export type TableKey = z.infer<typeof tableKeySchema>;
@@ -34,7 +36,7 @@ export function wsConnectionTtl(): number {
 export class Table {
   protected tableName: string;
 
-  constructor(protected db: DynamoDB) {
+  constructor(protected db: DynamoDBDocumentClient) {
     const tableName = process.env.TABLE_NAME;
     if (tableName === undefined || !tableName.length) throw new Error('env variable "TABLE_NAME" not set!');
     this.tableName = tableName;
@@ -42,18 +44,21 @@ export class Table {
 
   protected async sqlWrite(statements: DBStatement[]|DBStatement): Promise<void> {
     try {
-      /* eslint-disable @typescript-eslint/naming-convention */
       if (Array.isArray(statements)) {
-        await this.db.executeTransaction({
+        await this.db.send(new ExecuteTransactionCommand({
           TransactStatements: statements.map(s => ({
             Statement: s.query,
-            Parameters: toDBParameters(s.params),
+            Parameters: s.params,
           })),
-        });
-      } else await this.db.executeStatement({ Statement: statements.query, Parameters: toDBParameters(statements.params) });
-      /* eslint-enable @typescript-eslint/naming-convention */
+        }));
+      } else {
+        await this.db.send(new ExecuteStatementCommand({
+          Statement: statements.query,
+          Parameters: statements.params,
+        }));
+      }
     } catch (err) {
-      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(statements));
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(statements), { cause: err });
       else throw err;
     }
   }
@@ -72,39 +77,34 @@ export class Table {
    * Workaround: Use the query() method directly instead of PartiQL for these cases.
    */
   protected async sqlRead(statement: DBStatement): Promise<Record<string, unknown>[]> {
-    let output: ExecuteStatementCommandOutput;
     try {
-      /* eslint-disable @typescript-eslint/naming-convention */
-      output = await this.db.executeStatement({
+      const output = await this.db.send(new ExecuteStatementCommand({
         Statement: statement.query,
-        Parameters: toDBParameters(statement.params),
-        Limit: statement.limit
-      });
-      /* eslint-enable @typescript-eslint/naming-convention */
+        Parameters: statement.params,
+        Limit: statement.limit,
+      }));
+      if (!output.Items) throw new DBError('(unexpected) no items in output', JSON.stringify(statement));
+      return output.Items as Record<string, unknown>[];
     } catch (err) {
-      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(statement));
+      if (err instanceof DBError) throw err;
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(statement), { cause: err });
       else throw err;
     }
-    if (!output.Items) throw new DBError('(unexpected) no items in output', JSON.stringify(statement));
-    return output.Items.map(fromDBItem);
   }
 
   protected async batchUpdate<T extends TableKey>(items: T[]): Promise<void> {
-    const chunkSize = 25; // the max size of 'RequestItems' for the dynamoDB APi
+    const chunkSize = 25; // the max size of 'RequestItems' for the dynamoDB API
     for (let i = 0; i < items.length; i += chunkSize) {
-      await this.db.batchWriteItem({
-        /* eslint-disable @typescript-eslint/naming-convention */
+      await this.db.send(new BatchWriteCommand({
         RequestItems: {
-          [this.tableName]: items.slice(i, i + chunkSize).map(i => ({
+          [this.tableName]: items.slice(i, i + chunkSize).map(item => ({
             PutRequest: {
-              Item: toDBItem(i),
+              Item: item,
             },
           })),
-        }
-        /* eslint-enable @typescript-eslint/naming-convention */
-      });
+        },
+      }));
     }
-
   }
 
   protected async query(params: {
@@ -114,13 +114,11 @@ export class Table {
     limit?: number,
     scanIndexForward?: boolean,
   }): Promise<Record<string, unknown>[]> {
-    let output: QueryCommandOutput;
     try {
-      /* eslint-disable @typescript-eslint/naming-convention */
       const queryParams: {
         TableName: string,
         KeyConditionExpression: string,
-        ExpressionAttributeValues: Record<string, AttributeValue>,
+        ExpressionAttributeValues: Record<string, unknown>,
         ExpressionAttributeNames?: Record<string, string>,
         FilterExpression?: string,
         ProjectionExpression?: string,
@@ -129,23 +127,18 @@ export class Table {
       } = {
         TableName: this.tableName,
         KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: toDBItem({ ':pk': params.pk }),
+        ExpressionAttributeValues: { ':pk': params.pk },
         ScanIndexForward: params.scanIndexForward ?? true,
       };
 
       if (params.filter) {
         queryParams.FilterExpression = `${params.filter.attribute} = :filterValue`;
-        queryParams.ExpressionAttributeValues = {
-          ...queryParams.ExpressionAttributeValues,
-          ...toDBItem({ ':filterValue': params.filter.value }),
-        } as Record<string, AttributeValue>;
+        queryParams.ExpressionAttributeValues[':filterValue'] = params.filter.value;
       }
 
       if (params.projectionAttributes) {
-        // Handle reserved words like "data" by using ExpressionAttributeNames
         const expressionAttributeNames: Record<string, string> = {};
         queryParams.ProjectionExpression = params.projectionAttributes.map(attr => {
-          // Reserved words in DynamoDB need to be aliased
           const reservedWords = [ 'data', 'name', 'type', 'status', 'timestamp' ];
           if (reservedWords.includes(attr.toLowerCase())) {
             expressionAttributeNames[`#${attr}`] = attr;
@@ -153,7 +146,6 @@ export class Table {
           }
           return attr;
         }).join(', ');
-        // Only set ExpressionAttributeNames if it's not empty (DynamoDB rejects empty objects)
         if (Object.keys(expressionAttributeNames).length > 0) {
           queryParams.ExpressionAttributeNames = expressionAttributeNames;
         }
@@ -163,15 +155,13 @@ export class Table {
         queryParams.Limit = params.limit;
       }
 
-      output = await this.db.query(queryParams);
-      /* eslint-enable @typescript-eslint/naming-convention */
+      const output = await this.db.send(new QueryCommand(queryParams));
+
+      if (!output.Items) return [];
+      return output.Items as Record<string, unknown>[];
     } catch (err) {
-      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(params));
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(params), { cause: err });
       else throw err;
     }
-
-    if (!output.Items) return [];
-    return output.Items.map(fromDBItem);
   }
-
 }

@@ -3,7 +3,7 @@ import { IdentityToken } from '../auth/identity-token';
 import { RequestWithIdentityToken } from '../auth/identity-token-middleware';
 import { getNotifications, deleteNotification, markAsRead } from './notifications';
 import { Notifications } from '../dbmodels/notifications';
-import { dynamodb } from '../dynamodb';
+import { docClient } from '../dynamodb';
 
 /** Helper to create a mock request with identityToken already set (as middleware would do) */
 function mockRequestWithIdentityToken(
@@ -31,7 +31,7 @@ describe('Notification Handlers', () => {
   const identityToken: IdentityToken = { userId, exp: 9999999999 };
 
   beforeEach(async () => {
-    notifications = new Notifications(dynamodb);
+    notifications = new Notifications(docClient);
     await clearTable();
   });
 

@@ -6,6 +6,9 @@ import { subscribe, unsubscribe } from './handlers/thread-subscription';
 import { handleSubmissionCreated } from './handlers/submission-created';
 import { handleThreadStatusChanged } from './handlers/thread-status-changed';
 import { handleGradeSaved } from './handlers/grade-saved';
+import { submissionCreatedEvent } from '../events/submission-created';
+import { threadStatusChangedEvent } from '../events/thread-status-changed';
+import { gradeSavedEvent } from '../events/grade-saved';
 import { requireThreadToken } from './thread-token';
 import { requireIdentityToken } from '../auth/identity-token-middleware';
 import { followThread, unfollowThread, getFollowStatus } from './handlers/thread-follow';
@@ -29,9 +32,9 @@ const wsActions = (ws: WsServer): void => {
 };
 
 const eventHandlers = (eb: EventBusServer): void => {
-  eb.on('submission_created', handleSubmissionCreated, { supportedMajorVersion: 1 });
-  eb.on('thread_status_changed', handleThreadStatusChanged, { supportedMajorVersion: 1 });
-  eb.on('grade_saved', handleGradeSaved, { supportedMajorVersion: 1 });
+  eb.on(submissionCreatedEvent, handleSubmissionCreated, { supportedMajorVersion: 1 });
+  eb.on(threadStatusChangedEvent, handleThreadStatusChanged, { supportedMajorVersion: 1 });
+  eb.on(gradeSavedEvent, handleGradeSaved, { supportedMajorVersion: 1 });
 };
 
 export { restRoutes as forumRoutes, wsActions as forumWsActions, eventHandlers as forumEventHandlers };

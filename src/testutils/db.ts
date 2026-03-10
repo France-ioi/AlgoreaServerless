@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { QueryCommandOutput } from '@aws-sdk/client-dynamodb';
-import { dynamodb, toDBItem } from '../dynamodb';
+import { PutCommand, ScanCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { docClient } from '../dynamodb';
 
 const getTableName = (): string => {
   const tableName = process.env.TABLE_NAME;
@@ -9,26 +9,29 @@ const getTableName = (): string => {
 };
 
 const putItem = async (data: Record<string, unknown>): Promise<void> => {
-  await dynamodb.putItem({
+  await docClient.send(new PutCommand({
     TableName: getTableName(),
-    Item: toDBItem(data),
-  });
+    Item: data,
+  }));
 };
 
 export const loadFixture = async (data: Record<string, unknown>[]): Promise<void> => {
   await Promise.all(data.map(putItem));
 };
 
-export const getAll = (): Promise<QueryCommandOutput> => dynamodb.scan({ TableName: getTableName() });
+export const getAll = async (): Promise<Record<string, unknown>[]> => {
+  const result = await docClient.send(new ScanCommand({ TableName: getTableName() }));
+  return (result.Items ?? []) as Record<string, unknown>[];
+};
 
 export const deleteAll = async (): Promise<void> => {
-  const result = await getAll();
-  await Promise.all((result.Items || []).map(item => {
+  const items = await getAll();
+  await Promise.all(items.map(item => {
     if (!item.pk || !item.sk) return;
-    return dynamodb.deleteItem({
+    return docClient.send(new DeleteCommand({
       TableName: getTableName(),
       Key: { pk: item.pk, sk: item.sk },
-    });
+    }));
   }));
 };
 

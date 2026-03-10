@@ -1,7 +1,6 @@
 import { handleThreadStatusChanged, ThreadStatusChangedPayload } from './thread-status-changed';
-import { EventEnvelope } from '../../utils/lambda-eventbus-server';
 import { ThreadFollows } from '../dbmodels/thread-follows';
-import { dynamodb } from '../../dynamodb';
+import { docClient, dynamodb } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { ThreadId } from '../dbmodels/thread';
 
@@ -12,77 +11,34 @@ function createMockPayload(overrides?: Partial<ThreadStatusChangedPayload>): Thr
     new_status: 'waiting_for_trainer',
     former_status: 'not_started',
     helper_group_id: '100',
-    updated_by: 'trainer-1',
+    updated_by: '301',
     ...overrides,
-  };
-}
-
-function createMockEnvelope(payload: unknown = createMockPayload()): EventEnvelope {
-  return {
-    version: '1.0',
-    type: 'thread_status_changed',
-    source_app: 'algoreabackend',
-    instance: 'dev',
-    time: '2026-01-23T14:36:20.392285135Z',
-    request_id: 'test-request-123',
-    payload,
   };
 }
 
 describe('handleThreadStatusChanged', () => {
   let consoleLogSpy: jest.SpyInstance;
-  let consoleErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
   });
 
   afterEach(() => {
     consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
   });
 
   describe('successful parsing', () => {
     it('should handle events with all required fields without throwing', async () => {
-      const envelope = createMockEnvelope();
-
-      await expect(handleThreadStatusChanged(envelope)).resolves.not.toThrow();
+      const payload = createMockPayload();
+      await expect(handleThreadStatusChanged(payload)).resolves.not.toThrow();
     });
 
     it('should handle different status values without throwing', async () => {
-      const envelope = createMockEnvelope(createMockPayload({
+      const payload = createMockPayload({
         new_status: 'closed',
         former_status: 'waiting_for_participant',
-      }));
-
-      await expect(handleThreadStatusChanged(envelope)).resolves.not.toThrow();
-    });
-  });
-
-  describe('invalid payload handling', () => {
-    it('should log error for missing required fields', async () => {
-      const envelope = createMockEnvelope({
-        participant_id: '3',
-        // missing other required fields
       });
-
-      await handleThreadStatusChanged(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to parse thread_status_changed payload:',
-        expect.any(String)
-      );
-      expect(consoleLogSpy).not.toHaveBeenCalled();
-    });
-
-    it('should log error for null payload', async () => {
-      const envelope = createMockEnvelope(null);
-
-      await handleThreadStatusChanged(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(consoleLogSpy).not.toHaveBeenCalled();
+      await expect(handleThreadStatusChanged(payload)).resolves.not.toThrow();
     });
   });
 });
@@ -94,7 +50,7 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
   beforeEach(async () => {
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    threadFollows = new ThreadFollows(dynamodb);
+    threadFollows = new ThreadFollows(docClient);
     await clearTable();
   });
 
@@ -104,57 +60,54 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
   describe('thread opening (not-open -> open)', () => {
     it('should add participant and updater as followers when thread opens', async () => {
-      const envelope = createMockEnvelope(createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+      const payload = createMockPayload({
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'not_started',
         new_status: 'waiting_for_trainer',
-      }));
+      });
 
-      await handleThreadStatusChanged(envelope);
+      await handleThreadStatusChanged(payload);
 
-      const followers = await threadFollows.getFollowers({ participantId: 'participant-1', itemId: '1000' });
-      expect(followers.map(f => f.userId).sort()).toEqual([ 'participant-1', 'trainer-1' ]);
+      const followers = await threadFollows.getFollowers({ participantId: '201', itemId: '1000' });
+      expect(followers.map(f => f.userId).sort()).toEqual([ '201', '301' ]);
     });
 
     it('should only add participant once when updater is the same as participant', async () => {
-      const envelope = createMockEnvelope(createMockPayload({
-        participant_id: 'user-1',
-        updated_by: 'user-1',
+      const payload = createMockPayload({
+        participant_id: '201',
+        updated_by: '201',
         former_status: 'closed',
         new_status: 'waiting_for_participant',
-      }));
+      });
 
-      await handleThreadStatusChanged(envelope);
+      await handleThreadStatusChanged(payload);
 
-      const followers = await threadFollows.getFollowers({ participantId: 'user-1', itemId: '1000' });
+      const followers = await threadFollows.getFollowers({ participantId: '201', itemId: '1000' });
       expect(followers).toHaveLength(1);
-      expect(followers[0]?.userId).toBe('user-1');
+      expect(followers[0]?.userId).toBe('201');
     });
 
     it('should remove TTL from existing followers and not create duplicates', async () => {
       const ttl = Math.floor(Date.now() / 1000) + 3600;
-      const testThreadId = { participantId: 'participant-1', itemId: '1000' };
+      const testThreadId = { participantId: '201', itemId: '1000' };
 
-      // Pre-existing follower with TTL (e.g., from previous closure)
-      await threadFollows.insert(testThreadId, 'participant-1', ttl);
-      await threadFollows.insert(testThreadId, 'existing-follower', ttl);
+      await threadFollows.insert(testThreadId, '201', ttl);
+      await threadFollows.insert(testThreadId, '401', ttl);
 
-      const envelope = createMockEnvelope(createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+      const payload = createMockPayload({
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'not_started',
         new_status: 'waiting_for_trainer',
-      }));
+      });
 
-      await handleThreadStatusChanged(envelope);
+      await handleThreadStatusChanged(payload);
 
       const followers = await threadFollows.getFollowers(testThreadId);
-      // Should have: participant-1 (existing, not duplicated), existing-follower, trainer-1 (new)
-      expect(followers.map(f => f.userId).sort()).toEqual([ 'existing-follower', 'participant-1', 'trainer-1' ]);
+      expect(followers.map(f => f.userId).sort()).toEqual([ '201', '301', '401' ]);
 
-      // Verify TTL is removed
-      const pk = `${process.env.STAGE}#THREAD#participant-1#1000#FOLLOW`;
+      const pk = `${process.env.STAGE}#THREAD#201#1000#FOLLOW`;
       const result = await dynamodb.executeStatement({
         Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
@@ -167,23 +120,21 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
   describe('thread closing (open -> not-open)', () => {
     it('should set TTL on all followers when thread closes', async () => {
-      const testThreadId = { participantId: 'participant-1', itemId: '1000' };
+      const testThreadId = { participantId: '201', itemId: '1000' };
 
-      // Add some followers
-      await threadFollows.insert(testThreadId, 'user-1');
-      await threadFollows.insert(testThreadId, 'user-2');
+      await threadFollows.insert(testThreadId, '100');
+      await threadFollows.insert(testThreadId, '200');
 
-      const envelope = createMockEnvelope(createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+      const payload = createMockPayload({
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'waiting_for_trainer',
         new_status: 'closed',
-      }));
+      });
 
-      await handleThreadStatusChanged(envelope);
+      await handleThreadStatusChanged(payload);
 
-      // Verify TTL is set on all followers
-      const pk = `${process.env.STAGE}#THREAD#participant-1#1000#FOLLOW`;
+      const pk = `${process.env.STAGE}#THREAD#201#1000#FOLLOW`;
       const result = await dynamodb.executeStatement({
         Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
@@ -191,63 +142,59 @@ describe('handleThreadStatusChanged - follower behavior', () => {
       expect(result.Items).toHaveLength(2);
       for (const item of result.Items ?? []) {
         expect(item.ttl?.N).toBeDefined();
-        // TTL should be approximately 2 weeks from now
         const ttlValue = parseInt(item.ttl?.N ?? '0', 10);
         const twoWeeksFromNow = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 14;
-        expect(ttlValue).toBeGreaterThan(twoWeeksFromNow - 60); // Allow 1 minute tolerance
+        expect(ttlValue).toBeGreaterThan(twoWeeksFromNow - 60);
         expect(ttlValue).toBeLessThan(twoWeeksFromNow + 60);
       }
     });
 
     it('should handle closing thread with no followers gracefully', async () => {
-      const envelope = createMockEnvelope(createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+      const payload = createMockPayload({
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'waiting_for_participant',
         new_status: 'closed',
-      }));
+      });
 
-      await expect(handleThreadStatusChanged(envelope)).resolves.not.toThrow();
+      await expect(handleThreadStatusChanged(payload)).resolves.not.toThrow();
     });
   });
 
   describe('no-op transitions', () => {
     it('should not modify followers for open -> open transitions', async () => {
-      const testThreadId = { participantId: 'participant-1', itemId: '1000' };
-      await threadFollows.insert(testThreadId, 'existing-user');
+      const testThreadId = { participantId: '201', itemId: '1000' };
+      await threadFollows.insert(testThreadId, '501');
 
-      const envelope = createMockEnvelope(createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+      const payload = createMockPayload({
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'waiting_for_participant',
         new_status: 'waiting_for_trainer',
-      }));
+      });
 
-      await handleThreadStatusChanged(envelope);
+      await handleThreadStatusChanged(payload);
 
-      // Should still only have the existing user
       const followers = await threadFollows.getFollowers(testThreadId);
       expect(followers).toHaveLength(1);
-      expect(followers[0]?.userId).toBe('existing-user');
+      expect(followers[0]?.userId).toBe('501');
     });
 
     it('should not modify followers for closed -> closed transitions', async () => {
-      // Note: This transition might not happen in practice but should be handled
-      const testThreadId = { participantId: 'participant-1', itemId: '1000' };
+      const testThreadId = { participantId: '201', itemId: '1000' };
       const ttl = Math.floor(Date.now() / 1000) + 3600;
-      await threadFollows.insert(testThreadId, 'existing-user', ttl);
+      await threadFollows.insert(testThreadId, '501', ttl);
 
-      const envelope = createMockEnvelope(createMockPayload({
-        participant_id: 'participant-1',
-        updated_by: 'trainer-1',
+      const payload = createMockPayload({
+        participant_id: '201',
+        updated_by: '301',
         former_status: 'closed',
         new_status: 'closed',
-      }));
+      });
 
-      await handleThreadStatusChanged(envelope);
+      await handleThreadStatusChanged(payload);
 
-      // Should still only have the existing user with original TTL
-      const pk = `${process.env.STAGE}#THREAD#participant-1#1000#FOLLOW`;
+      const pk = `${process.env.STAGE}#THREAD#201#1000#FOLLOW`;
       const result = await dynamodb.executeStatement({
         Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
         Parameters: [{ S: pk }],

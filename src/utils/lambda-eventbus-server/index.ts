@@ -1,4 +1,5 @@
 import { EventBridgeEvent, Context } from 'aws-lambda';
+import { z } from 'zod';
 import { eblog, EbLogContext } from './logger';
 import { logError } from '../errors';
 import {
@@ -6,13 +7,15 @@ import {
   EventEnvelope,
   parseMajorVersion,
 } from './event-envelope';
+import { EventDefinition } from './event-definition';
 
 export { EventEnvelope } from './event-envelope';
+export { EventDefinition, defineEvent } from './event-definition';
 
 /**
- * Handler function that receives the full parsed envelope.
+ * Handler function that receives a typed payload and the full parsed envelope.
  */
-export type HandlerFunction = (envelope: EventEnvelope) => void | Promise<void>;
+export type HandlerFunction<T> = (payload: T, envelope: EventEnvelope) => void | Promise<void>;
 
 /**
  * Options for registering an event handler.
@@ -23,19 +26,24 @@ export interface HandlerOptions {
 }
 
 interface RegisteredHandler {
-  handler: HandlerFunction,
+  handler: HandlerFunction<unknown>,
   options: HandlerOptions,
+}
+
+interface RegisteredEvent {
+  schema: z.ZodType<unknown>,
+  handlers: RegisteredHandler[],
 }
 
 /**
  * A minimal EventBridge "server" responding to EventBridge events. Inspired by `lambda-ws-server`.
  * Unlike WebSocket, multiple handlers can be registered for the same event type and will run in parallel.
  *
- * The server parses the common event envelope (version, type, source_app, etc.) and passes
- * only the payload to handlers, along with metadata.
+ * The server parses the common event envelope and payload once, then passes
+ * the typed payload and envelope metadata to all handlers.
  */
 export class EventBusServer {
-  handlers: Map<string, RegisteredHandler[]> = new Map();
+  events: Map<string, RegisteredEvent> = new Map();
 
   /**
    * Register handlers from a sub-module.
@@ -46,22 +54,29 @@ export class EventBusServer {
   }
 
   /**
-   * Register a handler for a specific detail-type.
-   * Multiple handlers can be registered for the same event type.
+   * Register a handler for a specific event type.
+   * Multiple handlers can be registered for the same event type and will share the same payload schema.
    *
-   * @param detailType The EventBridge detail-type to handle
-   * @param handler Function that receives the full parsed envelope
+   * @param event The event definition (detail-type + Zod schema)
+   * @param handler Function that receives the typed payload and the full parsed envelope
    * @param options Handler options including supported version
    */
-  on(detailType: string, handler: HandlerFunction, options: HandlerOptions): void {
-    const existing = this.handlers.get(detailType) || [];
-    existing.push({ handler, options });
-    this.handlers.set(detailType, existing);
+  on<T>(event: EventDefinition<T>, handler: HandlerFunction<T>, options: HandlerOptions): void {
+    const existing = this.events.get(event.detailType);
+    if (existing) {
+      existing.handlers.push({ handler: handler as HandlerFunction<unknown>, options });
+    } else {
+      this.events.set(event.detailType, {
+        schema: event.schema as z.ZodType<unknown>,
+        handlers: [{ handler: handler as HandlerFunction<unknown>, options }],
+      });
+    }
   }
 
   /**
    * Main handler for EventBridge events.
-   * Parses the common envelope, validates versions, and runs matching handlers in parallel.
+   * Checks for registered handlers first, then parses the envelope and payload once,
+   * and runs matching handlers in parallel.
    */
   async handler(event: EventBridgeEvent<string, unknown>, _context: Context): Promise<void> {
     const logCtx: EbLogContext = { event };
@@ -69,6 +84,13 @@ export class EventBusServer {
     const detailType = event['detail-type'];
 
     eblog(logCtx, 'event received');
+
+    const registeredEvent = this.events.get(detailType);
+
+    if (!registeredEvent || registeredEvent.handlers.length === 0) {
+      eblog(logCtx, 'no handlers registered for event type', { detail_type: detailType });
+      return;
+    }
 
     // Parse the common envelope
     const envelopeResult = eventEnvelopeSchema.safeParse(event.detail);
@@ -82,16 +104,20 @@ export class EventBusServer {
     const envelope = envelopeResult.data;
     const eventMajorVersion = parseMajorVersion(envelope.version);
 
-    const registeredHandlers = this.handlers.get(detailType);
-
-    if (!registeredHandlers || registeredHandlers.length === 0) {
-      eblog(logCtx, 'no handlers registered for event type', { detail_type: detailType });
+    // Parse the payload once using the schema from the event definition
+    const payloadResult = registeredEvent.schema.safeParse(envelope.payload);
+    if (!payloadResult.success) {
+      eblog(logCtx, 'failed to parse event payload', { error: true });
+      // eslint-disable-next-line no-console
+      console.error(`Failed to parse ${detailType} payload:`, payloadResult.error.message);
       return;
     }
 
-    // Filter handlers that support this version and run them
+    const payload = payloadResult.data;
+
+    // Run all handlers that support this version in parallel
     const results = await Promise.allSettled(
-      registeredHandlers.map(async ({ handler, options }) => {
+      registeredEvent.handlers.map(async ({ handler, options }) => {
         if (eventMajorVersion > options.supportedMajorVersion) {
           eblog(logCtx, 'handler skipped due to unsupported version', {
             event_version: envelope.version,
@@ -99,7 +125,7 @@ export class EventBusServer {
           });
           return;
         }
-        await handler(envelope);
+        await handler(payload, envelope);
       })
     );
 
@@ -116,7 +142,7 @@ export class EventBusServer {
     const elapsedMs = Date.now() - startTime;
     eblog(logCtx, 'event processing complete', {
       elapsed_ms: elapsedMs,
-      handlers_count: registeredHandlers.length,
+      handlers_count: registeredEvent.handlers.length,
       has_errors: hasErrors,
     });
   }

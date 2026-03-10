@@ -1,6 +1,6 @@
 import { Table, TableKey } from './table';
 import { z } from 'zod';
-import { dynamodb } from '../dynamodb';
+import { safeNumber, docClient } from '../dynamodb';
 import { safeParseArray } from '../utils/zod-utils';
 
 /**
@@ -21,10 +21,10 @@ function pk(userId: string): string {
 }
 
 export const notificationSchema = z.object({
-  sk: z.number(),
+  sk: safeNumber,
   notificationType: z.string(),
   payload: z.record(z.string(), z.unknown()),
-  readTime: z.number().optional(),
+  readTime: safeNumber.optional(),
 });
 
 export type Notification = z.infer<typeof notificationSchema>;
@@ -57,7 +57,7 @@ export class Notifications extends Table {
       limit,
       scanIndexForward: false, // false = DESC order (newest first)
     });
-    return safeParseArray(results as unknown[], notificationSchema, 'notification');
+    return safeParseArray(results, notificationSchema, 'notification');
   }
 
   async insert(userId: string, notification: NotificationInput): Promise<number> {
@@ -94,9 +94,9 @@ export class Notifications extends Table {
     if (results.length === 0) return;
 
     // Delete them in batches
-    const keys: TableKey[] = results
-      .filter(r => typeof r.sk === 'number')
-      .map(r => ({ pk: pk(userId), sk: r.sk as number }));
+    const skSchema = z.object({ sk: safeNumber });
+    const keys: TableKey[] = safeParseArray(results, skSchema, 'notification sk')
+      .map(r => ({ pk: pk(userId), sk: r.sk }));
 
     if (keys.length === 0) return;
 
@@ -122,4 +122,4 @@ export class Notifications extends Table {
 }
 
 /** Singleton instance for use across the application */
-export const notificationsTable = new Notifications(dynamodb);
+export const notificationsTable = new Notifications(docClient);

@@ -1,6 +1,9 @@
 import { Table, wsConnectionTtl } from './table';
 import { z } from 'zod';
-import { dynamodb } from '../dynamodb';
+import { safeNumber, docClient } from '../dynamodb';
+import { connectionIdToNumberValue, dbConnectionId } from '../utils/connection-id-number';
+import { safeParseArray } from '../utils/zod-utils';
+import { DBError } from '../utils/errors';
 
 export type ConnectionId = string;
 export type UserId = string;
@@ -15,24 +18,19 @@ function u2cPk(userId: UserId): string {
   return `${stage}#USER#${userId}#CONN`;
 }
 
-const c2uEntrySchema = z.object({
+const c2uEntrySchema = z.looseObject({
   userId: z.string(),
-  creationTime: z.number(),
-  subscriptionKeys: z.object({ pk: z.string(), sk: z.number() }).optional(), // DynamoDB keys for the thread subscription
+  creationTime: safeNumber,
 });
 
 type C2uEntry = z.infer<typeof c2uEntrySchema>;
 
 /**
- * Additional info that can be stored/updated on a connection.
- * Derived from c2uEntrySchema, excluding core fields (userId, creationTime).
+ * Arbitrary metadata that can be stored/updated on a connection.
+ * Keys present with a value are SET, keys present with `undefined` are REMOVED,
+ * absent keys are left untouched.
  */
-export type ConnectionInfo = Partial<Omit<C2uEntry, 'userId' | 'creationTime'>>;
-
-const u2cEntrySchema = z.object({
-  connectionId: z.string(),
-  sk: z.number(),
-});
+type ConnectionInfo = Record<string, unknown>;
 
 /**
  * UserConnections tracks WebSocket connections per user.
@@ -40,8 +38,9 @@ const u2cEntrySchema = z.object({
  * Two entry types are stored:
  * - c2u (connection to user): pk: `${stage}#CONN#${connectionId}#USER`, sk: 0
  *   Contains: userId, creationTime (ms since epoch), ttl (seconds since epoch, DynamoDB TTL format)
- * - u2c (user to connection): pk: `${stage}#USER#${userId}#CONN`, sk: creationTime (ms since epoch)
- *   Contains: connectionId, ttl (seconds since epoch, DynamoDB TTL format)
+ * - u2c (user to connection): pk: `${stage}#USER#${userId}#CONN`,
+ *   sk: connectionId encoded as a number (base64 → big-endian unsigned integer)
+ *   Contains: connectionId (for debugging), ttl (seconds since epoch, DynamoDB TTL format)
  */
 export class UserConnections extends Table {
 
@@ -59,7 +58,7 @@ export class UserConnections extends Table {
       },
       {
         query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'sk': ?, 'ttl': ?, 'connectionId': ? }`,
-        params: [ u2cPk(userId), creationTime, ttl, connectionId ],
+        params: [ u2cPk(userId), connectionIdToNumberValue(connectionId), ttl, connectionId ],
       },
     ]);
   }
@@ -67,12 +66,12 @@ export class UserConnections extends Table {
   /**
    * Delete a user connection by connectionId.
    * Removes both c2u and u2c entries.
-   * @returns The deleted connection info (including subscriptionKeys for cleanup), or null if not found
+   * @returns The deleted connection entry (core fields + any extra metadata), or null if not found
    */
   async delete(connectionId: ConnectionId): Promise<C2uEntry | null> {
-    // 1) Get c2u entry to find userId, creationTime, and any subscription info
+    // Get the c2u entry to know the userId to delete the u2c entry
     const c2uResults = await this.sqlRead({
-      query: `SELECT userId, creationTime, subscriptionKeys FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
+      query: `SELECT * FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
       params: [ c2uPk(connectionId), 0 ],
     });
 
@@ -81,9 +80,9 @@ export class UserConnections extends Table {
       return null;
     }
 
-    const { userId, creationTime, subscriptionKeys } = c2uEntrySchema.parse(c2uResults[0]);
+    const entry = c2uEntrySchema.parse(c2uResults[0]);
 
-    // 2) Delete both entries in a transaction
+    // Delete both entries in a transaction
     await this.sqlWrite([
       {
         query: `DELETE FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
@@ -91,16 +90,19 @@ export class UserConnections extends Table {
       },
       {
         query: `DELETE FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
-        params: [ u2cPk(userId), creationTime ],
+        params: [ u2cPk(entry.userId), connectionIdToNumberValue(connectionId) ],
       },
     ]);
 
-    return { userId, creationTime, subscriptionKeys };
+    return entry;
   }
 
   /**
    * Update additional info for a connection (e.g., subscription info).
-   * Uses SET for provided values and REMOVE for undefined values.
+   * Only fields explicitly present in `info` are affected:
+   * - Provided with a value: SET the field
+   * - Provided as undefined: REMOVE the field
+   * - Not present at all: left untouched
    * This is a best-effort operation - if the connection doesn't exist, it silently succeeds.
    */
   async updateConnectionInfo(connectionId: ConnectionId, info: ConnectionInfo): Promise<void> {
@@ -108,12 +110,17 @@ export class UserConnections extends Table {
     const removeClauses: string[] = [];
     const params: unknown[] = [];
 
-    if (info.subscriptionKeys !== undefined) {
-      setClauses.push('subscriptionKeys = ?');
-      params.push(info.subscriptionKeys);
-    } else {
-      removeClauses.push('subscriptionKeys');
+    for (const key of Object.keys(info)) {
+      const value = info[key];
+      if (value !== undefined) {
+        setClauses.push(`${key} = ?`);
+        params.push(value);
+      } else {
+        removeClauses.push(key);
+      }
     }
+
+    if (setClauses.length === 0 && removeClauses.length === 0) return;
 
     let query = `UPDATE "${this.tableName}"`;
     if (setClauses.length > 0) {
@@ -128,10 +135,7 @@ export class UserConnections extends Table {
     try {
       await this.sqlWrite({ query, params });
     } catch (err) {
-      // Ignore ConditionalCheckFailedException - connection might have been deleted or TTL'd
-      if (err instanceof Error && err.message.includes('ConditionalCheckFailedException')) {
-        return;
-      }
+      if (err instanceof DBError && err.cause instanceof Error && err.cause.name.includes('ConditionalCheckFailed')) return;
       throw err;
     }
   }
@@ -141,13 +145,13 @@ export class UserConnections extends Table {
    */
   async getAll(userId: UserId): Promise<ConnectionId[]> {
     const results = await this.sqlRead({
-      query: `SELECT connectionId, sk FROM "${this.tableName}" WHERE pk = ?`,
+      query: `SELECT sk FROM "${this.tableName}" WHERE pk = ?`,
       params: [ u2cPk(userId) ],
     });
-
-    return z.array(u2cEntrySchema).parse(results).map(entry => entry.connectionId);
+    const connectionSchema = z.object({ sk: dbConnectionId }).transform(({ sk }) => sk);
+    return safeParseArray(results, connectionSchema, 'user connection');
   }
 }
 
 /** Singleton instance for use across the application */
-export const userConnectionsTable = new UserConnections(dynamodb);
+export const userConnectionsTable = new UserConnections(docClient);

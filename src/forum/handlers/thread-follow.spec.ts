@@ -4,7 +4,7 @@ import { IdentityToken } from '../../auth/identity-token';
 import { RequestWithIdentityToken } from '../../auth/identity-token-middleware';
 import { followThread, unfollowThread, getFollowStatus } from './thread-follow';
 import { ThreadFollows } from '../dbmodels/thread-follows';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 
 /** Helper to create a mock request with threadToken already set (as middleware would do) */
 function mockRequestWithThreadToken(token: ThreadToken, extras: Partial<RequestWithThreadToken> = {}): RequestWithThreadToken {
@@ -43,14 +43,14 @@ describe('Thread Follow Handlers', () => {
   const threadId = { participantId: 'user123', itemId: 'item456' };
 
   beforeEach(async () => {
-    threadFollows = new ThreadFollows(dynamodb);
+    threadFollows = new ThreadFollows(docClient);
     await clearTable();
   });
 
   describe('followThread', () => {
     const baseToken: ThreadToken = {
       ...threadId,
-      userId: 'user-123',
+      userId: '123',
       canWrite: false,
       canWatch: true,
       isMine: false,
@@ -67,11 +67,11 @@ describe('Thread Follow Handlers', () => {
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(1);
-      expect(followers[0]?.userId).toBe('user-123');
+      expect(followers[0]?.userId).toBe('123');
     });
 
     it('should ignore if user is already following', async () => {
-      await threadFollows.insert(threadId, 'user-123');
+      await threadFollows.insert(threadId, '123');
 
       const req = mockRequestWithThreadToken(baseToken);
       const resp = mockResponse();
@@ -87,10 +87,10 @@ describe('Thread Follow Handlers', () => {
   });
 
   describe('unfollowThread', () => {
-    const identityToken: IdentityToken = { userId: 'user-123', exp: 9999999999 };
+    const identityToken: IdentityToken = { userId: '123', exp: 9999999999 };
 
     it('should remove user from followers and return 200', async () => {
-      await threadFollows.insert(threadId, 'user-123');
+      await threadFollows.insert(threadId, '123');
 
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { participantId: 'user123', itemId: 'item456' },
@@ -137,8 +137,8 @@ describe('Thread Follow Handlers', () => {
     });
 
     it('should not affect other followers when unfollowing', async () => {
-      await threadFollows.insert(threadId, 'user-123');
-      await threadFollows.insert(threadId, 'user-456');
+      await threadFollows.insert(threadId, '123');
+      await threadFollows.insert(threadId, '456');
 
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { participantId: 'user123', itemId: 'item456' },
@@ -149,15 +149,15 @@ describe('Thread Follow Handlers', () => {
 
       const followers = await threadFollows.getFollowers(threadId);
       expect(followers).toHaveLength(1);
-      expect(followers[0]?.userId).toBe('user-456');
+      expect(followers[0]?.userId).toBe('456');
     });
   });
 
   describe('getFollowStatus', () => {
-    const identityToken: IdentityToken = { userId: 'user-123', exp: 9999999999 };
+    const identityToken: IdentityToken = { userId: '123', exp: 9999999999 };
 
     it('should return isFollowing: true when user is following', async () => {
-      await threadFollows.insert(threadId, 'user-123');
+      await threadFollows.insert(threadId, '123');
 
       const req = mockRequestWithIdentityToken(identityToken, {
         params: { participantId: 'user123', itemId: 'item456' },

@@ -1,6 +1,8 @@
 import { ConnectionId, WsMessage, isClosedConnection, logSendResults, wsClient } from '../websocket-client';
 import { userConnectionsTable } from '../dbmodels/user-connections';
+import { liveActivitySubscriptionsTable } from '../dbmodels/live-activity-subscriptions';
 import { threadSubscriptionsTable } from '../forum/dbmodels/thread-subscriptions';
+import { threadIdSchema } from '../forum/dbmodels/thread';
 
 /**
  * Result of a user connection cleanup.
@@ -18,28 +20,28 @@ export interface BroadcastResult<T> {
   successfulRecipients: T[],
 }
 
+
 /**
- * Cleans up a gone WebSocket connection by removing both:
+ * Cleans up a gone WebSocket connection by removing:
  * 1. The user connection entry
- * 2. The thread subscription (if any)
- *
- * This is the single cleanup function used for all gone connection scenarios.
- * Even when subscription keys are already known by the caller, this function
- * doesn't benefit from them because userConnections.delete() must read the
- * connection entry anyway (to get userId and creationTime), and that read
- * returns subscriptionKeys for free.
+ * 2. The thread subscription (if any, via stored threadId + connectionId)
+ * 3. The live activity subscription (if any, via direct connectionId delete)
  *
  * @param connectionId - The connection to clean up
  * @returns The userId if the connection was found, undefined otherwise
  */
 export async function cleanupGoneConnection(connectionId: ConnectionId): Promise<CleanupResult> {
   const connInfo = await userConnectionsTable.delete(connectionId);
+  if (!connInfo) return {};
 
-  if (connInfo?.subscriptionKeys) {
-    await threadSubscriptionsTable.deleteByKeys(connInfo.subscriptionKeys);
+  const threadId = threadIdSchema.safeParse(connInfo['subscriptionThreadId']);
+  if (threadId.success) {
+    await threadSubscriptionsTable.deleteByConnectionId(threadId.data, connectionId);
   }
 
-  return { userId: connInfo?.userId };
+  await liveActivitySubscriptionsTable.deleteByConnectionId(connectionId); // no-op if not subscribed
+
+  return { userId: connInfo.userId };
 }
 
 /**

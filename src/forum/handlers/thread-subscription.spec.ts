@@ -1,9 +1,14 @@
 import { subscribe, unsubscribe } from './thread-subscription';
 import { ThreadSubscriptions } from '../dbmodels/thread-subscriptions';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 import { clearTable } from '../../testutils/db';
 import { generateToken, initializeKeys } from '../../testutils/token-generator';
 import { WsRequest } from '../../utils/lambda-ws-server';
+
+// Valid base64 connectionIds (first byte must be non-zero for number encoding round-trip)
+const connA = 'AQ==';
+const connB = 'Ag==';
+const connC = 'Aw==';
 
 describe('Thread Subscription Service', () => {
   let threadSubs: ThreadSubscriptions;
@@ -14,7 +19,7 @@ describe('Thread Subscription Service', () => {
   });
 
   beforeEach(async () => {
-    threadSubs = new ThreadSubscriptions(dynamodb);
+    threadSubs = new ThreadSubscriptions(docClient);
     await clearTable();
   });
 
@@ -22,15 +27,15 @@ describe('Thread Subscription Service', () => {
     it('should subscribe a connection to a thread', async () => {
       const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
       const request = {
-        connectionId: () => 'conn-123',
+        connectionId: () => connA,
         body: { token },
       } as unknown as WsRequest;
 
       await subscribe(request);
 
-      const subscribers = await threadSubs.getSubscribers({ threadId });
+      const subscribers = await threadSubs.getSubscribers(threadId);
       expect(subscribers).toHaveLength(1);
-      expect(subscribers[0]?.connectionId).toBe('conn-123');
+      expect(subscribers[0]?.connectionId).toBe(connA);
     });
 
     it('should allow multiple connections to subscribe', async () => {
@@ -38,26 +43,26 @@ describe('Thread Subscription Service', () => {
       const token2 = await generateToken({ ...threadId, userId: 'user2', canWrite: false });
 
       const request1 = {
-        connectionId: () => 'conn-1',
+        connectionId: () => connA,
         body: { token: token1 },
       } as unknown as WsRequest;
 
       const request2 = {
-        connectionId: () => 'conn-2',
+        connectionId: () => connB,
         body: { token: token2 },
       } as unknown as WsRequest;
 
       await subscribe(request1);
       await subscribe(request2);
 
-      const subscribers = await threadSubs.getSubscribers({ threadId });
+      const subscribers = await threadSubs.getSubscribers(threadId);
       expect(subscribers).toHaveLength(2);
-      expect(subscribers.map(s => s.connectionId).sort()).toEqual([ 'conn-1', 'conn-2' ]);
+      expect(subscribers.map(s => s.connectionId).sort()).toEqual([ connA, connB ].sort());
     });
 
     it('should throw error for invalid token', async () => {
       const request = {
-        connectionId: () => 'conn-123',
+        connectionId: () => connA,
         body: { token: 'invalid-token' },
       } as unknown as WsRequest;
 
@@ -66,7 +71,7 @@ describe('Thread Subscription Service', () => {
 
     it('should throw error when token is missing', async () => {
       const request = {
-        connectionId: () => 'conn-123',
+        connectionId: () => connA,
         body: {},
       } as unknown as WsRequest;
 
@@ -78,24 +83,22 @@ describe('Thread Subscription Service', () => {
     it('should unsubscribe a connection from a thread', async () => {
       const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
 
-      // First subscribe
       const subscribeRequest = {
-        connectionId: () => 'conn-123',
+        connectionId: () => connA,
         body: { token },
       } as unknown as WsRequest;
       await subscribe(subscribeRequest);
 
-      let subscribers = await threadSubs.getSubscribers({ threadId });
+      let subscribers = await threadSubs.getSubscribers(threadId);
       expect(subscribers).toHaveLength(1);
 
-      // Then unsubscribe
       const unsubscribeRequest = {
-        connectionId: () => 'conn-123',
+        connectionId: () => connA,
         body: { token },
       } as unknown as WsRequest;
       await unsubscribe(unsubscribeRequest);
 
-      subscribers = await threadSubs.getSubscribers({ threadId });
+      subscribers = await threadSubs.getSubscribers(threadId);
       expect(subscribers).toHaveLength(0);
     });
 
@@ -104,23 +107,21 @@ describe('Thread Subscription Service', () => {
       const token2 = await generateToken({ ...threadId, userId: 'user2', canWrite: false });
       const token3 = await generateToken({ ...threadId, userId: 'user3', canWrite: false });
 
-      // Subscribe three connections
-      await subscribe({ connectionId: () => 'conn-1', body: { token: token1 } } as unknown as WsRequest);
-      await subscribe({ connectionId: () => 'conn-2', body: { token: token2 } } as unknown as WsRequest);
-      await subscribe({ connectionId: () => 'conn-3', body: { token: token3 } } as unknown as WsRequest);
+      await subscribe({ connectionId: () => connA, body: { token: token1 } } as unknown as WsRequest);
+      await subscribe({ connectionId: () => connB, body: { token: token2 } } as unknown as WsRequest);
+      await subscribe({ connectionId: () => connC, body: { token: token3 } } as unknown as WsRequest);
 
-      // Unsubscribe one
-      await unsubscribe({ connectionId: () => 'conn-2', body: { token: token2 } } as unknown as WsRequest);
+      await unsubscribe({ connectionId: () => connB, body: { token: token2 } } as unknown as WsRequest);
 
-      const subscribers = await threadSubs.getSubscribers({ threadId });
+      const subscribers = await threadSubs.getSubscribers(threadId);
       expect(subscribers).toHaveLength(2);
-      expect(subscribers.map(s => s.connectionId).sort()).toEqual([ 'conn-1', 'conn-3' ]);
+      expect(subscribers.map(s => s.connectionId).sort()).toEqual([ connA, connC ].sort());
     });
 
     it('should handle unsubscribing from non-existent subscription gracefully', async () => {
       const token = await generateToken({ ...threadId, userId: 'user123', canWrite: false });
       const request = {
-        connectionId: () => 'non-existent-conn',
+        connectionId: () => connA,
         body: { token },
       } as unknown as WsRequest;
 
@@ -129,7 +130,7 @@ describe('Thread Subscription Service', () => {
 
     it('should throw error for invalid token', async () => {
       const request = {
-        connectionId: () => 'conn-123',
+        connectionId: () => connA,
         body: { token: 'invalid-token' },
       } as unknown as WsRequest;
 
@@ -137,4 +138,3 @@ describe('Thread Subscription Service', () => {
     });
   });
 });
-

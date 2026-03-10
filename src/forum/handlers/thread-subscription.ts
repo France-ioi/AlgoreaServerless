@@ -23,9 +23,9 @@ import { extractThreadTokenFromWs } from '../thread-token';
 export async function subscribe(request: WsRequest): Promise<void> {
   const { participantId, itemId, userId } = await extractThreadTokenFromWs(request.body);
   const threadId = { participantId, itemId };
-  const subscriptionKeys = await threadSubscriptionsTable.insert(threadId, request.connectionId(), userId);
+  await threadSubscriptionsTable.insert(threadId, request.connectionId(), userId);
   // Store the subscription keys in the connection for efficient cleanup on disconnect
-  await userConnectionsTable.updateConnectionInfo(request.connectionId(), { subscriptionKeys });
+  await userConnectionsTable.updateConnectionInfo(request.connectionId(), { subscriptionThreadId: threadId });
 }
 /**
  * Unsubscribe from a thread
@@ -35,5 +35,5 @@ export async function unsubscribe(request: WsRequest): Promise<void> {
   const token = await extractThreadTokenFromWs(request.body);
   await threadSubscriptionsTable.deleteByConnectionId(token, request.connectionId());
   // Clear the subscription info from the connection
-  await userConnectionsTable.updateConnectionInfo(request.connectionId(), {});
+  await userConnectionsTable.updateConnectionInfo(request.connectionId(), { subscriptionThreadId: undefined });
 }

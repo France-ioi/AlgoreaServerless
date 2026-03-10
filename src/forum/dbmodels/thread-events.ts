@@ -1,7 +1,7 @@
 import { Table } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { literal, z } from 'zod';
-import { dynamodb } from '../../dynamodb';
+import { safeNumber, docClient } from '../../dynamodb';
 import { safeParseArray } from '../../utils/zod-utils';
 
 /**
@@ -12,7 +12,7 @@ export enum ThreadEventLabel {
 }
 
 const threadEventBaseSchema = z.object({
-  sk: z.number(),
+  sk: safeNumber,
   label: z.string(),
   data: z.record(z.string(), z.unknown()),
 });
@@ -65,9 +65,9 @@ export class ThreadEvents extends Table {
       limit: options.limit,
       scanIndexForward: false, // false = DESC order
     });
-    return safeParseArray(results as unknown[], threadEventSchema, 'thread event');
+    return safeParseArray(results, threadEventSchema, 'thread event');
   }
 }
 
 /** Singleton instance for use across the application */
-export const threadEventsTable = new ThreadEvents(dynamodb);
+export const threadEventsTable = new ThreadEvents(docClient);

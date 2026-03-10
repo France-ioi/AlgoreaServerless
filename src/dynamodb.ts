@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { AttributeValue, DynamoDB } from '@aws-sdk/client-dynamodb';
+import { DynamoDB } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, NumberValue } from '@aws-sdk/lib-dynamodb';
+import { z } from 'zod';
 
 const dynamoOptions = (): ConstructorParameters<typeof DynamoDB>[0] | undefined => {
   switch (process.env.STAGE) {
@@ -26,33 +28,34 @@ const dynamoOptions = (): ConstructorParameters<typeof DynamoDB>[0] | undefined 
 };
 
 const options = dynamoOptions();
-export const dynamodb = options ? new DynamoDB(options) : new DynamoDB();
+const dynamodbClient = options ? new DynamoDB(options) : new DynamoDB();
 
-export const toAttributeValue = (value: unknown): AttributeValue => {
-  if (typeof value === 'string') return { S: value };
-  if (typeof value === 'number') return { N: value.toString() };
-  if (typeof value === 'boolean') return { BOOL: value };
-  if (value === null) return { NULL: true };
-  if (typeof value === 'object') return { M: Object.fromEntries(Object.entries(value).map(([ k, v ]) => [ k, toAttributeValue(v) ])) };
-  if (value === null) return { NULL: true };
-  throw new Error(`unhandled value ${String(value)}`);
-};
-export const fromAttributeValue = (attr: AttributeValue): unknown => {
-  if (attr.S !== undefined) return attr.S;
-  if (attr.N !== undefined) return Number(attr.N);
-  if (typeof attr.BOOL === 'boolean') return attr.BOOL;
-  if (attr.NULL) return null;
-  if (attr.M) return Object.fromEntries(Object.entries(attr.M).map(([ k, v ]) => [ k, fromAttributeValue(v) ]));
-  throw new Error(`unhandled value ${JSON.stringify(attr, null, 2)}`);
-};
-export const toDBItem = <T extends Record<string, unknown>>(value: T): Record<string, AttributeValue> => {
-  const entries = Object.entries(value)
-    .filter(([ , value ]) => value !== undefined)
-    .map(([ key, value ]): [string, AttributeValue] => [ key, toAttributeValue(value) ]);
-  return Object.fromEntries(entries);
-};
-export const fromDBItem = (item: Record<string, AttributeValue>): Record<string, unknown> => {
-  const entries = Object.entries(item).map(([ key, attr ]): [ string, unknown ] => [ key, fromAttributeValue(attr) ]);
-  return Object.fromEntries(entries);
-};
-export const toDBParameters = (value: unknown[]): AttributeValue[] => value.map(v => toAttributeValue(v));
+/**
+ * Raw DynamoDB client - only used for low-level operations in tests.
+ */
+export const dynamodb = dynamodbClient;
+
+/**
+ * DynamoDB Document Client with automatic marshalling/unmarshalling.
+ * Numbers are returned as NumberValue (wrapNumbers: true) to preserve precision
+ * for large numbers (e.g. int64 IDs, base64-encoded connection IDs used as sort keys).
+ * Use `safeNumber` Zod schema to parse NumberValue back to JS number when safe.
+ */
+export const docClient = DynamoDBDocumentClient.from(dynamodbClient, {
+  marshallOptions: {
+    convertEmptyValues: true,
+    allowImpreciseNumbers: false,
+  },
+  unmarshallOptions: {
+    wrapNumbers: true,
+  },
+});
+
+/**
+ * Zod schema that parses DynamoDB NumberValue (from wrapNumbers: true) into a JS number.
+ * Use this in all Zod schemas for number fields returned from DynamoDB.
+ */
+export const safeNumber = z.union([
+  z.number(),
+  z.instanceof(NumberValue).transform(n => Number(n.value)),
+]);

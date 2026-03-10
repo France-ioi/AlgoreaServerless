@@ -11,7 +11,7 @@ import { handleGradeSaved, GradeSavedPayload } from './grade-saved';
 import { EventEnvelope } from '../../utils/lambda-eventbus-server';
 import { ThreadSubscriptions } from '../dbmodels/thread-subscriptions';
 import { UserConnections } from '../../dbmodels/user-connections';
-import { dynamodb } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 
 function createMockPayload(overrides?: Partial<GradeSavedPayload>): GradeSavedPayload {
   return {
@@ -22,6 +22,7 @@ function createMockPayload(overrides?: Partial<GradeSavedPayload>): GradeSavedPa
     validated: true,
     caller_id: '101',
     score: 100,
+    score_improved: true,
     ...overrides,
   };
 }
@@ -38,41 +39,41 @@ function createMockEnvelope(payload: unknown = createMockPayload()): EventEnvelo
   };
 }
 
+// Valid base64 connectionIds (first byte must be non-zero for number encoding round-trip)
+const connA = 'AQ==';
+const connB = 'Ag==';
+const connC = 'Aw==';
+const connGone = 'BA==';
+
 describe('handleGradeSaved', () => {
   let threadSubs: ThreadSubscriptions;
   let userConnections: UserConnections;
-  let consoleErrorSpy: jest.SpyInstance;
 
   const defaultPayload = createMockPayload();
   const threadId = { participantId: defaultPayload.participant_id, itemId: defaultPayload.item_id };
 
   beforeEach(async () => {
-    threadSubs = new ThreadSubscriptions(dynamodb);
-    userConnections = new UserConnections(dynamodb);
+    threadSubs = new ThreadSubscriptions(docClient);
+    userConnections = new UserConnections(docClient);
     await clearTable();
     jest.clearAllMocks();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
     mockSend.mockImplementation((connectionIds) =>
       Promise.resolve(connectionIds.map((id: string) => ({ success: true, connectionId: id }))));
   });
 
-  afterEach(() => {
-    consoleErrorSpy.mockRestore();
-  });
-
   describe('successful handling', () => {
     it('should notify all subscribers when grade is saved', async () => {
-      await threadSubs.insert(threadId, 'conn-1', 'user1');
-      await threadSubs.insert(threadId, 'conn-2', 'user2');
+      await threadSubs.insert(threadId, connA, 'user1');
+      await threadSubs.insert(threadId, connB, 'user2');
 
-      const envelope = createMockEnvelope();
-      handleGradeSaved(envelope);
+      const payload = createMockPayload();
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(mockSend).toHaveBeenCalledWith(
-        expect.arrayContaining([ 'conn-1', 'conn-2' ]),
+        expect.arrayContaining([ connA, connB ]),
         expect.objectContaining({
           action: 'forum.grade.update',
           answerId: defaultPayload.answer_id,
@@ -80,6 +81,7 @@ describe('handleGradeSaved', () => {
           itemId: defaultPayload.item_id,
           attemptId: defaultPayload.attempt_id,
           score: defaultPayload.score,
+          scoreImproved: defaultPayload.score_improved,
           validated: defaultPayload.validated,
           time: expect.any(Number),
         })
@@ -87,56 +89,58 @@ describe('handleGradeSaved', () => {
     });
 
     it('should not call send when no subscribers exist', async () => {
-      const envelope = createMockEnvelope();
-      handleGradeSaved(envelope);
+      const payload = createMockPayload();
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // broadcastAndCleanup returns early when there are no entries
       expect(mockSend).not.toHaveBeenCalled();
     });
 
     it('should handle events with all required fields without throwing', () => {
-      const envelope = createMockEnvelope();
-      expect(() => handleGradeSaved(envelope)).not.toThrow();
+      const payload = createMockPayload();
+      const envelope = createMockEnvelope(payload);
+      expect(() => handleGradeSaved(payload, envelope)).not.toThrow();
     });
 
     it('should handle validated=false and partial score', async () => {
-      await threadSubs.insert(threadId, 'conn-1', 'user1');
+      await threadSubs.insert(threadId, connA, 'user1');
 
-      const envelope = createMockEnvelope(createMockPayload({
+      const payload = createMockPayload({
         validated: false,
         score: 50,
-      }));
-      handleGradeSaved(envelope);
+        score_improved: false,
+      });
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(mockSend).toHaveBeenCalledWith(
-        [ 'conn-1' ],
+        [ connA ],
         expect.objectContaining({
           validated: false,
           score: 50,
+          scoreImproved: false,
         })
       );
     });
 
     it('should handle zero score', async () => {
-      await threadSubs.insert(threadId, 'conn-1', 'user1');
+      await threadSubs.insert(threadId, connA, 'user1');
 
-      const envelope = createMockEnvelope(createMockPayload({
+      const payload = createMockPayload({
         validated: false,
         score: 0,
-      }));
-      handleGradeSaved(envelope);
+      });
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(mockSend).toHaveBeenCalledWith(
-        [ 'conn-1' ],
+        [ connA ],
         expect.objectContaining({
           score: 0,
         })
@@ -146,21 +150,20 @@ describe('handleGradeSaved', () => {
 
   describe('cleanup of gone connections', () => {
     it('should remove gone subscribers after sending message', async () => {
-      // Set up user connections with subscriptions (needed for full cleanup)
-      await userConnections.insert('conn-1', 'user1');
-      await userConnections.insert('conn-gone', 'user2');
-      await userConnections.insert('conn-3', 'user3');
+      await userConnections.insert(connA, 'user1');
+      await userConnections.insert(connGone, 'user2');
+      await userConnections.insert(connC, 'user3');
 
-      const subKeys1 = await threadSubs.insert(threadId, 'conn-1', 'user1');
-      const subKeysGone = await threadSubs.insert(threadId, 'conn-gone', 'user2');
-      const subKeys3 = await threadSubs.insert(threadId, 'conn-3', 'user3');
+      await threadSubs.insert(threadId, connA, 'user1');
+      await threadSubs.insert(threadId, connGone, 'user2');
+      await threadSubs.insert(threadId, connC, 'user3');
 
-      await userConnections.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys1 });
-      await userConnections.updateConnectionInfo('conn-gone', { subscriptionKeys: subKeysGone });
-      await userConnections.updateConnectionInfo('conn-3', { subscriptionKeys: subKeys3 });
+      await userConnections.updateConnectionInfo(connA, { subscriptionThreadId: threadId });
+      await userConnections.updateConnectionInfo(connGone, { subscriptionThreadId: threadId });
+      await userConnections.updateConnectionInfo(connC, { subscriptionThreadId: threadId });
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
-        if (id === 'conn-gone') {
+        if (id === connGone) {
           const error = new Error('Gone');
           error.name = 'GoneException';
           return { success: false, connectionId: id, error };
@@ -168,69 +171,18 @@ describe('handleGradeSaved', () => {
         return { success: true, connectionId: id };
       })));
 
-      const envelope = createMockEnvelope();
-      handleGradeSaved(envelope);
+      const payload = createMockPayload();
+      const envelope = createMockEnvelope(payload);
+      handleGradeSaved(payload, envelope);
 
-      // Wait for async operations and cleanup
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      const subscribers = await threadSubs.getSubscribers({ threadId });
+      const subscribers = await threadSubs.getSubscribers(threadId);
       expect(subscribers).toHaveLength(2);
-      expect(subscribers.map(s => s.connectionId)).not.toContain('conn-gone');
+      expect(subscribers.map(s => s.connectionId)).not.toContain(connGone);
 
-      // Verify user connection was also cleaned up
       const goneUserConns = await userConnections.getAll('user2');
       expect(goneUserConns).toHaveLength(0);
-    });
-  });
-
-  describe('invalid payload handling', () => {
-    it('should log error for missing required fields', () => {
-      const envelope = createMockEnvelope({
-        answer_id: '123',
-        // missing other required fields
-      });
-
-      handleGradeSaved(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to parse grade_saved payload:',
-        expect.any(String)
-      );
-      expect(mockSend).not.toHaveBeenCalled();
-    });
-
-    it('should log error for wrong type on validated field', () => {
-      const envelope = createMockEnvelope({
-        ...createMockPayload(),
-        validated: 'true', // should be boolean
-      });
-
-      handleGradeSaved(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(mockSend).not.toHaveBeenCalled();
-    });
-
-    it('should log error for wrong type on score field', () => {
-      const envelope = createMockEnvelope({
-        ...createMockPayload(),
-        score: '100', // should be number
-      });
-
-      handleGradeSaved(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(mockSend).not.toHaveBeenCalled();
-    });
-
-    it('should log error for null payload', () => {
-      const envelope = createMockEnvelope(null);
-
-      handleGradeSaved(envelope);
-
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      expect(mockSend).not.toHaveBeenCalled();
     });
   });
 });

@@ -51,7 +51,7 @@ async function create(req: RequestWithThreadToken, resp: Response): Promise<Retu
   // 3. Get thread followers
   const [ , successfulSubscriberUserIds, followers ] = await Promise.all([
     threadEventsTable.insert([{ label: ThreadEventLabel.Message, sk: time, threadId, data: { authorId, text, uuid } }]),
-    threadSubscriptionsTable.getSubscribers({ threadId }).then(async subscribers => {
+    threadSubscriptionsTable.getSubscribers(threadId).then(async subscribers => {
       const wsMessage = { action: ForumMessageAction.NewMessage, participantId, itemId, authorId, time, text, uuid };
       const { successfulRecipients } = await broadcastAndCleanup(subscribers, s => s.connectionId, wsMessage);
       return new Set(successfulRecipients.map(s => s.userId));
