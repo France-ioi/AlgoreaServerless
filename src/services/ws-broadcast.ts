@@ -2,6 +2,7 @@ import { ConnectionId, WsMessage, isClosedConnection, logSendResults, wsClient }
 import { userConnectionsTable } from '../dbmodels/user-connections';
 import { liveActivitySubscriptionsTable } from '../dbmodels/live-activity-subscriptions';
 import { threadSubscriptionsTable } from '../forum/dbmodels/thread-subscriptions';
+import { z } from 'zod';
 
 /**
  * Result of a user connection cleanup.
@@ -18,6 +19,8 @@ export interface CleanupResult {
 export interface BroadcastResult<T> {
   successfulRecipients: T[],
 }
+
+const subKeysSchema = z.object({ pk: z.string(), sk: z.number() });
 
 /**
  * Cleans up a gone WebSocket connection by removing:
@@ -36,15 +39,19 @@ export interface BroadcastResult<T> {
  */
 export async function cleanupGoneConnection(connectionId: ConnectionId): Promise<CleanupResult> {
   const connInfo = await userConnectionsTable.delete(connectionId);
+  if (!connInfo) return {};
 
-  if (connInfo?.subscriptionKeys) {
-    await threadSubscriptionsTable.deleteByKeys(connInfo.subscriptionKeys);
-  }
-  if (connInfo?.liveActivitySubscriptionKeys) {
-    await liveActivitySubscriptionsTable.deleteByKeys(connInfo.liveActivitySubscriptionKeys);
+  const threadSubKeys = subKeysSchema.safeParse(connInfo['subscriptionKeys']);
+  if (threadSubKeys.success) {
+    await threadSubscriptionsTable.deleteByKeys(threadSubKeys.data);
   }
 
-  return { userId: connInfo?.userId };
+  const liveActivitySubKeys = subKeysSchema.safeParse(connInfo['liveActivitySubscriptionKeys']);
+  if (liveActivitySubKeys.success) {
+    await liveActivitySubscriptionsTable.deleteByKeys(liveActivitySubKeys.data);
+  }
+
+  return { userId: connInfo.userId };
 }
 
 /**

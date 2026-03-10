@@ -15,22 +15,19 @@ function u2cPk(userId: UserId): string {
   return `${stage}#USER#${userId}#CONN`;
 }
 
-const subscriptionKeysSchema = z.object({ pk: z.string(), sk: z.number() });
-
-const c2uEntrySchema = z.object({
+const c2uEntrySchema = z.looseObject({
   userId: z.string(),
   creationTime: z.number(),
-  subscriptionKeys: subscriptionKeysSchema.optional(), // DynamoDB keys for the thread subscription
-  liveActivitySubscriptionKeys: subscriptionKeysSchema.optional(), // DynamoDB keys for the live activity subscription
 });
 
 type C2uEntry = z.infer<typeof c2uEntrySchema>;
 
 /**
- * Additional info that can be stored/updated on a connection.
- * Derived from c2uEntrySchema, excluding core fields (userId, creationTime).
+ * Arbitrary metadata that can be stored/updated on a connection.
+ * Keys present with a value are SET, keys present with `undefined` are REMOVED,
+ * absent keys are left untouched.
  */
-export type ConnectionInfo = Partial<Omit<C2uEntry, 'userId' | 'creationTime'>>;
+type ConnectionInfo = Record<string, unknown>;
 
 const u2cEntrySchema = z.object({
   connectionId: z.string(),
@@ -70,12 +67,11 @@ export class UserConnections extends Table {
   /**
    * Delete a user connection by connectionId.
    * Removes both c2u and u2c entries.
-   * @returns The deleted connection info (including subscriptionKeys for cleanup), or null if not found
+   * @returns The deleted connection entry (core fields + any extra metadata), or null if not found
    */
   async delete(connectionId: ConnectionId): Promise<C2uEntry | null> {
-    // 1) Get c2u entry to find userId, creationTime, and any subscription info
     const c2uResults = await this.sqlRead({
-      query: `SELECT userId, creationTime, subscriptionKeys, liveActivitySubscriptionKeys FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
+      query: `SELECT * FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
       params: [ c2uPk(connectionId), 0 ],
     });
 
@@ -114,21 +110,13 @@ export class UserConnections extends Table {
     const removeClauses: string[] = [];
     const params: unknown[] = [];
 
-    if ('subscriptionKeys' in info) {
-      if (info.subscriptionKeys !== undefined) {
-        setClauses.push('subscriptionKeys = ?');
-        params.push(info.subscriptionKeys);
+    for (const key of Object.keys(info)) {
+      const value = info[key];
+      if (value !== undefined) {
+        setClauses.push(`${key} = ?`);
+        params.push(value);
       } else {
-        removeClauses.push('subscriptionKeys');
-      }
-    }
-
-    if ('liveActivitySubscriptionKeys' in info) {
-      if (info.liveActivitySubscriptionKeys !== undefined) {
-        setClauses.push('liveActivitySubscriptionKeys = ?');
-        params.push(info.liveActivitySubscriptionKeys);
-      } else {
-        removeClauses.push('liveActivitySubscriptionKeys');
+        removeClauses.push(key);
       }
     }
 
