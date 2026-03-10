@@ -11,6 +11,12 @@ jest.mock('../../websocket-client', () => ({
 
 import { globalHandler } from '../../handlers';
 
+// Valid base64 connectionIds (first byte must be non-zero for number encoding round-trip)
+const connUser2 = 'AQ==';
+const connUser3 = 'Ag==';
+const connT1 = 'Aw==';
+const connT2 = 'BA==';
+
 describe('E2E: Thread Isolation', () => {
   const thread1 = { participantId: 'user1', itemId: 'item1' };
   const thread2 = { participantId: 'user2', itemId: 'item2' };
@@ -76,13 +82,13 @@ describe('E2E: Thread Isolation', () => {
 
     // Subscribe user2 to thread1
     await globalHandler(mockWebSocketMessageEvent({
-      connectionId: 'user2-conn',
+      connectionId: connUser2,
       body: JSON.stringify({ action: 'forum.subscribe', token: thread1User2 }),
     }), {} as any);
 
     // Subscribe user3 to thread2
     await globalHandler(mockWebSocketMessageEvent({
-      connectionId: 'user3-conn',
+      connectionId: connUser3,
       body: JSON.stringify({ action: 'forum.subscribe', token: thread2User3 }),
     }), {} as any);
 
@@ -100,11 +106,11 @@ describe('E2E: Thread Isolation', () => {
 
     // Only user2 (subscribed to thread1) should receive notification
     expect(mockSend).toHaveBeenCalledWith(
-      [ 'user2-conn' ],
+      [ connUser2 ],
       expect.objectContaining({ text: 'Thread 1 only' })
     );
     expect(mockSend).not.toHaveBeenCalledWith(
-      expect.arrayContaining([ 'user3-conn' ]),
+      expect.arrayContaining([ connUser3 ]),
       expect.anything()
     );
   });
@@ -159,18 +165,18 @@ describe('E2E: Thread Isolation', () => {
 
     // Subscribe to both threads with different connection IDs
     await globalHandler(mockWebSocketMessageEvent({
-      connectionId: 'user-conn-t1',
+      connectionId: connT1,
       body: JSON.stringify({ action: 'forum.subscribe', token: thread1Token }),
     }), {} as any);
 
     await globalHandler(mockWebSocketMessageEvent({
-      connectionId: 'user-conn-t2',
+      connectionId: connT2,
       body: JSON.stringify({ action: 'forum.subscribe', token: thread2Token }),
     }), {} as any);
 
     // Unsubscribe from thread1
     await globalHandler(mockWebSocketMessageEvent({
-      connectionId: 'user-conn-t1',
+      connectionId: connT1,
       body: JSON.stringify({ action: 'forum.unsubscribe', token: thread1Token }),
     }), {} as any);
 
@@ -186,10 +192,10 @@ describe('E2E: Thread Isolation', () => {
       body: JSON.stringify({ text: 'After unsubscribe', uuid: 'msg-after' }),
     }), {} as any);
 
-    // user-conn-t1 should not receive notification
+    // connT1 should not receive notification
     const calls = mockSend.mock.calls;
     const connectionsCalled = calls.flatMap(call => call[0]);
-    expect(connectionsCalled).not.toContain('user-conn-t1');
+    expect(connectionsCalled).not.toContain(connT1);
   });
 });
 

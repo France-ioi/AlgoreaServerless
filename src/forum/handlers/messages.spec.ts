@@ -27,6 +27,16 @@ function mockRequest(token: ThreadToken, extras: Partial<RequestWithThreadToken>
   } as RequestWithThreadToken;
 }
 
+// Valid base64 connectionIds (first byte must be non-zero for number encoding round-trip)
+const connA = 'AQ==';
+const connB = 'Ag==';
+const connC = 'Aw==';
+const connGone = 'BA==';
+const connSub = 'BQ==';
+const connGoneSub = 'Bg==';
+const connOther = 'Bw==';
+const connFollower = 'CA==';
+
 describe('Forum Messages Service', () => {
   let threadEvents: ThreadEvents;
   let threadSubs: ThreadSubscriptions;
@@ -169,8 +179,8 @@ describe('Forum Messages Service', () => {
     });
 
     it('should notify all subscribers when message is created', async () => {
-      await threadSubs.insert(threadId, 'conn-1', 'user1');
-      await threadSubs.insert(threadId, 'conn-2', 'user2');
+      await threadSubs.insert(threadId, connA, 'user1');
+      await threadSubs.insert(threadId, connB, 'user2');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -183,7 +193,7 @@ describe('Forum Messages Service', () => {
       await createMessage(req, resp);
 
       expect(mockSend).toHaveBeenCalledWith(
-        expect.arrayContaining([ 'conn-1', 'conn-2' ]),
+        expect.arrayContaining([ connA, connB ]),
         expect.objectContaining({
           action: 'forum.message.new',
           participantId: threadId.participantId,
@@ -196,21 +206,20 @@ describe('Forum Messages Service', () => {
     });
 
     it('should remove gone subscribers after sending message', async () => {
-      // Set up user connections with subscriptions (needed for full cleanup)
-      await userConnections.insert('conn-1', 'user1');
-      await userConnections.insert('conn-gone', 'user2');
-      await userConnections.insert('conn-3', 'user3');
+      await userConnections.insert(connA, 'user1');
+      await userConnections.insert(connGone, 'user2');
+      await userConnections.insert(connC, 'user3');
 
-      const subKeys1 = await threadSubs.insert(threadId, 'conn-1', 'user1');
-      const subKeysGone = await threadSubs.insert(threadId, 'conn-gone', 'user2');
-      const subKeys3 = await threadSubs.insert(threadId, 'conn-3', 'user3');
+      await threadSubs.insert(threadId, connA, 'user1');
+      await threadSubs.insert(threadId, connGone, 'user2');
+      await threadSubs.insert(threadId, connC, 'user3');
 
-      await userConnections.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys1 });
-      await userConnections.updateConnectionInfo('conn-gone', { subscriptionKeys: subKeysGone });
-      await userConnections.updateConnectionInfo('conn-3', { subscriptionKeys: subKeys3 });
+      await userConnections.updateConnectionInfo(connA, { subscriptionThreadId: threadId });
+      await userConnections.updateConnectionInfo(connGone, { subscriptionThreadId: threadId });
+      await userConnections.updateConnectionInfo(connC, { subscriptionThreadId: threadId });
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
-        if (id === 'conn-gone') {
+        if (id === connGone) {
           const error = new Error('Gone');
           error.name = 'GoneException';
           return { success: false, connectionId: id, error };
@@ -231,9 +240,9 @@ describe('Forum Messages Service', () => {
       // Wait a bit for cleanup to complete
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      const subscribers = await threadSubs.getSubscribers({ threadId });
+      const subscribers = await threadSubs.getSubscribers(threadId);
       expect(subscribers).toHaveLength(2);
-      expect(subscribers.map(s => s.connectionId)).not.toContain('conn-gone');
+      expect(subscribers.map(s => s.connectionId)).not.toContain(connGone);
 
       // Verify user connection was also cleaned up
       const goneUserConns = await userConnections.getAll('user2');
@@ -264,7 +273,7 @@ describe('Forum Messages Service', () => {
       // Follower with no active subscription
       await threadFollows.insert(threadId, 'follower-user');
       // Also add a connection for the follower so we can verify the WS notification
-      await userConnections.insert('follower-conn', 'follower-user');
+      await userConnections.insert(connFollower, 'follower-user');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -311,7 +320,7 @@ describe('Forum Messages Service', () => {
     it('should exclude successful subscribers from follower notifications', async () => {
       // User is both a follower and an active subscriber
       await threadFollows.insert(threadId, 'subscriber-user');
-      await threadSubs.insert(threadId, 'sub-conn', 'subscriber-user');
+      await threadSubs.insert(threadId, connSub, 'subscriber-user');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -331,11 +340,11 @@ describe('Forum Messages Service', () => {
     it('should notify followers whose subscription connection was gone', async () => {
       // User is both a follower and a subscriber, but their connection is gone
       await threadFollows.insert(threadId, 'gone-subscriber');
-      await threadSubs.insert(threadId, 'gone-conn', 'gone-subscriber');
-      await userConnections.insert('other-conn', 'gone-subscriber');
+      await threadSubs.insert(threadId, connGoneSub, 'gone-subscriber');
+      await userConnections.insert(connOther, 'gone-subscriber');
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
-        if (id === 'gone-conn') {
+        if (id === connGoneSub) {
           const error = new Error('Gone');
           error.name = 'GoneException';
           return { success: false, connectionId: id, error };
@@ -366,7 +375,7 @@ describe('Forum Messages Service', () => {
       await threadFollows.insert(threadId, 'author-user'); // author is also a follower
 
       // subscriber-and-follower has an active subscription
-      await threadSubs.insert(threadId, 'sub-conn', 'subscriber-and-follower');
+      await threadSubs.insert(threadId, connSub, 'subscriber-and-follower');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {

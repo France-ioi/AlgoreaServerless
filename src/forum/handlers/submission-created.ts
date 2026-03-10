@@ -21,7 +21,7 @@ export async function handleSubmissionCreated(payload: SubmissionPayload, envelo
   const time = new Date(envelope.time).getTime();
   const threadId = { participantId, itemId };
 
-  const subscribers = await threadSubscriptionsTable.getSubscribers({ threadId });
+  const subscribers = await threadSubscriptionsTable.getSubscribers(threadId);
   const wsMessage = {
     action: ForumMessageAction.NewSubmission as const,
     answerId,

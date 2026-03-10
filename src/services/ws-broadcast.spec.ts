@@ -50,8 +50,8 @@ describe('ws-broadcast', () => {
 
     it('should clean up thread subscription when connection has one', async () => {
       await userConnectionsTable.insert(conn1, 'user-123');
-      const subKeys = await threadSubscriptionsTable.insert(threadId, conn1, 'user-123');
-      await userConnectionsTable.updateConnectionInfo(conn1, { subscriptionKeys: subKeys });
+      await threadSubscriptionsTable.insert(threadId, conn1, 'user-123');
+      await userConnectionsTable.updateConnectionInfo(conn1, { subscriptionThreadId: threadId });
 
       const result = await cleanupGoneConnection(conn1);
 
@@ -62,7 +62,7 @@ describe('ws-broadcast', () => {
       expect(connections).toHaveLength(0);
 
       // Verify subscription was also deleted
-      const subs = await threadSubscriptionsTable.getSubscribers({ threadId });
+      const subs = await threadSubscriptionsTable.getSubscribers(threadId);
       expect(subs).toHaveLength(0);
     });
 
@@ -133,10 +133,10 @@ describe('ws-broadcast', () => {
       await userConnectionsTable.insert(connActive, 'user-active');
       await userConnectionsTable.insert(connGone, 'user-gone');
 
-      const activeSubKeys = await threadSubscriptionsTable.insert(threadId, connActive, 'user-active');
-      const goneSubKeys = await threadSubscriptionsTable.insert(threadId, connGone, 'user-gone');
-      await userConnectionsTable.updateConnectionInfo(connActive, { subscriptionKeys: activeSubKeys });
-      await userConnectionsTable.updateConnectionInfo(connGone, { subscriptionKeys: goneSubKeys });
+      await threadSubscriptionsTable.insert(threadId, connActive, 'user-active');
+      await threadSubscriptionsTable.insert(threadId, connGone, 'user-gone');
+      await userConnectionsTable.updateConnectionInfo(connActive, { subscriptionThreadId: threadId });
+      await userConnectionsTable.updateConnectionInfo(connGone, { subscriptionThreadId: threadId });
 
       const entries = [
         { connectionId: connActive, userId: 'user-active' },
@@ -160,7 +160,7 @@ describe('ws-broadcast', () => {
       const goneConnections = await userConnectionsTable.getAll('user-gone');
       expect(goneConnections).toHaveLength(0);
 
-      const subs = await threadSubscriptionsTable.getSubscribers({ threadId });
+      const subs = await threadSubscriptionsTable.getSubscribers(threadId);
       expect(subs).toHaveLength(1);
       expect(subs[0]?.connectionId).toBe(connActive);
     });

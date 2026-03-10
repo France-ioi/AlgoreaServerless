@@ -2,8 +2,7 @@ import { ConnectionId, WsMessage, isClosedConnection, logSendResults, wsClient }
 import { userConnectionsTable } from '../dbmodels/user-connections';
 import { liveActivitySubscriptionsTable } from '../dbmodels/live-activity-subscriptions';
 import { threadSubscriptionsTable } from '../forum/dbmodels/thread-subscriptions';
-import { z } from 'zod';
-import { dbNumber } from '../dynamodb';
+import { threadIdSchema } from '../forum/dbmodels/thread';
 
 /**
  * Result of a user connection cleanup.
@@ -21,12 +20,11 @@ export interface BroadcastResult<T> {
   successfulRecipients: T[],
 }
 
-const subKeysSchema = z.object({ pk: z.string(), sk: dbNumber });
 
 /**
  * Cleans up a gone WebSocket connection by removing:
  * 1. The user connection entry
- * 2. The thread subscription (if any, via stored keys)
+ * 2. The thread subscription (if any, via stored threadId + connectionId)
  * 3. The live activity subscription (if any, via direct connectionId delete)
  *
  * @param connectionId - The connection to clean up
@@ -36,9 +34,9 @@ export async function cleanupGoneConnection(connectionId: ConnectionId): Promise
   const connInfo = await userConnectionsTable.delete(connectionId);
   if (!connInfo) return {};
 
-  const threadSubKeys = subKeysSchema.safeParse(connInfo['subscriptionKeys']);
-  if (threadSubKeys.success) {
-    await threadSubscriptionsTable.deleteByKeys(threadSubKeys.data);
+  const threadId = threadIdSchema.safeParse(connInfo['subscriptionThreadId']);
+  if (threadId.success) {
+    await threadSubscriptionsTable.deleteByConnectionId(threadId.data, connectionId);
   }
 
   await liveActivitySubscriptionsTable.deleteByConnectionId(connectionId); // no-op if not subscribed

@@ -36,6 +36,12 @@ function createMockEnvelope(payload: unknown = createMockPayload()): EventEnvelo
   };
 }
 
+// Valid base64 connectionIds (first byte must be non-zero for number encoding round-trip)
+const connA = 'AQ==';
+const connB = 'Ag==';
+const connC = 'Aw==';
+const connGone = 'BA==';
+
 describe('handleSubmissionCreated', () => {
   let threadSubs: ThreadSubscriptions;
   let userConnections: UserConnections;
@@ -54,8 +60,8 @@ describe('handleSubmissionCreated', () => {
 
   describe('successful handling', () => {
     it('should notify all subscribers when submission is created', async () => {
-      await threadSubs.insert(threadId, 'conn-1', 'user1');
-      await threadSubs.insert(threadId, 'conn-2', 'user2');
+      await threadSubs.insert(threadId, connA, 'user1');
+      await threadSubs.insert(threadId, connB, 'user2');
 
       const payload = createMockPayload();
       const envelope = createMockEnvelope(payload);
@@ -64,7 +70,7 @@ describe('handleSubmissionCreated', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(mockSend).toHaveBeenCalledWith(
-        expect.arrayContaining([ 'conn-1', 'conn-2' ]),
+        expect.arrayContaining([ connA, connB ]),
         expect.objectContaining({
           action: 'forum.submission.new',
           answerId: defaultPayload.answer_id,
@@ -96,20 +102,20 @@ describe('handleSubmissionCreated', () => {
 
   describe('cleanup of gone connections', () => {
     it('should remove gone subscribers after sending message', async () => {
-      await userConnections.insert('conn-1', 'user1');
-      await userConnections.insert('conn-gone', 'user2');
-      await userConnections.insert('conn-3', 'user3');
+      await userConnections.insert(connA, 'user1');
+      await userConnections.insert(connGone, 'user2');
+      await userConnections.insert(connC, 'user3');
 
-      const subKeys1 = await threadSubs.insert(threadId, 'conn-1', 'user1');
-      const subKeysGone = await threadSubs.insert(threadId, 'conn-gone', 'user2');
-      const subKeys3 = await threadSubs.insert(threadId, 'conn-3', 'user3');
+      await threadSubs.insert(threadId, connA, 'user1');
+      await threadSubs.insert(threadId, connGone, 'user2');
+      await threadSubs.insert(threadId, connC, 'user3');
 
-      await userConnections.updateConnectionInfo('conn-1', { subscriptionKeys: subKeys1 });
-      await userConnections.updateConnectionInfo('conn-gone', { subscriptionKeys: subKeysGone });
-      await userConnections.updateConnectionInfo('conn-3', { subscriptionKeys: subKeys3 });
+      await userConnections.updateConnectionInfo(connA, { subscriptionThreadId: threadId });
+      await userConnections.updateConnectionInfo(connGone, { subscriptionThreadId: threadId });
+      await userConnections.updateConnectionInfo(connC, { subscriptionThreadId: threadId });
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
-        if (id === 'conn-gone') {
+        if (id === connGone) {
           const error = new Error('Gone');
           error.name = 'GoneException';
           return { success: false, connectionId: id, error };
@@ -123,9 +129,9 @@ describe('handleSubmissionCreated', () => {
 
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      const subscribers = await threadSubs.getSubscribers({ threadId });
+      const subscribers = await threadSubs.getSubscribers(threadId);
       expect(subscribers).toHaveLength(2);
-      expect(subscribers.map(s => s.connectionId)).not.toContain('conn-gone');
+      expect(subscribers.map(s => s.connectionId)).not.toContain(connGone);
 
       const goneUserConns = await userConnections.getAll('user2');
       expect(goneUserConns).toHaveLength(0);

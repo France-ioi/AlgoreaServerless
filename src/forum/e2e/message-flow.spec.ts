@@ -13,6 +13,11 @@ jest.mock('../../websocket-client', () => ({
 
 import { globalHandler } from '../../handlers';
 
+// Valid base64 connectionIds (first byte must be non-zero for number encoding round-trip)
+const connUser2 = 'AQ==';
+const connUser3 = 'Ag==';
+const connUser3Gone = 'Aw==';
+
 describe('E2E: Message Flow', () => {
   const threadId = { participantId: 'user123', itemId: 'item456' };
 
@@ -33,7 +38,7 @@ describe('E2E: Message Flow', () => {
 
     // Step 1: User2 subscribes to thread via WebSocket
     const subscribeEvent = mockWebSocketMessageEvent({
-      connectionId: 'user2-conn',
+      connectionId: connUser2,
       body: JSON.stringify({
         action: 'forum.subscribe',
         token: user2Token,
@@ -56,7 +61,7 @@ describe('E2E: Message Flow', () => {
 
     // Step 3: Verify User2 received WebSocket notification
     expect(mockSend).toHaveBeenCalledWith(
-      [ 'user2-conn' ],
+      [ connUser2 ],
       expect.objectContaining({
         action: 'forum.message.new',
         authorId: 'user1',
@@ -85,7 +90,7 @@ describe('E2E: Message Flow', () => {
 
     // Step 5: User2 unsubscribes
     const unsubscribeEvent = mockWebSocketMessageEvent({
-      connectionId: 'user2-conn',
+      connectionId: connUser2,
       body: JSON.stringify({
         action: 'forum.unsubscribe',
         token: user2Token,
@@ -103,12 +108,12 @@ describe('E2E: Message Flow', () => {
 
     // Subscribe two users
     await globalHandler(mockWebSocketMessageEvent({
-      connectionId: 'user2-conn',
+      connectionId: connUser2,
       body: JSON.stringify({ action: 'forum.subscribe', token: user2Token }),
     }), {} as any);
 
     await globalHandler(mockWebSocketMessageEvent({
-      connectionId: 'user3-conn',
+      connectionId: connUser3,
       body: JSON.stringify({ action: 'forum.subscribe', token: user3Token }),
     }), {} as any);
 
@@ -124,7 +129,7 @@ describe('E2E: Message Flow', () => {
 
     // Both subscribers should receive the message
     expect(mockSend).toHaveBeenCalledWith(
-      expect.arrayContaining([ 'user2-conn', 'user3-conn' ]),
+      expect.arrayContaining([ connUser2, connUser3 ]),
       expect.objectContaining({
         action: 'forum.message.new',
         text: 'Broadcast message',
@@ -173,23 +178,23 @@ describe('E2E: Message Flow', () => {
     const user3Token = await generateToken({ ...threadId, userId: 'user3', canWrite: false });
 
     // Create user connections before subscribing (simulating what handleConnect does)
-    await userConnections.insert('user2-conn', 'user2');
-    await userConnections.insert('user3-gone-conn', 'user3');
+    await userConnections.insert(connUser2, 'user2');
+    await userConnections.insert(connUser3Gone, 'user3');
 
-    // Subscribe two users (this will also update the connection with subscriptionKeys)
+    // Subscribe two users (this will also update the connection with subscriptionThreadId)
     await globalHandler(mockWebSocketMessageEvent({
-      connectionId: 'user2-conn',
+      connectionId: connUser2,
       body: JSON.stringify({ action: 'forum.subscribe', token: user2Token }),
     }), {} as any);
 
     await globalHandler(mockWebSocketMessageEvent({
-      connectionId: 'user3-gone-conn',
+      connectionId: connUser3Gone,
       body: JSON.stringify({ action: 'forum.subscribe', token: user3Token }),
     }), {} as any);
 
     // Simulate user3 connection is gone
     mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
-      if (id === 'user3-gone-conn') {
+      if (id === connUser3Gone) {
         const error = new Error('Gone');
         error.name = 'GoneException';
         return { success: false, connectionId: id, error };
@@ -226,8 +231,8 @@ describe('E2E: Message Flow', () => {
 
     const calls = mockSend.mock.calls;
     const lastCall = calls[calls.length - 1];
-    expect(lastCall?.[0]).toEqual([ 'user2-conn' ]);
-    expect(lastCall?.[0]).not.toContain('user3-gone-conn');
+    expect(lastCall?.[0]).toEqual([ connUser2 ]);
+    expect(lastCall?.[0]).not.toContain(connUser3Gone);
   });
 });
 

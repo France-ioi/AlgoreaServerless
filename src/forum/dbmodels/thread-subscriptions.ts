@@ -1,18 +1,10 @@
 import { ConnectionId } from '../../websocket-client';
-import { Table, TableKey, wsConnectionTtl } from '../../dbmodels/table';
+import { Table, wsConnectionTtl } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
-import { dbNumber, docClient } from '../../dynamodb';
+import { docClient } from '../../dynamodb';
 import { safeParseArray } from '../../utils/zod-utils';
-
-/**
- * The DynamoDB keys for a subscription entry.
- * Can be used to directly delete the subscription without querying.
- */
-export interface SubscriptionKeys {
-  pk: string,
-  sk: number,
-}
+import { connectionIdToNumberValue, dbConnectionId } from '../../utils/connection-id-number';
 
 function pk(thread: ThreadId): string {
   const stage = process.env.STAGE || 'dev';
@@ -31,68 +23,39 @@ function pk(thread: ThreadId): string {
  *
  * Database schema:
  * - pk: stage#THREAD#{participantId}#{itemId}#SUB
- * - sk: insertion timestamp (milliseconds since epoch, allows multiple subscriptions per thread)
- * - connectionId: the WebSocket connection id
+ * - sk: connectionId encoded as a number (base64 → big-endian unsigned integer)
+ * - connectionId: the WebSocket connection id string (stored for debugging, not read back)
  * - ttl: auto-deletion time (seconds since epoch, DynamoDB TTL format, tied to WebSocket connection lifetime)
  * - userId: the user id of the subscriber
  */
 export class ThreadSubscriptions extends Table {
 
-  async getSubscribers(
-    filter: { threadId: ThreadId, connectionId?: ConnectionId }
-  ): Promise<{ connectionId: ConnectionId, sk: number, userId: string }[]> {
-    let query = `SELECT connectionId, sk, userId FROM "${ this.tableName }" WHERE pk = ?`;
-    const params = [ pk(filter.threadId) ];
-    if (filter.connectionId) {
-      query += ' AND connectionId = ?';
-      params.push(filter.connectionId);
-    }
-    const results = await this.sqlRead({ query, params });
-    const subscriberSchema = z.object({
-      connectionId: z.string(),
-      sk: dbNumber,
-      userId: z.string(),
+  async getSubscribers(threadId: ThreadId): Promise<{ connectionId: ConnectionId, userId: string }[]> {
+    const results = await this.sqlRead({
+      query: `SELECT sk, userId FROM "${ this.tableName }" WHERE pk = ?`,
+      params: [ pk(threadId) ],
     });
+    const subscriberSchema = z.object({
+      sk: dbConnectionId,
+      userId: z.string(),
+    }).transform(({ sk, userId }) => ({ connectionId: sk, userId }));
     return safeParseArray(results, subscriberSchema, 'thread subscriber');
   }
 
-  async insert(thread: ThreadId, connectionId: ConnectionId, userId: string): Promise<SubscriptionKeys> {
-    const keys: SubscriptionKeys = { pk: pk(thread), sk: Date.now() };
+  async insert(threadId: ThreadId, connectionId: ConnectionId, userId: string): Promise<void> {
+    const sk = connectionIdToNumberValue(connectionId);
     await this.sqlWrite({
       query: `INSERT INTO "${ this.tableName }" VALUE { 'pk': ?, 'sk': ?, 'connectionId': ?, 'ttl': ?, 'userId': ? }`,
-      params: [ keys.pk, keys.sk, connectionId, wsConnectionTtl(), userId ]
+      params: [ pk(threadId), sk, connectionId, wsConnectionTtl(), userId ]
     });
-    return keys;
-  }
-
-  private async deleteRows(keys: TableKey[]): Promise<void> {
-    await this.sqlWrite(keys.map(k => ({
-      query: `DELETE FROM "${ this.tableName }" WHERE pk = ? AND sk = ?`,
-      params: [ k.pk, k.sk ],
-    })));
-  }
-
-  async deleteSet(thread: ThreadId, sks: number[]): Promise<void> {
-    if (sks.length === 0) return;
-    await this.deleteRows(sks.map(sk => ({ pk: pk(thread), sk })));
   }
 
   async deleteByConnectionId(threadId: ThreadId, connectionId: ConnectionId): Promise<void> {
-    const entry = await this.getSubscribers({ threadId, connectionId });
-    if (!entry.length) {
-      // eslint-disable-next-line no-console
-      console.warn('Unexpected: deleting a non-existing subscription.', JSON.stringify(threadId), connectionId);
-      return;
-    }
-    await this.deleteSet(threadId, entry.map(e => e.sk));
-  }
-
-  /**
-   * Delete subscription using the keys directly.
-   * More efficient than deleteByConnectionId as it doesn't require a query.
-   */
-  async deleteByKeys(keys: SubscriptionKeys): Promise<void> {
-    await this.deleteRows([ keys ]);
+    const sk = connectionIdToNumberValue(connectionId);
+    await this.sqlWrite({
+      query: `DELETE FROM "${ this.tableName }" WHERE pk = ? AND sk = ?`,
+      params: [ pk(threadId), sk ],
+    });
   }
 }
 
