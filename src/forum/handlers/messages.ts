@@ -74,10 +74,17 @@ async function create(req: RequestWithThreadToken, resp: Response): Promise<Retu
   return created(resp);
 }
 
+interface MessageEntry {
+  time: number,
+  text: string,
+  authorId: string,
+  uuid: string,
+}
+
 const defaultLimit = 10;
 const maxLimit = 20;
 
-async function getAll(req: RequestWithThreadToken): Promise<{ time: number, text: string, authorId: string, uuid: string }[]> {
+async function getAll(req: RequestWithThreadToken): Promise<MessageEntry[]> {
   const { threadToken } = req;
   const limitParam = req.query['limit'] ? +req.query['limit'] : undefined;
   let limit: number;

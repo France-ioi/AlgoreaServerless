@@ -1,6 +1,6 @@
 import { Table, TableKey } from './table';
 import { z } from 'zod';
-import { safeNumber, docClient } from '../dynamodb';
+import { safeNumber, deepConvertNumberValues, docClient } from '../dynamodb';
 import { safeParseArray } from '../utils/zod-utils';
 
 /**
@@ -23,7 +23,7 @@ function pk(userId: string): string {
 export const notificationSchema = z.object({
   sk: safeNumber,
   notificationType: z.string(),
-  payload: z.record(z.string(), z.unknown()),
+  payload: z.record(z.string(), z.unknown()).transform(p => deepConvertNumberValues(p) as Record<string, unknown>),
   readTime: safeNumber.optional(),
 });
 

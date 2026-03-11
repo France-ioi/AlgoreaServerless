@@ -89,6 +89,19 @@ describe('Notifications', () => {
       expect(user1Notifs[0]?.notificationType).toBe('for-user-1');
       expect(user2Notifs[0]?.notificationType).toBe('for-user-2');
     });
+
+    it('should return number values in payload as plain numbers (not NumberValue)', async () => {
+      const time = Date.now();
+      await notifications.insert(userId, {
+        notificationType: 'forum.new_message',
+        payload: { participantId: '123', itemId: '456', time, text: 'hello', authorId: '789', uuid: 'abc' },
+      });
+
+      const result = await notifications.getNotifications(userId, 10);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.payload.time).toBe(time);
+      expect(typeof result[0]?.payload.time).toBe('number');
+    });
   });
 
   describe('delete', () => {

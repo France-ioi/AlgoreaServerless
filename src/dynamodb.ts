@@ -59,3 +59,21 @@ export const safeNumber = z.union([
   z.number(),
   z.instanceof(NumberValue).transform(n => Number(n.value)),
 ]);
+
+/**
+ * Recursively converts any DynamoDB NumberValue instances to plain JS numbers
+ * inside a value tree. Useful for schemaless fields (e.g. notification payloads)
+ * where NumberValue objects would otherwise serialize as { "value": "..." }.
+ */
+export function deepConvertNumberValues(value: unknown): unknown {
+  if (value instanceof NumberValue) return Number(value.value);
+  if (Array.isArray(value)) return value.map(deepConvertNumberValues);
+  if (value !== null && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [ k, v ] of Object.entries(value)) {
+      result[k] = deepConvertNumberValues(v);
+    }
+    return result;
+  }
+  return value;
+}
