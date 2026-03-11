@@ -33,7 +33,7 @@ describe('getLatestValidations', () => {
     expect(result).toEqual({ validations: [] });
   });
 
-  it('should return validations in descending order', async () => {
+  it('should return validations in descending order with time instead of sk', async () => {
     const baseTime = Date.now();
     await validations.insert(baseTime, {
       participantId: 'p1', itemId: 'i1', answerId: 'a1',
@@ -48,7 +48,17 @@ describe('getLatestValidations', () => {
     const result = await getLatestValidations(req, resp);
 
     expect(result.validations).toHaveLength(2);
-    expect(result.validations[0]?.participantId).toBe('p2');
-    expect(result.validations[1]?.participantId).toBe('p1');
+    expect(result.validations[0]).toEqual({
+      time: baseTime + 100,
+      participantId: 'p2',
+      itemId: 'i2',
+      answerId: 'a2',
+    });
+    expect(result.validations[1]).toEqual({
+      time: baseTime,
+      participantId: 'p1',
+      itemId: 'i1',
+      answerId: 'a1',
+    });
   });
 });
