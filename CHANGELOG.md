@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.3.0 - 2026-03-11
+
+- rename `sk` to `time` in the GET /validations response and stop exposing internal DB fields
+
 ## 2.2.0 - 2026-03-10
 
 - new rest service to get latest activities (global)
