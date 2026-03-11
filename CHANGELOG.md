@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.3.1 - 2026-03-11
+- fix number values in notification payloads being returned as objects instead of plain numbers
+
 ## 2.3.0 - 2026-03-11
 
 - rename `sk` to `time` in the GET /validations response and stop exposing internal DB fields
