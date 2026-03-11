@@ -1,5 +1,5 @@
 import { NumberValue } from '@aws-sdk/lib-dynamodb';
-import { safeNumber } from './dynamodb';
+import { safeNumber, deepConvertNumberValues } from './dynamodb';
 
 describe('safeNumber', () => {
 
@@ -24,6 +24,37 @@ describe('safeNumber', () => {
     expect(() => safeNumber.parse(undefined)).toThrow();
     expect(() => safeNumber.parse(true)).toThrow();
     expect(() => safeNumber.parse({})).toThrow();
+  });
+
+});
+
+describe('deepConvertNumberValues', () => {
+
+  it('should convert a top-level NumberValue', () => {
+    expect(deepConvertNumberValues(NumberValue.from('42'))).toBe(42);
+  });
+
+  it('should convert NumberValues inside a flat object', () => {
+    const input = { time: NumberValue.from('1000'), text: 'hello' };
+    expect(deepConvertNumberValues(input)).toEqual({ time: 1000, text: 'hello' });
+  });
+
+  it('should convert NumberValues in nested objects', () => {
+    const input = { nested: { ts: NumberValue.from('999') } };
+    expect(deepConvertNumberValues(input)).toEqual({ nested: { ts: 999 } });
+  });
+
+  it('should convert NumberValues inside arrays', () => {
+    const input = [ NumberValue.from('1'), 'a', NumberValue.from('2') ];
+    expect(deepConvertNumberValues(input)).toEqual([ 1, 'a', 2 ]);
+  });
+
+  it('should leave primitives unchanged', () => {
+    expect(deepConvertNumberValues('hello')).toBe('hello');
+    expect(deepConvertNumberValues(42)).toBe(42);
+    expect(deepConvertNumberValues(null)).toBeNull();
+    expect(deepConvertNumberValues(undefined)).toBeUndefined();
+    expect(deepConvertNumberValues(true)).toBe(true);
   });
 
 });
