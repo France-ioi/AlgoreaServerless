@@ -95,8 +95,8 @@ describe('live-activity handleGradeSaved', () => {
   });
 
   it('should clean up gone connections after broadcast', async () => {
-    await userConnections.insert(connA, 'user1');
-    await userConnections.insert(connGone, 'user2');
+    await userConnections.insert(connA, '50001');
+    await userConnections.insert(connGone, '50002');
 
     await liveActivitySubs.insert(connA);
     await liveActivitySubs.insert(connGone);
@@ -115,7 +115,7 @@ describe('live-activity handleGradeSaved', () => {
     const subscribers = await liveActivitySubs.getSubscribers();
     expect(subscribers.map(s => s.connectionId)).not.toContain(connGone);
 
-    const goneUserConns = await userConnections.getAll('user2');
+    const goneUserConns = await userConnections.getAll('50002');
     expect(goneUserConns).toHaveLength(0);
   });
 });

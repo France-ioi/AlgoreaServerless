@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { ExecuteStatementCommand, ExecuteTransactionCommand, BatchWriteCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { ExecuteStatementCommand, ExecuteTransactionCommand, BatchWriteCommand, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { DBError } from '../utils/errors';
 import { z } from 'zod';
 import { safeNumber } from '../dynamodb';
@@ -92,6 +92,18 @@ export class Table {
     }
   }
 
+  protected async upsert(item: Record<string, unknown>): Promise<void> {
+    try {
+      await this.db.send(new PutCommand({
+        TableName: this.tableName,
+        Item: item,
+      }));
+    } catch (err) {
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(item), { cause: err });
+      else throw err;
+    }
+  }
+
   protected async batchUpdate<T extends TableKey>(items: T[]): Promise<void> {
     const chunkSize = 25; // the max size of 'RequestItems' for the dynamoDB API
     for (let i = 0; i < items.length; i += chunkSize) {
@@ -104,6 +116,21 @@ export class Table {
           })),
         },
       }));
+    }
+  }
+
+  protected async countByPk(pk: string): Promise<number> {
+    try {
+      const output = await this.db.send(new QueryCommand({
+        TableName: this.tableName,
+        KeyConditionExpression: 'pk = :pk',
+        ExpressionAttributeValues: { ':pk': pk },
+        Select: 'COUNT',
+      }));
+      return output.Count ?? 0;
+    } catch (err) {
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, pk, { cause: err });
+      else throw err;
     }
   }
 

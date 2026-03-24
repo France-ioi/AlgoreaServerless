@@ -22,7 +22,7 @@ const connGone = 'KCwwNDg8QEQ=';
 describe('notifyUser', () => {
   let userConnections: UserConnections;
   let notifications: Notifications;
-  const userId = 'user-123';
+  const userId = '30123';
 
   beforeEach(async () => {
     userConnections = new UserConnections(docClient);
@@ -162,10 +162,10 @@ describe('notifyUsers', () => {
   });
 
   it('should notify multiple users in parallel', async () => {
-    const userIds = [ 'user-1', 'user-2', 'user-3' ];
+    const userIds = [ '30001', '30002', '30003' ];
 
-    await userConnections.insert(conn1, 'user-1');
-    await userConnections.insert(conn2, 'user-2');
+    await userConnections.insert(conn1, '30001');
+    await userConnections.insert(conn2, '30002');
 
     const sks = await notifyUsers(userIds, {
       notificationType: 'forum.new_message',

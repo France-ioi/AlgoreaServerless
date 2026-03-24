@@ -33,8 +33,8 @@ describe('E2E: Message Flow', () => {
   });
 
   it('should handle complete message lifecycle: subscribe, post, receive, get', async () => {
-    const user1Token = await generateToken({ ...threadId, userId: 'user1', canWrite: true });
-    const user2Token = await generateToken({ ...threadId, userId: 'user2', canWrite: false });
+    const user1Token = await generateToken({ ...threadId, userId: '40001', canWrite: true });
+    const user2Token = await generateToken({ ...threadId, userId: '40002', canWrite: false });
 
     // Step 1: User2 subscribes to thread via WebSocket
     const subscribeEvent = mockWebSocketMessageEvent({
@@ -64,7 +64,7 @@ describe('E2E: Message Flow', () => {
       [ connUser2 ],
       expect.objectContaining({
         action: 'forum.message.new',
-        authorId: 'user1',
+        authorId: '40001',
         text: 'Hello from user1',
         uuid: 'msg-uuid-1',
       })
@@ -83,7 +83,7 @@ describe('E2E: Message Flow', () => {
     const messages = JSON.parse(getResult.body);
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
-      authorId: 'user1',
+      authorId: '40001',
       text: 'Hello from user1',
       uuid: 'msg-uuid-1',
     });
@@ -102,9 +102,9 @@ describe('E2E: Message Flow', () => {
   });
 
   it('should handle multiple subscribers receiving the same message', async () => {
-    const user1Token = await generateToken({ ...threadId, userId: 'user1', canWrite: true });
-    const user2Token = await generateToken({ ...threadId, userId: 'user2', canWrite: false });
-    const user3Token = await generateToken({ ...threadId, userId: 'user3', canWrite: false });
+    const user1Token = await generateToken({ ...threadId, userId: '40001', canWrite: true });
+    const user2Token = await generateToken({ ...threadId, userId: '40002', canWrite: false });
+    const user3Token = await generateToken({ ...threadId, userId: '40003', canWrite: false });
 
     // Subscribe two users
     await globalHandler(mockWebSocketMessageEvent({
@@ -138,7 +138,7 @@ describe('E2E: Message Flow', () => {
   });
 
   it('should handle posting multiple messages in sequence', async () => {
-    const userToken = await generateToken({ ...threadId, userId: 'user1', canWrite: true });
+    const userToken = await generateToken({ ...threadId, userId: '40001', canWrite: true });
 
     // Post three messages
     for (let i = 1; i <= 3; i++) {
@@ -173,13 +173,13 @@ describe('E2E: Message Flow', () => {
   it('should clean up gone subscribers when posting message', async () => {
     const userConnections = new UserConnections(docClient);
 
-    const user1Token = await generateToken({ ...threadId, userId: 'user1', canWrite: true });
-    const user2Token = await generateToken({ ...threadId, userId: 'user2', canWrite: false });
-    const user3Token = await generateToken({ ...threadId, userId: 'user3', canWrite: false });
+    const user1Token = await generateToken({ ...threadId, userId: '40001', canWrite: true });
+    const user2Token = await generateToken({ ...threadId, userId: '40002', canWrite: false });
+    const user3Token = await generateToken({ ...threadId, userId: '40003', canWrite: false });
 
     // Create user connections before subscribing (simulating what handleConnect does)
-    await userConnections.insert(connUser2, 'user2');
-    await userConnections.insert(connUser3Gone, 'user3');
+    await userConnections.insert(connUser2, '40002');
+    await userConnections.insert(connUser3Gone, '40003');
 
     // Subscribe two users (this will also update the connection with subscriptionThreadId)
     await globalHandler(mockWebSocketMessageEvent({

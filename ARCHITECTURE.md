@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: March 10, 2026
+**Last Updated**: March 23, 2026
 
 ## Overview
 
@@ -590,6 +590,17 @@ payload: Record<string, unknown>
 readTime?: number (milliseconds, when marked as read)
 ttl: {timestamp + ~5184000} (~60 days, in seconds since epoch)
 ```
+
+#### Connected Users (Presence)
+```
+pk: {STAGE}#CONNECTED_USERS
+sk: {userId as DynamoDB Number} (numeric userId used directly via NumberValue.from)
+userId: string (for debugging/inspection)
+ttl: {timestamp + 7200} (2 hours, same as WebSocket connection TTL)
+```
+One entry per connected user. Upserted on connect (PutItem with refreshed TTL), deleted on last disconnect
+(after verifying no remaining u2c entries). Used by `UserConnections.countDistinctUsers()` which queries
+this partition with `Select: 'COUNT'` and a TTL filter to exclude expired-but-not-yet-cleaned entries.
 
 ### Key Design Patterns
 

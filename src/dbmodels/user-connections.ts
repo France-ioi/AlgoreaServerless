@@ -1,4 +1,6 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import { Table, wsConnectionTtl } from './table';
+import { NumberValue } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { safeNumber, docClient } from '../dynamodb';
 import { connectionIdToNumberValue, dbConnectionId } from '../utils/connection-id-number';
@@ -18,6 +20,16 @@ function u2cPk(userId: UserId): string {
   return `${stage}#USER#${userId}#CONN`;
 }
 
+function connectedUsersPk(): string {
+  const stage = process.env.STAGE || 'dev';
+  return `${stage}#CONNECTED_USERS`;
+}
+
+/** userId is always a numeric string (int64) so it can be used directly as a DynamoDB Number sk. */
+function userIdToSk(userId: UserId): NumberValue {
+  return NumberValue.from(userId);
+}
+
 const c2uEntrySchema = z.looseObject({
   userId: z.string(),
   creationTime: safeNumber,
@@ -35,17 +47,23 @@ type ConnectionInfo = Record<string, unknown>;
 /**
  * UserConnections tracks WebSocket connections per user.
  *
- * Two entry types are stored:
+ * Three entry types are stored:
  * - c2u (connection to user): pk: `${stage}#CONN#${connectionId}#USER`, sk: 0
  *   Contains: userId, creationTime (ms since epoch), ttl (seconds since epoch, DynamoDB TTL format)
  * - u2c (user to connection): pk: `${stage}#USER#${userId}#CONN`,
  *   sk: connectionId encoded as a number (base64 → big-endian unsigned integer)
  *   Contains: connectionId (for debugging), ttl (seconds since epoch, DynamoDB TTL format)
+ * - presence: pk: `${stage}#CONNECTED_USERS`, sk: NumberValue.from(userId)
+ *   One entry per connected user (upserted on connect, deleted on last disconnect).
+ *   Contains: userId (for debugging), ttl (seconds since epoch). Used by countDistinctUsers().
  */
 export class UserConnections extends Table {
 
   /**
-   * Insert a new user connection (creates both c2u and u2c entries).
+   * Insert a new user connection (creates c2u, u2c, and presence entries).
+   * The presence entry is upserted separately (PartiQL UPDATE has upsert semantics only
+   * outside transactions) so that multiple connections for the same user share a single
+   * presence entry with refreshed TTL.
    */
   async insert(connectionId: ConnectionId, userId: UserId): Promise<void> {
     const creationTime = Date.now();
@@ -61,11 +79,13 @@ export class UserConnections extends Table {
         params: [ u2cPk(userId), connectionIdToNumberValue(connectionId), ttl, connectionId ],
       },
     ]);
+
+    await this.upsert({ pk: connectedUsersPk(), sk: userIdToSk(userId), userId, ttl });
   }
 
   /**
    * Delete a user connection by connectionId.
-   * Removes both c2u and u2c entries.
+   * Removes c2u and u2c entries, and the presence entry if this was the user's last connection.
    * @returns The deleted connection entry (core fields + any extra metadata), or null if not found
    */
   async delete(connectionId: ConnectionId): Promise<C2uEntry | null> {
@@ -93,6 +113,15 @@ export class UserConnections extends Table {
         params: [ u2cPk(entry.userId), connectionIdToNumberValue(connectionId) ],
       },
     ]);
+
+    // Remove presence entry if this was the user's last connection
+    const remaining = await this.getAll(entry.userId);
+    if (remaining.length === 0) {
+      await this.sqlWrite({
+        query: `DELETE FROM "${this.tableName}" WHERE pk = ? AND sk = ?`,
+        params: [ connectedUsersPk(), userIdToSk(entry.userId) ],
+      });
+    }
 
     return entry;
   }
@@ -150,6 +179,11 @@ export class UserConnections extends Table {
     });
     const connectionSchema = z.object({ sk: dbConnectionId }).transform(({ sk }) => sk);
     return safeParseArray(results, connectionSchema, 'user connection');
+  }
+
+  /** Count the number of distinct users currently connected. */
+  async countDistinctUsers(): Promise<number> {
+    return this.countByPk(connectedUsersPk());
   }
 }
 

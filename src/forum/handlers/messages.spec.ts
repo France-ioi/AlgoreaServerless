@@ -179,8 +179,8 @@ describe('Forum Messages Service', () => {
     });
 
     it('should notify all subscribers when message is created', async () => {
-      await threadSubs.insert(threadId, connA, 'user1');
-      await threadSubs.insert(threadId, connB, 'user2');
+      await threadSubs.insert(threadId, connA, '60001');
+      await threadSubs.insert(threadId, connB, '60002');
 
       const req = mockRequest(writeToken, { body: { text: 'New message', uuid: 'msg-uuid-1' } });
       const resp = {
@@ -206,13 +206,13 @@ describe('Forum Messages Service', () => {
     });
 
     it('should remove gone subscribers after sending message', async () => {
-      await userConnections.insert(connA, 'user1');
-      await userConnections.insert(connGone, 'user2');
-      await userConnections.insert(connC, 'user3');
+      await userConnections.insert(connA, '60001');
+      await userConnections.insert(connGone, '60002');
+      await userConnections.insert(connC, '60003');
 
-      await threadSubs.insert(threadId, connA, 'user1');
-      await threadSubs.insert(threadId, connGone, 'user2');
-      await threadSubs.insert(threadId, connC, 'user3');
+      await threadSubs.insert(threadId, connA, '60001');
+      await threadSubs.insert(threadId, connGone, '60002');
+      await threadSubs.insert(threadId, connC, '60003');
 
       await userConnections.updateConnectionInfo(connA, { subscriptionThreadId: threadId });
       await userConnections.updateConnectionInfo(connGone, { subscriptionThreadId: threadId });
@@ -245,7 +245,7 @@ describe('Forum Messages Service', () => {
       expect(subscribers.map(s => s.connectionId)).not.toContain(connGone);
 
       // Verify user connection was also cleaned up
-      const goneUserConns = await userConnections.getAll('user2');
+      const goneUserConns = await userConnections.getAll('60002');
       expect(goneUserConns).toHaveLength(0);
     });
 
