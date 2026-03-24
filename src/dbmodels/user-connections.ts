@@ -183,7 +183,7 @@ export class UserConnections extends Table {
 
   /** Count the number of distinct users currently connected. */
   async countDistinctUsers(): Promise<number> {
-    return this.countByPk(connectedUsersPk());
+    return this.countByPk(connectedUsersPk(), { excludeExpiredTtl: true });
   }
 }
 

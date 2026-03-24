@@ -119,12 +119,22 @@ export class Table {
     }
   }
 
-  protected async countByPk(pk: string): Promise<number> {
+  protected async countByPk(pk: string, options?: { excludeExpiredTtl?: boolean }): Promise<number> {
     try {
+      const expressionValues: Record<string, unknown> = { ':pk': pk };
+      let filterExpression: string | undefined;
+      let expressionNames: Record<string, string> | undefined;
+      if (options?.excludeExpiredTtl) {
+        expressionValues[':now'] = Math.floor(Date.now() / 1000);
+        expressionNames = { '#ttl': 'ttl' };
+        filterExpression = '#ttl > :now';
+      }
       const output = await this.db.send(new QueryCommand({
         TableName: this.tableName,
         KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: { ':pk': pk },
+        ExpressionAttributeValues: expressionValues,
+        ExpressionAttributeNames: expressionNames,
+        FilterExpression: filterExpression,
         Select: 'COUNT',
       }));
       return output.Count ?? 0;

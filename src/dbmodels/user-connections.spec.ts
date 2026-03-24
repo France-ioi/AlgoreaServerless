@@ -12,6 +12,18 @@ function queryPresenceEntries() {
   });
 }
 
+async function putRawPresenceEntry(userId: string, ttl: number): Promise<void> {
+  await dynamodb.executeStatement({
+    Statement: `INSERT INTO "${process.env.TABLE_NAME}" VALUE { 'pk': ?, 'sk': ?, 'userId': ?, 'ttl': ? }`,
+    Parameters: [
+      { S: `${process.env.STAGE}#CONNECTED_USERS` },
+      { N: userId },
+      { S: userId },
+      { N: String(ttl) },
+    ],
+  });
+}
+
 // Valid base64 connectionIds for tests (first byte must be non-zero for number encoding round-trip)
 const connA = 'L0SM9cOFIAMCIdw=';
 const connB = 'dGVzdENvbm4=';
@@ -366,6 +378,14 @@ describe('UserConnections', () => {
 
       const count = await userConnections.countDistinctUsers();
       expect(count).toBe(2);
+    });
+
+    it('should exclude entries with expired TTL', async () => {
+      await userConnections.insert(connA, '1500');
+      await putRawPresenceEntry('1600', Math.floor(Date.now() / 1000) - 3600);
+
+      const count = await userConnections.countDistinctUsers();
+      expect(count).toBe(1);
     });
 
     it('should decrement count after last connection is deleted', async () => {
