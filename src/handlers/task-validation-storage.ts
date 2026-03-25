@@ -1,6 +1,7 @@
 import { EventEnvelope } from '../utils/lambda-eventbus-server';
 import { GradeSavedPayload } from '../events/grade-saved';
 import { validationsTable } from '../dbmodels/validations';
+import { validationCountsTable } from '../dbmodels/validation-counts';
 
 /**
  * Root-level handler for grade_saved events.
@@ -18,4 +19,5 @@ export async function handleGradeSaved(payload: GradeSavedPayload, envelope: Eve
     itemId: payload.item_id,
     answerId: payload.answer_id,
   });
+  await validationCountsTable.incrementDay(time);
 }

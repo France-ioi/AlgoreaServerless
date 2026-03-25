@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { ExecuteStatementCommand, ExecuteTransactionCommand, BatchWriteCommand, QueryCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  ExecuteStatementCommand, ExecuteTransactionCommand, BatchWriteCommand,
+  QueryCommand, PutCommand, UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { DBError } from '../utils/errors';
 import { z } from 'zod';
 import { safeNumber } from '../dynamodb';
@@ -104,6 +107,29 @@ export class Table {
     }
   }
 
+  protected async incrementCounter(key: TableKey, options?: { ttl?: number }): Promise<void> {
+    try {
+      const expressionNames: Record<string, string> = { '#count': 'count' };
+      const expressionValues: Record<string, unknown> = { ':increment': 1 };
+      let updateExpression = 'ADD #count :increment';
+      if (options?.ttl !== undefined) {
+        expressionNames['#ttl'] = 'ttl';
+        expressionValues[':ttl'] = options.ttl;
+        updateExpression += ' SET #ttl = :ttl';
+      }
+      await this.db.send(new UpdateCommand({
+        TableName: this.tableName,
+        Key: key,
+        UpdateExpression: updateExpression,
+        ExpressionAttributeNames: expressionNames,
+        ExpressionAttributeValues: expressionValues,
+      }));
+    } catch (err) {
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(key), { cause: err });
+      else throw err;
+    }
+  }
+
   protected async batchUpdate<T extends TableKey>(items: T[]): Promise<void> {
     const chunkSize = 25; // the max size of 'RequestItems' for the dynamoDB API
     for (let i = 0; i < items.length; i += chunkSize) {
@@ -119,25 +145,52 @@ export class Table {
     }
   }
 
-  protected async countByPk(pk: string, options?: { excludeExpiredTtl?: boolean }): Promise<number> {
+  protected async countByPk(pk: string, options?: {
+    skRange?: { start?: number, end?: number },
+    excludeExpiredTtl?: boolean,
+  }): Promise<number> {
     try {
       const expressionValues: Record<string, unknown> = { ':pk': pk };
+      let keyCondition = 'pk = :pk';
       let filterExpression: string | undefined;
       let expressionNames: Record<string, string> | undefined;
+
+      if (options?.skRange?.start !== undefined && options.skRange.end !== undefined) {
+        keyCondition += ' AND sk BETWEEN :skStart AND :skEnd';
+        expressionValues[':skStart'] = options.skRange.start;
+        expressionValues[':skEnd'] = options.skRange.end;
+      } else if (options?.skRange?.start !== undefined) {
+        keyCondition += ' AND sk >= :skStart';
+        expressionValues[':skStart'] = options.skRange.start;
+      } else if (options?.skRange?.end !== undefined) {
+        keyCondition += ' AND sk <= :skEnd';
+        expressionValues[':skEnd'] = options.skRange.end;
+      }
+
       if (options?.excludeExpiredTtl) {
         expressionValues[':now'] = Math.floor(Date.now() / 1000);
         expressionNames = { '#ttl': 'ttl' };
         filterExpression = '#ttl > :now';
       }
-      const output = await this.db.send(new QueryCommand({
-        TableName: this.tableName,
-        KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: expressionValues,
-        ExpressionAttributeNames: expressionNames,
-        FilterExpression: filterExpression,
-        Select: 'COUNT',
-      }));
-      return output.Count ?? 0;
+
+      let total = 0;
+      let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+      do {
+        const output = await this.db.send(new QueryCommand({
+          TableName: this.tableName,
+          KeyConditionExpression: keyCondition,
+          ExpressionAttributeValues: expressionValues,
+          ExpressionAttributeNames: expressionNames,
+          FilterExpression: filterExpression,
+          Select: 'COUNT',
+          ExclusiveStartKey: lastEvaluatedKey,
+        }));
+        total += output.Count ?? 0;
+        lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+      } while (lastEvaluatedKey);
+
+      return total;
     } catch (err) {
       if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, pk, { cause: err });
       else throw err;
@@ -146,56 +199,69 @@ export class Table {
 
   protected async query(params: {
     pk: string,
+    skRange?: { start?: number, end?: number },
     filter?: { attribute: string, value: unknown },
     projectionAttributes?: string[],
     limit?: number,
     scanIndexForward?: boolean,
   }): Promise<Record<string, unknown>[]> {
     try {
-      const queryParams: {
-        TableName: string,
-        KeyConditionExpression: string,
-        ExpressionAttributeValues: Record<string, unknown>,
-        ExpressionAttributeNames?: Record<string, string>,
-        FilterExpression?: string,
-        ProjectionExpression?: string,
-        Limit?: number,
-        ScanIndexForward?: boolean,
-      } = {
-        TableName: this.tableName,
-        KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: { ':pk': params.pk },
-        ScanIndexForward: params.scanIndexForward ?? true,
-      };
+      const expressionValues: Record<string, unknown> = { ':pk': params.pk };
+      let keyCondition = 'pk = :pk';
 
-      if (params.filter) {
-        queryParams.FilterExpression = `${params.filter.attribute} = :filterValue`;
-        queryParams.ExpressionAttributeValues[':filterValue'] = params.filter.value;
+      if (params.skRange?.start !== undefined && params.skRange?.end !== undefined) {
+        keyCondition += ' AND sk BETWEEN :skStart AND :skEnd';
+        expressionValues[':skStart'] = params.skRange.start;
+        expressionValues[':skEnd'] = params.skRange.end;
+      } else if (params.skRange?.start !== undefined) {
+        keyCondition += ' AND sk >= :skStart';
+        expressionValues[':skStart'] = params.skRange.start;
+      } else if (params.skRange?.end !== undefined) {
+        keyCondition += ' AND sk <= :skEnd';
+        expressionValues[':skEnd'] = params.skRange.end;
       }
 
+      const expressionNames: Record<string, string> = {};
+      let filterExpression: string | undefined;
+
+      if (params.filter) {
+        filterExpression = `${params.filter.attribute} = :filterValue`;
+        expressionValues[':filterValue'] = params.filter.value;
+      }
+
+      let projectionExpression: string | undefined;
       if (params.projectionAttributes) {
-        const expressionAttributeNames: Record<string, string> = {};
-        queryParams.ProjectionExpression = params.projectionAttributes.map(attr => {
-          const reservedWords = [ 'data', 'name', 'type', 'status', 'timestamp' ];
+        projectionExpression = params.projectionAttributes.map(attr => {
+          const reservedWords = [ 'data', 'name', 'type', 'status', 'timestamp', 'count' ];
           if (reservedWords.includes(attr.toLowerCase())) {
-            expressionAttributeNames[`#${attr}`] = attr;
+            expressionNames[`#${attr}`] = attr;
             return `#${attr}`;
           }
           return attr;
         }).join(', ');
-        if (Object.keys(expressionAttributeNames).length > 0) {
-          queryParams.ExpressionAttributeNames = expressionAttributeNames;
-        }
       }
 
-      if (params.limit) {
-        queryParams.Limit = params.limit;
-      }
+      const results: Record<string, unknown>[] = [];
+      let lastEvaluatedKey: Record<string, unknown> | undefined;
 
-      const output = await this.db.send(new QueryCommand(queryParams));
+      do {
+        const output = await this.db.send(new QueryCommand({
+          TableName: this.tableName,
+          KeyConditionExpression: keyCondition,
+          ExpressionAttributeValues: expressionValues,
+          ExpressionAttributeNames: Object.keys(expressionNames).length > 0 ? expressionNames : undefined,
+          FilterExpression: filterExpression,
+          ProjectionExpression: projectionExpression,
+          Limit: params.limit,
+          ScanIndexForward: params.scanIndexForward ?? true,
+          ExclusiveStartKey: lastEvaluatedKey,
+        }));
 
-      if (!output.Items) return [];
-      return output.Items as Record<string, unknown>[];
+        results.push(...(output.Items ?? []) as Record<string, unknown>[]);
+        lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+      } while (lastEvaluatedKey && (!params.limit || results.length < params.limit));
+
+      return params.limit ? results.slice(0, params.limit) : results;
     } catch (err) {
       if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(params), { cause: err });
       else throw err;

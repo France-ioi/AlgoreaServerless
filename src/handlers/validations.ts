@@ -1,6 +1,7 @@
 import { HandlerFunction } from 'lambda-api';
 import { RequestWithIdentityToken } from '../auth/identity-token-middleware';
 import { validationsTable } from '../dbmodels/validations';
+import { validationCountsTable } from '../dbmodels/validation-counts';
 
 interface ValidatedTaskEntry {
   time: number,
@@ -11,6 +12,12 @@ interface ValidatedTaskEntry {
 
 interface ValidationResponse {
   validations: ValidatedTaskEntry[],
+}
+
+interface ValidationStatsResponse {
+  last24h: number,
+  last30d: number,
+  last1y: number,
 }
 
 /**
@@ -29,4 +36,19 @@ async function get(_req: RequestWithIdentityToken): Promise<ValidationResponse> 
   };
 }
 
+/**
+ * GET /validations/stats
+ * Returns aggregated validation counters for fixed rolling windows.
+ */
+async function getStats(_req: RequestWithIdentityToken): Promise<ValidationStatsResponse> {
+  const now = Date.now();
+  const [ last24h, daySums ] = await Promise.all([
+    validationsTable.countSince(now - 24 * 60 * 60 * 1000),
+    validationCountsTable.sumWindows([ 30, 365 ], now),
+  ]);
+
+  return { last24h, last30d: daySums[0]!, last1y: daySums[1]! };
+}
+
 export const getLatestValidations = get as unknown as HandlerFunction;
+export const getValidationStats = getStats as unknown as HandlerFunction;

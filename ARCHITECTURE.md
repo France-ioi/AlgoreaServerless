@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: March 23, 2026
+**Last Updated**: March 24, 2026
 
 ## Overview
 
@@ -240,6 +240,7 @@ Built on the `lambda-api` library with:
   - `PUT /:sk/mark-as-read` - Mark notification as read/unread
 - **Validation Routes** (`/sls/validations`):
   - `GET /` - List latest 30 validations (newest first, requires identity token)
+  - `GET /stats` - Return rolling counters (`last24h`, `last30d`, `last1y`, requires identity token)
 - **Common Routes**:
   - `OPTIONS /*` - CORS preflight handling
 
@@ -346,6 +347,7 @@ export const userConnectionsTable = new UserConnections(dynamodb);
 - `threadEventsTable` - Thread messages and events
 - `notificationsTable` - User notifications
 - `validationsTable` - Live activity validations
+- `validationCountsTable` - Daily validation aggregates
 
 **Rationale**: Table classes are stateless (only hold a reference to the shared `dynamodb` client). Singletons eliminate redundant instantiation and simplify function signatures by removing dependency injection parameters.
 
@@ -391,7 +393,13 @@ await userConnectionsTable.insert(connectionId, userId);
 - Stores successful item validations from grade_saved events (where validated=true and score_improved=true)
 - Schema: `pk` (`{stage}#VALIDATIONS`), `sk` (envelope time in milliseconds), `participantId`, `itemId`, `answerId`, `ttl` (2 weeks)
 - Single global partition key (not scoped to a user or thread)
-- Used by the REST endpoint to return the latest validations
+- Used by the REST endpoint to return the latest validations and compute exact 24h counts
+
+**ValidationCounts** (`src/dbmodels/validation-counts.ts`)
+- Stores aggregated validation counters in UTC day buckets
+- Schema: `pk` (`{stage}#VALIDATIONS#DAY`), `sk` (`YYYYMMDD` UTC day key), `count`, `ttl` (2 years)
+- Updated atomically (`ADD count :increment`) from the `grade_saved` ingestion flow
+- Used by the `/validations/stats` endpoint for rolling `30d` and `1y` counters
 
 **Notifications** (`src/dbmodels/notifications.ts`)
 - Stores per-user notifications with auto-expiration
@@ -579,6 +587,14 @@ participantId: string
 itemId: string
 answerId: string
 ttl: {current time + 2 weeks} (seconds since epoch)
+```
+
+#### Validation Daily Counts
+```
+pk: {STAGE}#VALIDATIONS#DAY
+sk: {YYYYMMDD in UTC}
+count: number
+ttl: {day start + 2 years} (seconds since epoch)
 ```
 
 #### User Notifications
