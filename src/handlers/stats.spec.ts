@@ -4,7 +4,12 @@ import { IdentityToken } from '../auth/identity-token';
 import { getStats } from './stats';
 import { Validations } from '../dbmodels/validations';
 import { ValidationCounts } from '../dbmodels/validation-counts';
+import { userConnectionsTable } from '../dbmodels/user-connections';
 import { docClient } from '../dynamodb';
+
+/** Valid base64 connectionIds (see user-connections.spec). */
+const connA = 'L0SM9cOFIAMCIdw=';
+const connB = 'dGVzdENvbm4=';
 
 function mockRequestWithIdentityToken(token: IdentityToken): RequestWithIdentityToken {
   return {
@@ -55,9 +60,20 @@ describe('getStats', () => {
       expect(result).toEqual({
         validations: { last24h: 2, last30d: 4, last1y: 5 },
         activeUsers: { last24h: 0, last30d: 0, last1y: 0 },
+        connectedUsers: 0,
       });
     } finally {
       jest.restoreAllMocks();
     }
+  });
+
+  it('should return connectedUsers as distinct users with a live WebSocket', async () => {
+    await userConnectionsTable.insert(connA, '8001');
+    await userConnectionsTable.insert(connB, '8002');
+
+    const req = mockRequestWithIdentityToken(identityToken);
+    const result = await getStats(req, {} as any);
+
+    expect(result.connectedUsers).toBe(2);
   });
 });

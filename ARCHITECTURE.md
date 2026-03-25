@@ -240,7 +240,7 @@ Built on the `lambda-api` library with:
   - `DELETE /:sk` - Delete notification by sk, or all if sk="all"
   - `PUT /:sk/mark-as-read` - Mark notification as read/unread
 - **Stats Routes** (`/sls/stats`):
-  - `GET /` - Return rolling counters: `{ validations: { last24h, last30d, last1y }, activeUsers: { last24h, last30d, last1y } }` (requires identity token)
+  - `GET /` - Return rolling counters plus live WebSocket user count: `{ validations: { last24h, last30d, last1y }, activeUsers: { last24h, last30d, last1y }, connectedUsers }` where `connectedUsers` is the number of distinct users with at least one open connection (`userConnectionsTable.countDistinctUsers()`), requires identity token
 - **Validation Routes** (`/sls/validations`):
   - `GET /` - List latest 30 validations (newest first, requires identity token)
 - **Common Routes**:
@@ -626,6 +626,7 @@ ttl: {timestamp + 7200} (2 hours, same as WebSocket connection TTL)
 One entry per connected user. Upserted on connect (PutItem with refreshed TTL), deleted on last disconnect
 (after verifying no remaining u2c entries). Used by `UserConnections.countDistinctUsers()` which queries
 this partition with `Select: 'COUNT'` and a TTL filter to exclude expired-but-not-yet-cleaned entries.
+Also returned as `connectedUsers` on `GET /sls/stats`.
 
 #### Active Users
 ```
