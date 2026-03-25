@@ -52,12 +52,12 @@ export class ValidationCounts extends Table {
   }
 
   /**
-   * Compute sums for multiple rolling windows from a single query.
+   * Compute sums for multiple rolling windows (in days) from a single query.
    * Fetches data for the largest window and partitions rows into each window.
    */
-  async sumWindows(windows: number[], nowMs: number = Date.now()): Promise<number[]> {
-    const maxDays = Math.max(...windows);
-    if (maxDays <= 0) return windows.map(() => 0);
+  async sumWindows(windowsDays: number[], nowMs: number = Date.now()): Promise<number[]> {
+    const maxDays = Math.max(...windowsDays);
+    if (maxDays <= 0) return windowsDays.map(() => 0);
 
     const results = await this.query({
       pk: dayPk(),
@@ -66,7 +66,7 @@ export class ValidationCounts extends Table {
     });
 
     const rows = safeParseArray(results, validationDayCountSchema, 'validation daily count');
-    return windows.map(days => {
+    return windowsDays.map(days => {
       if (days <= 0) return 0;
       const startKey = dayKeyFromTimeMs(dayStartMsForWindow(nowMs, days));
       return rows

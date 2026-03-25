@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent } from 'aws-lambda';
 import { parseIdentityToken } from '../auth/identity-token';
+import { activeUsersTable } from '../dbmodels/active-users';
 import { userConnectionsTable } from '../dbmodels/user-connections';
 import { WsHandlerResult } from '../utils/lambda-ws-server';
 import { cleanupGoneConnection } from '../services/ws-broadcast';
@@ -28,8 +29,10 @@ export async function handleConnect(event: APIGatewayProxyEvent): Promise<WsHand
     return { statusCode: 401, body: `Unauthorized: ${String(err)}` };
   }
 
-  // Store connection in database
-  await userConnectionsTable.insert(connectionId, userId);
+  await Promise.all([
+    userConnectionsTable.insert(connectionId, userId),
+    activeUsersTable.insert(userId),
+  ]);
 
   return { statusCode: 200, body: 'Connected', userId };
 }

@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: March 24, 2026
+**Last Updated**: March 25, 2026
 
 ## Overview
 
@@ -130,6 +130,7 @@ AlgoreaServerless/
 │   │   ├── identity-token-middleware.ts  # Identity token middleware
 │   │   └── *.spec.ts      # Authentication tests
 │   ├── dbmodels/          # Shared database models and base classes
+│   │   ├── active-users.ts  # Active user tracking for stats
 │   │   ├── live-activity-subscriptions.ts  # Live activity subscription model
 │   │   ├── notifications.ts  # User notifications model
 │   │   ├── user-connections.ts  # WebSocket user connections model
@@ -238,9 +239,10 @@ Built on the `lambda-api` library with:
   - `GET /` - List user notifications (last 20)
   - `DELETE /:sk` - Delete notification by sk, or all if sk="all"
   - `PUT /:sk/mark-as-read` - Mark notification as read/unread
+- **Stats Routes** (`/sls/stats`):
+  - `GET /` - Return rolling counters: `{ validations: { last24h, last30d, last1y }, activeUsers: { last24h, last30d, last1y } }` (requires identity token)
 - **Validation Routes** (`/sls/validations`):
   - `GET /` - List latest 30 validations (newest first, requires identity token)
-  - `GET /stats` - Return rolling counters (`last24h`, `last30d`, `last1y`, requires identity token)
 - **Common Routes**:
   - `OPTIONS /*` - CORS preflight handling
 
@@ -348,6 +350,7 @@ export const userConnectionsTable = new UserConnections(dynamodb);
 - `notificationsTable` - User notifications
 - `validationsTable` - Live activity validations
 - `validationCountsTable` - Daily validation aggregates
+- `activeUsersTable` - Active user tracking for stats
 
 **Rationale**: Table classes are stateless (only hold a reference to the shared `dynamodb` client). Singletons eliminate redundant instantiation and simplify function signatures by removing dependency injection parameters.
 
@@ -400,6 +403,12 @@ await userConnectionsTable.insert(connectionId, userId);
 - Schema: `pk` (`{stage}#VALIDATIONS#DAY`), `sk` (`YYYYMMDD` UTC day key), `count`, `ttl` (2 years)
 - Updated atomically (`ADD count :increment`) from the `grade_saved` ingestion flow
 - Used by the `/validations/stats` endpoint for rolling `30d` and `1y` counters
+
+**ActiveUsers** (`src/dbmodels/active-users.ts`)
+- Tracks distinct users who have connected via WebSocket for rolling stats
+- Schema: `pk` (`{stage}#ACTIVE_USERS`), `sk` (userId as NumberValue), `lastConnectedTime` (ms), `ttl` (1 year)
+- Upserted on every WebSocket connect (deduplicates by userId)
+- Used by `/validations/stats` for active user counts over 24h/30d/1y windows
 
 **Notifications** (`src/dbmodels/notifications.ts`)
 - Stores per-user notifications with auto-expiration
@@ -617,6 +626,18 @@ ttl: {timestamp + 7200} (2 hours, same as WebSocket connection TTL)
 One entry per connected user. Upserted on connect (PutItem with refreshed TTL), deleted on last disconnect
 (after verifying no remaining u2c entries). Used by `UserConnections.countDistinctUsers()` which queries
 this partition with `Select: 'COUNT'` and a TTL filter to exclude expired-but-not-yet-cleaned entries.
+
+#### Active Users
+```
+pk: {STAGE}#ACTIVE_USERS
+sk: {userId as DynamoDB Number} (numeric userId used directly via NumberValue.from)
+lastConnectedTime: number (ms since epoch, updated on each WebSocket connect)
+ttl: {lastConnectedTime + 1 year} (seconds since epoch)
+```
+One entry per user who has connected via WebSocket. Upserted on every connect (PutItem overwrites
+with latest timestamp). Used by `ActiveUsers.countWindows()` which queries all entries,
+projects `lastConnectedTime`, and counts client-side for 24h/30d/1y windows (viable because
+user count is bounded at <50k).
 
 ### Key Design Patterns
 

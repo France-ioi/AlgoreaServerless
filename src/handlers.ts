@@ -5,6 +5,7 @@ import createEventBusServer from './utils/lambda-eventbus-server';
 import { forumRoutes, forumWsActions, forumEventHandlers } from './forum/routes';
 import { portalRoutes } from './portal/routes';
 import { notificationRoutes } from './routes/notifications';
+import { statsRoutes } from './routes/stats';
 import { validationRoutes, validationEventHandlers } from './routes/validations';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
@@ -31,6 +32,7 @@ api.options('/*', () => ({}));
 api.register(forumRoutes, { prefix: '/forum' });
 api.register(portalRoutes, { prefix: '/portal' });
 api.register(notificationRoutes, { prefix: '/notifications' });
+api.register(statsRoutes, { prefix: '/stats' });
 api.register(validationRoutes, { prefix: '/validations' });
 
 

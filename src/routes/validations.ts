@@ -1,12 +1,11 @@
 import { API } from 'lambda-api';
 import { EventBusServer } from '../utils/lambda-eventbus-server';
 import { requireIdentityToken } from '../auth/identity-token-middleware';
-import { getLatestValidations, getValidationStats } from '../handlers/validations';
+import { getLatestValidations } from '../handlers/validations';
 import { handleGradeSaved } from '../handlers/task-validation-storage';
 import { gradeSavedEvent } from '../events/grade-saved';
 
 const restRoutes = (api: API): void => {
-  api.get('/stats', requireIdentityToken, getValidationStats);
   api.get('/', requireIdentityToken, getLatestValidations);
 };
 
