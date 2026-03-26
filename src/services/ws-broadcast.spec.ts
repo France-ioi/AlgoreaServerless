@@ -31,14 +31,14 @@ describe('ws-broadcast', () => {
 
   describe('cleanupGoneConnection', () => {
     it('should delete user connection and return userId', async () => {
-      await userConnectionsTable.insert(conn1, 'user-123');
+      await userConnectionsTable.insert(conn1, '20123');
 
       const result = await cleanupGoneConnection(conn1);
 
-      expect(result.userId).toBe('user-123');
+      expect(result.userId).toBe('20123');
 
       // Verify connection was deleted
-      const connections = await userConnectionsTable.getAll('user-123');
+      const connections = await userConnectionsTable.getAll('20123');
       expect(connections).toHaveLength(0);
     });
 
@@ -49,16 +49,16 @@ describe('ws-broadcast', () => {
     });
 
     it('should clean up thread subscription when connection has one', async () => {
-      await userConnectionsTable.insert(conn1, 'user-123');
-      await threadSubscriptionsTable.insert(threadId, conn1, 'user-123');
+      await userConnectionsTable.insert(conn1, '20123');
+      await threadSubscriptionsTable.insert(threadId, conn1, '20123');
       await userConnectionsTable.updateConnectionInfo(conn1, { subscriptionThreadId: threadId });
 
       const result = await cleanupGoneConnection(conn1);
 
-      expect(result.userId).toBe('user-123');
+      expect(result.userId).toBe('20123');
 
       // Verify connection was deleted
-      const connections = await userConnectionsTable.getAll('user-123');
+      const connections = await userConnectionsTable.getAll('20123');
       expect(connections).toHaveLength(0);
 
       // Verify subscription was also deleted
@@ -67,14 +67,14 @@ describe('ws-broadcast', () => {
     });
 
     it('should not fail when connection has no subscription', async () => {
-      await userConnectionsTable.insert(conn1, 'user-123');
+      await userConnectionsTable.insert(conn1, '20123');
 
       const result = await cleanupGoneConnection(conn1);
 
-      expect(result.userId).toBe('user-123');
+      expect(result.userId).toBe('20123');
 
       // Verify connection was deleted
-      const connections = await userConnectionsTable.getAll('user-123');
+      const connections = await userConnectionsTable.getAll('20123');
       expect(connections).toHaveLength(0);
     });
   });
@@ -89,8 +89,8 @@ describe('ws-broadcast', () => {
 
     it('should send message to all entries and return successful ones', async () => {
       const entries = [
-        { connectionId: conn1, userId: 'user-1' },
-        { connectionId: conn2, userId: 'user-2' },
+        { connectionId: conn1, userId: '20003' },
+        { connectionId: conn2, userId: '20004' },
       ];
 
       const result = await broadcastAndCleanup(entries, e => e.connectionId, { action: 'test' });
@@ -101,12 +101,12 @@ describe('ws-broadcast', () => {
     });
 
     it('should clean up gone connections (user connection only)', async () => {
-      await userConnectionsTable.insert(connActive, 'user-active');
-      await userConnectionsTable.insert(connGone, 'user-gone');
+      await userConnectionsTable.insert(connActive, '20001');
+      await userConnectionsTable.insert(connGone, '20002');
 
       const entries = [
-        { connectionId: connActive, userId: 'user-active' },
-        { connectionId: connGone, userId: 'user-gone' },
+        { connectionId: connActive, userId: '20001' },
+        { connectionId: connGone, userId: '20002' },
       ];
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
@@ -123,24 +123,24 @@ describe('ws-broadcast', () => {
       expect(result.successfulRecipients).toHaveLength(1);
       expect(result.successfulRecipients[0]?.connectionId).toBe(connActive);
 
-      const activeConnections = await userConnectionsTable.getAll('user-active');
-      const goneConnections = await userConnectionsTable.getAll('user-gone');
+      const activeConnections = await userConnectionsTable.getAll('20001');
+      const goneConnections = await userConnectionsTable.getAll('20002');
       expect(activeConnections).toContain(connActive);
       expect(goneConnections).toHaveLength(0);
     });
 
     it('should clean up gone connections with thread subscriptions (full cleanup)', async () => {
-      await userConnectionsTable.insert(connActive, 'user-active');
-      await userConnectionsTable.insert(connGone, 'user-gone');
+      await userConnectionsTable.insert(connActive, '20001');
+      await userConnectionsTable.insert(connGone, '20002');
 
-      await threadSubscriptionsTable.insert(threadId, connActive, 'user-active');
-      await threadSubscriptionsTable.insert(threadId, connGone, 'user-gone');
+      await threadSubscriptionsTable.insert(threadId, connActive, '20001');
+      await threadSubscriptionsTable.insert(threadId, connGone, '20002');
       await userConnectionsTable.updateConnectionInfo(connActive, { subscriptionThreadId: threadId });
       await userConnectionsTable.updateConnectionInfo(connGone, { subscriptionThreadId: threadId });
 
       const entries = [
-        { connectionId: connActive, userId: 'user-active' },
-        { connectionId: connGone, userId: 'user-gone' },
+        { connectionId: connActive, userId: '20001' },
+        { connectionId: connGone, userId: '20002' },
       ];
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
@@ -157,7 +157,7 @@ describe('ws-broadcast', () => {
       expect(result.successfulRecipients).toHaveLength(1);
       expect(result.successfulRecipients[0]?.connectionId).toBe(connActive);
 
-      const goneConnections = await userConnectionsTable.getAll('user-gone');
+      const goneConnections = await userConnectionsTable.getAll('20002');
       expect(goneConnections).toHaveLength(0);
 
       const subs = await threadSubscriptionsTable.getSubscribers(threadId);
@@ -166,8 +166,8 @@ describe('ws-broadcast', () => {
     });
 
     it('should work with connection IDs directly (as strings)', async () => {
-      await userConnectionsTable.insert(conn1, 'user-1');
-      await userConnectionsTable.insert(conn2, 'user-2');
+      await userConnectionsTable.insert(conn1, '20003');
+      await userConnectionsTable.insert(conn2, '20004');
 
       const connectionIds = [ conn1, conn2 ];
 
@@ -178,8 +178,8 @@ describe('ws-broadcast', () => {
     });
 
     it('should handle all connections being gone', async () => {
-      await userConnectionsTable.insert(conn1, 'user-1');
-      await userConnectionsTable.insert(conn2, 'user-2');
+      await userConnectionsTable.insert(conn1, '20003');
+      await userConnectionsTable.insert(conn2, '20004');
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
         const error = new Error('Gone');
@@ -191,16 +191,16 @@ describe('ws-broadcast', () => {
 
       expect(result.successfulRecipients).toHaveLength(0);
 
-      const c1 = await userConnectionsTable.getAll('user-1');
-      const c2 = await userConnectionsTable.getAll('user-2');
+      const c1 = await userConnectionsTable.getAll('20003');
+      const c2 = await userConnectionsTable.getAll('20004');
       expect(c1).toHaveLength(0);
       expect(c2).toHaveLength(0);
     });
 
     it('should not include failed (non-gone) connections in successfulRecipients', async () => {
       const entries = [
-        { connectionId: connOk, userId: 'user-ok' },
-        { connectionId: connError, userId: 'user-error' },
+        { connectionId: connOk, userId: '20005' },
+        { connectionId: connError, userId: '20006' },
       ];
 
       mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {

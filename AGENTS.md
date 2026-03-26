@@ -53,6 +53,7 @@ This is an AWS Serverless application using:
 
 - Single-table design: all entities share the same table with `pk` (string) and `sk` (number) keys
 - Use `Table` base class from `src/dbmodels/table.ts` for DB operations
+- **Never call `this.db` directly** in model classes — use the existing `Table` methods (`sqlRead`, `sqlWrite`, `query`, `upsert`, `incrementCounter`, `countByPk`, `batchUpdate`) or create new reusable methods in `Table` if none fit
 - Use PartiQL for queries via `sqlRead()` and `sqlWrite()` methods
 - TTL is used for auto-expiring records (e.g., WebSocket connections)
 

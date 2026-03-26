@@ -67,4 +67,22 @@ describe('Validations', () => {
       expect(result).toHaveLength(3);
     });
   });
+
+  describe('countSince', () => {
+    it('should count only validations newer than the threshold', async () => {
+      const baseTime = Date.now();
+      await validations.insert(baseTime, {
+        participantId: 'p1', itemId: 'i1', answerId: 'a1',
+      });
+      await validations.insert(baseTime + 1000, {
+        participantId: 'p2', itemId: 'i2', answerId: 'a2',
+      });
+      await validations.insert(baseTime + 2000, {
+        participantId: 'p3', itemId: 'i3', answerId: 'a3',
+      });
+
+      const result = await validations.countSince(baseTime + 1000);
+      expect(result).toBe(2);
+    });
+  });
 });

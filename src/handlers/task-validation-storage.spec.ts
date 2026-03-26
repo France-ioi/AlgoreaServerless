@@ -2,6 +2,7 @@ import { handleGradeSaved } from './task-validation-storage';
 import { EventEnvelope } from '../utils/lambda-eventbus-server';
 import { GradeSavedPayload } from '../events/grade-saved';
 import { Validations } from '../dbmodels/validations';
+import { ValidationCounts } from '../dbmodels/validation-counts';
 import { docClient } from '../dynamodb';
 import { clearTable } from '../testutils/db';
 
@@ -33,9 +34,11 @@ function makeEnvelope(time = '2026-03-10T12:00:00Z'): EventEnvelope {
 
 describe('handleGradeSaved (root-level)', () => {
   let validations: Validations;
+  let validationCounts: ValidationCounts;
 
   beforeEach(async () => {
     validations = new Validations(docClient);
+    validationCounts = new ValidationCounts(docClient);
     await clearTable();
   });
 
@@ -51,6 +54,9 @@ describe('handleGradeSaved (root-level)', () => {
       itemId: 'item-1',
       answerId: 'answer-1',
     });
+
+    const statsNow = new Date('2026-03-10T23:59:59Z').getTime();
+    expect(await validationCounts.sumLastDays(1, statsNow)).toBe(1);
   });
 
   it('should skip when validated=false', async () => {
@@ -58,6 +64,7 @@ describe('handleGradeSaved (root-level)', () => {
 
     const result = await validations.getLatest(10);
     expect(result).toHaveLength(0);
+    expect(await validationCounts.sumLastDays(1, Date.now())).toBe(0);
   });
 
   it('should skip when score_improved=false', async () => {
@@ -65,6 +72,7 @@ describe('handleGradeSaved (root-level)', () => {
 
     const result = await validations.getLatest(10);
     expect(result).toHaveLength(0);
+    expect(await validationCounts.sumLastDays(1, Date.now())).toBe(0);
   });
 
   it('should skip when both validated=false and score_improved=false', async () => {
@@ -72,5 +80,6 @@ describe('handleGradeSaved (root-level)', () => {
 
     const result = await validations.getLatest(10);
     expect(result).toHaveLength(0);
+    expect(await validationCounts.sumLastDays(1, Date.now())).toBe(0);
   });
 });

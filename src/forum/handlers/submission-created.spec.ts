@@ -60,8 +60,8 @@ describe('handleSubmissionCreated', () => {
 
   describe('successful handling', () => {
     it('should notify all subscribers when submission is created', async () => {
-      await threadSubs.insert(threadId, connA, 'user1');
-      await threadSubs.insert(threadId, connB, 'user2');
+      await threadSubs.insert(threadId, connA, '80001');
+      await threadSubs.insert(threadId, connB, '80002');
 
       const payload = createMockPayload();
       const envelope = createMockEnvelope(payload);
@@ -102,13 +102,13 @@ describe('handleSubmissionCreated', () => {
 
   describe('cleanup of gone connections', () => {
     it('should remove gone subscribers after sending message', async () => {
-      await userConnections.insert(connA, 'user1');
-      await userConnections.insert(connGone, 'user2');
-      await userConnections.insert(connC, 'user3');
+      await userConnections.insert(connA, '80001');
+      await userConnections.insert(connGone, '80002');
+      await userConnections.insert(connC, '80003');
 
-      await threadSubs.insert(threadId, connA, 'user1');
-      await threadSubs.insert(threadId, connGone, 'user2');
-      await threadSubs.insert(threadId, connC, 'user3');
+      await threadSubs.insert(threadId, connA, '80001');
+      await threadSubs.insert(threadId, connGone, '80002');
+      await threadSubs.insert(threadId, connC, '80003');
 
       await userConnections.updateConnectionInfo(connA, { subscriptionThreadId: threadId });
       await userConnections.updateConnectionInfo(connGone, { subscriptionThreadId: threadId });
@@ -133,7 +133,7 @@ describe('handleSubmissionCreated', () => {
       expect(subscribers).toHaveLength(2);
       expect(subscribers.map(s => s.connectionId)).not.toContain(connGone);
 
-      const goneUserConns = await userConnections.getAll('user2');
+      const goneUserConns = await userConnections.getAll('80002');
       expect(goneUserConns).toHaveLength(0);
     });
   });

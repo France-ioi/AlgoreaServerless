@@ -63,8 +63,8 @@ describe('handleGradeSaved', () => {
 
   describe('successful handling', () => {
     it('should notify all subscribers when grade is saved', async () => {
-      await threadSubs.insert(threadId, connA, 'user1');
-      await threadSubs.insert(threadId, connB, 'user2');
+      await threadSubs.insert(threadId, connA, '70001');
+      await threadSubs.insert(threadId, connB, '70002');
 
       const payload = createMockPayload();
       const envelope = createMockEnvelope(payload);
@@ -105,7 +105,7 @@ describe('handleGradeSaved', () => {
     });
 
     it('should handle validated=false and partial score', async () => {
-      await threadSubs.insert(threadId, connA, 'user1');
+      await threadSubs.insert(threadId, connA, '70001');
 
       const payload = createMockPayload({
         validated: false,
@@ -128,7 +128,7 @@ describe('handleGradeSaved', () => {
     });
 
     it('should handle zero score', async () => {
-      await threadSubs.insert(threadId, connA, 'user1');
+      await threadSubs.insert(threadId, connA, '70001');
 
       const payload = createMockPayload({
         validated: false,
@@ -150,13 +150,13 @@ describe('handleGradeSaved', () => {
 
   describe('cleanup of gone connections', () => {
     it('should remove gone subscribers after sending message', async () => {
-      await userConnections.insert(connA, 'user1');
-      await userConnections.insert(connGone, 'user2');
-      await userConnections.insert(connC, 'user3');
+      await userConnections.insert(connA, '70001');
+      await userConnections.insert(connGone, '70002');
+      await userConnections.insert(connC, '70003');
 
-      await threadSubs.insert(threadId, connA, 'user1');
-      await threadSubs.insert(threadId, connGone, 'user2');
-      await threadSubs.insert(threadId, connC, 'user3');
+      await threadSubs.insert(threadId, connA, '70001');
+      await threadSubs.insert(threadId, connGone, '70002');
+      await threadSubs.insert(threadId, connC, '70003');
 
       await userConnections.updateConnectionInfo(connA, { subscriptionThreadId: threadId });
       await userConnections.updateConnectionInfo(connGone, { subscriptionThreadId: threadId });
@@ -181,7 +181,7 @@ describe('handleGradeSaved', () => {
       expect(subscribers).toHaveLength(2);
       expect(subscribers.map(s => s.connectionId)).not.toContain(connGone);
 
-      const goneUserConns = await userConnections.getAll('user2');
+      const goneUserConns = await userConnections.getAll('70002');
       expect(goneUserConns).toHaveLength(0);
     });
   });

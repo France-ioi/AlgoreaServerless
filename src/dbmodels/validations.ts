@@ -60,6 +60,15 @@ export class Validations extends Table {
     return safeParseArray(results, validationSchema, 'validation');
   }
 
+  /**
+   * Count validations since the given timestamp.
+   * Only accurate for `sinceMs` within the last `VALIDATION_TTL_SECONDS` (2 weeks),
+   * as older entries may have been purged by DynamoDB TTL.
+   */
+  async countSince(sinceMs: number): Promise<number> {
+    return this.countByPk(pk(), { skRange: { start: sinceMs } });
+  }
+
   async insert(time: number, input: ValidationInput): Promise<void> {
     await this.sqlWrite({
       query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'sk': ?, 'participantId': ?, 'itemId': ?, 'answerId': ?, 'ttl': ? }`,

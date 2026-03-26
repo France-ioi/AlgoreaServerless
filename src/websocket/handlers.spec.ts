@@ -5,6 +5,15 @@ jest.mock('../auth/identity-token', () => ({
   parseIdentityToken: jest.fn(),
 }));
 
+// Mock the ActiveUsers module with singleton
+const mockActiveUsersTable = {
+  insert: jest.fn().mockResolvedValue(undefined),
+};
+jest.mock('../dbmodels/active-users', () => ({
+  ActiveUsers: jest.fn(),
+  activeUsersTable: mockActiveUsersTable,
+}));
+
 // Mock the UserConnections module with singleton
 const mockUserConnectionsTable = {
   insert: jest.fn().mockResolvedValue(undefined),

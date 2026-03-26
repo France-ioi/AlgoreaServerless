@@ -4,6 +4,26 @@ import { clearTable } from '../testutils/db';
 import { connectionIdToNumberValue } from '../utils/connection-id-number';
 import { z } from 'zod';
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+function queryPresenceEntries() {
+  return dynamodb.executeStatement({
+    Statement: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+    Parameters: [{ S: `${process.env.STAGE}#CONNECTED_USERS` }],
+  });
+}
+
+async function putRawPresenceEntry(userId: string, ttl: number): Promise<void> {
+  await dynamodb.executeStatement({
+    Statement: `INSERT INTO "${process.env.TABLE_NAME}" VALUE { 'pk': ?, 'sk': ?, 'userId': ?, 'ttl': ? }`,
+    Parameters: [
+      { S: `${process.env.STAGE}#CONNECTED_USERS` },
+      { N: userId },
+      { S: userId },
+      { N: String(ttl) },
+    ],
+  });
+}
+
 // Valid base64 connectionIds for tests (first byte must be non-zero for number encoding round-trip)
 const connA = 'L0SM9cOFIAMCIdw=';
 const connB = 'dGVzdENvbm4=';
@@ -25,7 +45,7 @@ describe('UserConnections', () => {
   describe('create', () => {
 
     it('should create both c2u and u2c entries', async () => {
-      await userConnections.insert(connA, 'user-456');
+      await userConnections.insert(connA, '456');
 
       // Verify c2u entry exists
       const c2uResult = await dynamodb.executeStatement({
@@ -37,7 +57,7 @@ describe('UserConnections', () => {
       });
       expect(c2uResult.Items).toHaveLength(1);
       const c2uEntry = c2uResult.Items?.[0];
-      expect(c2uEntry?.userId?.S).toBe('user-456');
+      expect(c2uEntry?.userId?.S).toBe('456');
       expect(c2uEntry?.creationTime?.N).toBeDefined();
       expect(c2uEntry?.ttl?.N).toBeDefined();
 
@@ -45,7 +65,7 @@ describe('UserConnections', () => {
       const u2cResult = await dynamodb.executeStatement({
         Statement: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
         Parameters: [
-          { S: `${process.env.STAGE}#USER#user-456#CONN` },
+          { S: `${process.env.STAGE}#USER#456#CONN` },
         ],
       });
       expect(u2cResult.Items).toHaveLength(1);
@@ -55,12 +75,12 @@ describe('UserConnections', () => {
     });
 
     it('should store connectionId encoded as number in u2c sk', async () => {
-      await userConnections.insert(connA, 'user-xyz');
+      await userConnections.insert(connA, '789');
 
       const u2cResult = await dynamodb.executeStatement({
         Statement: `SELECT sk FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
         Parameters: [
-          { S: `${process.env.STAGE}#USER#user-xyz#CONN` },
+          { S: `${process.env.STAGE}#USER#789#CONN` },
         ],
       });
 
@@ -69,11 +89,11 @@ describe('UserConnections', () => {
     });
 
     it('should handle multiple connections for the same user', async () => {
-      await userConnections.insert(connA, 'user-multi');
-      await userConnections.insert(connB, 'user-multi');
-      await userConnections.insert(connC, 'user-multi');
+      await userConnections.insert(connA, '1001');
+      await userConnections.insert(connB, '1001');
+      await userConnections.insert(connC, '1001');
 
-      const connections = await userConnections.getAll('user-multi');
+      const connections = await userConnections.getAll('1001');
       expect(connections).toHaveLength(3);
       expect(connections).toContain(connA);
       expect(connections).toContain(connB);
@@ -82,9 +102,9 @@ describe('UserConnections', () => {
 
     it('should round-trip short connectionIds that encode to JS-safe numbers', async () => {
       const shortConn = 'Aw=='; // 1 byte [3] → sk = 3
-      await userConnections.insert(shortConn, 'user-short');
+      await userConnections.insert(shortConn, '1002');
 
-      const connections = await userConnections.getAll('user-short');
+      const connections = await userConnections.getAll('1002');
       expect(connections).toEqual([ shortConn ]);
     });
 
@@ -93,7 +113,7 @@ describe('UserConnections', () => {
   describe('delete', () => {
 
     it('should remove both c2u and u2c entries', async () => {
-      await userConnections.insert(connA, 'user-del');
+      await userConnections.insert(connA, '2001');
 
       await userConnections.delete(connA);
 
@@ -110,7 +130,7 @@ describe('UserConnections', () => {
       const u2cResult = await dynamodb.executeStatement({
         Statement: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
         Parameters: [
-          { S: `${process.env.STAGE}#USER#user-del#CONN` },
+          { S: `${process.env.STAGE}#USER#2001#CONN` },
         ],
       });
       expect(u2cResult.Items).toHaveLength(0);
@@ -122,23 +142,23 @@ describe('UserConnections', () => {
     });
 
     it('should return the deleted userId and creationTime', async () => {
-      await userConnections.insert(connA, 'user-return');
+      await userConnections.insert(connA, '2002');
 
       const result = await userConnections.delete(connA);
 
       expect(result).not.toBeNull();
-      expect(result?.userId).toBe('user-return');
+      expect(result?.userId).toBe('2002');
       expect(result?.creationTime).toBeGreaterThan(0);
     });
 
     it('should only delete the specified connection for a user with multiple connections', async () => {
-      await userConnections.insert(connD, 'user-partial');
-      await userConnections.insert(connE, 'user-partial');
-      await userConnections.insert(connF, 'user-partial');
+      await userConnections.insert(connD, '2003');
+      await userConnections.insert(connE, '2003');
+      await userConnections.insert(connF, '2003');
 
       await userConnections.delete(connE);
 
-      const connections = await userConnections.getAll('user-partial');
+      const connections = await userConnections.getAll('2003');
       expect(connections).toHaveLength(2);
       expect(connections).toContain(connD);
       expect(connections).toContain(connF);
@@ -150,10 +170,10 @@ describe('UserConnections', () => {
   describe('getAll', () => {
 
     it('should return all connections for a user', async () => {
-      await userConnections.insert(connA, 'user-getall');
-      await userConnections.insert(connB, 'user-getall');
+      await userConnections.insert(connA, '3001');
+      await userConnections.insert(connB, '3001');
 
-      const connections = await userConnections.getAll('user-getall');
+      const connections = await userConnections.getAll('3001');
 
       expect(connections).toHaveLength(2);
       expect(connections).toContain(connA);
@@ -161,17 +181,17 @@ describe('UserConnections', () => {
     });
 
     it('should return empty array when user has no connections', async () => {
-      const connections = await userConnections.getAll('user-no-connections');
+      const connections = await userConnections.getAll('3002');
 
       expect(connections).toEqual([]);
     });
 
     it('should not return connections from other users', async () => {
-      await userConnections.insert(connA, 'user-1');
-      await userConnections.insert(connB, 'user-2');
+      await userConnections.insert(connA, '4001');
+      await userConnections.insert(connB, '4002');
 
-      const user1Connections = await userConnections.getAll('user-1');
-      const user2Connections = await userConnections.getAll('user-2');
+      const user1Connections = await userConnections.getAll('4001');
+      const user2Connections = await userConnections.getAll('4002');
 
       expect(user1Connections).toEqual([ connA ]);
       expect(user2Connections).toEqual([ connB ]);
@@ -182,7 +202,7 @@ describe('UserConnections', () => {
   describe('updateConnectionInfo', () => {
 
     it('should set subscriptionKeys on a connection', async () => {
-      await userConnections.insert(connA, 'user-info');
+      await userConnections.insert(connA, '5001');
 
       const subscriptionKeys = { pk: 'dev#THREAD#participant123#item456#SUB', sk: 1234567890 };
       await userConnections.updateConnectionInfo(connA, { subscriptionKeys });
@@ -201,7 +221,7 @@ describe('UserConnections', () => {
     });
 
     it('should remove subscriptionKeys when explicitly set to undefined', async () => {
-      await userConnections.insert(connB, 'user-remove');
+      await userConnections.insert(connB, '5002');
       await userConnections.updateConnectionInfo(connB, {
         subscriptionKeys: { pk: 'dev#THREAD#p#i#SUB', sk: 123 },
       });
@@ -219,7 +239,7 @@ describe('UserConnections', () => {
     });
 
     it('should be a no-op when no fields are specified', async () => {
-      await userConnections.insert(connC, 'user-noop');
+      await userConnections.insert(connC, '5003');
       await userConnections.updateConnectionInfo(connC, {
         subscriptionKeys: { pk: 'dev#THREAD#p#i#SUB', sk: 123 },
       });
@@ -249,7 +269,7 @@ describe('UserConnections', () => {
   describe('delete with subscriptionKeys', () => {
 
     it('should return subscriptionKeys when present', async () => {
-      await userConnections.insert(connG, 'user-sub');
+      await userConnections.insert(connG, '6001');
       const subscriptionKeys = { pk: 'dev#THREAD#part123#item456#SUB', sk: 9876543210 };
       await userConnections.updateConnectionInfo(connG, { subscriptionKeys });
 
@@ -261,12 +281,121 @@ describe('UserConnections', () => {
     });
 
     it('should return undefined subscriptionKeys when not set', async () => {
-      await userConnections.insert(connH, 'user-nosub');
+      await userConnections.insert(connH, '6002');
 
       const result = await userConnections.delete(connH);
 
       expect(result).not.toBeNull();
       expect(result?.subscriptionKeys).toBeUndefined();
+    });
+
+  });
+
+  describe('presence entries', () => {
+
+    it('should create a presence entry on insert', async () => {
+      await userConnections.insert(connA, '100');
+
+      const result = await queryPresenceEntries();
+      expect(result.Items).toHaveLength(1);
+      expect(result.Items?.[0]?.userId?.S).toBe('100');
+    });
+
+    it('should create only one presence entry for multiple connections from the same user', async () => {
+      await userConnections.insert(connA, '200');
+      await userConnections.insert(connB, '200');
+      await userConnections.insert(connC, '200');
+
+      const result = await queryPresenceEntries();
+      expect(result.Items).toHaveLength(1);
+      expect(result.Items?.[0]?.userId?.S).toBe('200');
+    });
+
+    it('should keep presence entry when deleting one of multiple connections', async () => {
+      await userConnections.insert(connD, '300');
+      await userConnections.insert(connE, '300');
+
+      await userConnections.delete(connD);
+
+      const result = await queryPresenceEntries();
+      expect(result.Items).toHaveLength(1);
+      expect(result.Items?.[0]?.userId?.S).toBe('300');
+    });
+
+    it('should remove presence entry when deleting the last connection', async () => {
+      await userConnections.insert(connA, '400');
+
+      await userConnections.delete(connA);
+
+      const result = await queryPresenceEntries();
+      expect(result.Items).toHaveLength(0);
+    });
+
+    it('should remove presence entry after deleting all connections one by one', async () => {
+      await userConnections.insert(connA, '500');
+      await userConnections.insert(connB, '500');
+
+      await userConnections.delete(connA);
+      await userConnections.delete(connB);
+
+      const result = await queryPresenceEntries();
+      expect(result.Items).toHaveLength(0);
+    });
+
+    it('should not remove other users presence entries on delete', async () => {
+      await userConnections.insert(connA, '600');
+      await userConnections.insert(connB, '700');
+
+      await userConnections.delete(connA);
+
+      const result = await queryPresenceEntries();
+      expect(result.Items).toHaveLength(1);
+      expect(result.Items?.[0]?.userId?.S).toBe('700');
+    });
+
+  });
+
+  describe('countDistinctUsers', () => {
+
+    it('should return 0 when no users are connected', async () => {
+      const count = await userConnections.countDistinctUsers();
+      expect(count).toBe(0);
+    });
+
+    it('should count distinct users correctly', async () => {
+      await userConnections.insert(connA, '800');
+      await userConnections.insert(connB, '900');
+      await userConnections.insert(connC, '1000');
+
+      const count = await userConnections.countDistinctUsers();
+      expect(count).toBe(3);
+    });
+
+    it('should not double-count a user with multiple connections', async () => {
+      await userConnections.insert(connA, '1100');
+      await userConnections.insert(connB, '1100');
+      await userConnections.insert(connC, '1200');
+
+      const count = await userConnections.countDistinctUsers();
+      expect(count).toBe(2);
+    });
+
+    it('should exclude entries with expired TTL', async () => {
+      await userConnections.insert(connA, '1500');
+      await putRawPresenceEntry('1600', Math.floor(Date.now() / 1000) - 3600);
+
+      const count = await userConnections.countDistinctUsers();
+      expect(count).toBe(1);
+    });
+
+    it('should decrement count after last connection is deleted', async () => {
+      await userConnections.insert(connA, '1300');
+      await userConnections.insert(connB, '1400');
+
+      await userConnections.delete(connA);
+
+      const count = await userConnections.countDistinctUsers();
+      expect(count).toBe(1);
     });
 
   });
