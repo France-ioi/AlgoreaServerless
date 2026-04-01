@@ -1,3 +1,4 @@
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { Table } from './table';
 import { z } from 'zod';
 import { safeNumber, docClient } from '../dynamodb';
@@ -16,8 +17,7 @@ export function validationTtl(): number {
 }
 
 function pk(): string {
-  const stage = process.env.STAGE || 'dev';
-  return `${stage}#VALIDATIONS`;
+  return 'VALIDATIONS';
 }
 
 export const validationSchema = z.object({
@@ -37,7 +37,7 @@ export type ValidationInput = Omit<Validation, 'sk'>;
  * Stores grade_saved events where validated=true and score_improved=true.
  *
  * Database schema:
- * - pk: ${stage}#VALIDATIONS
+ * - pk: VALIDATIONS
  * - sk: event envelope time (milliseconds)
  * - participantId: the participant who validated
  * - itemId: the validated task
@@ -45,6 +45,9 @@ export type ValidationInput = Omit<Validation, 'sk'>;
  * - ttl: auto-deletion time (2 weeks after creation, seconds since epoch)
  */
 export class Validations extends Table {
+  constructor(db: DynamoDBDocumentClient) {
+    super(db, 'TABLE_STATS');
+  }
 
   /**
    * Get the latest validations.

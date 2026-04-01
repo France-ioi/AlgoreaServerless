@@ -8,6 +8,8 @@ export default async (): Promise<void> => {
   process.env.TABLE_NAME = 'algorea-forum-test';
   process.env.TABLE_NOTIFICATIONS = 'alg-sls-test-notifications';
   process.env.TABLE_CONNECTIONS = 'alg-sls-test-connections';
+  process.env.TABLE_STATS = 'alg-sls-test-stats';
+  process.env.TABLE_ACTIVE_USERS = 'alg-sls-test-active-users';
   process.env.STAGE = 'test';
   process.env.APIGW_ENDPOINT = 'http://localhost:3001';
   process.env.BACKEND_PUBLIC_KEY = ''; // Will be set by token generator in tests
@@ -104,6 +106,38 @@ export default async (): Promise<void> => {
           KeySchema: [
             { AttributeName: 'liveActivityPk', KeyType: 'HASH' as const },
             { AttributeName: 'connectionId', KeyType: 'RANGE' as const },
+          ],
+          Projection: { ProjectionType: 'KEYS_ONLY' as const },
+        },
+      ],
+    },
+    {
+      TableName: 'alg-sls-test-stats',
+      AttributeDefinitions: [
+        { AttributeName: 'pk', AttributeType: 'S' as const },
+        { AttributeName: 'sk', AttributeType: 'N' as const },
+      ],
+      KeySchema: [
+        { AttributeName: 'pk', KeyType: 'HASH' as const },
+        { AttributeName: 'sk', KeyType: 'RANGE' as const },
+      ],
+    },
+    {
+      TableName: 'alg-sls-test-active-users',
+      AttributeDefinitions: [
+        { AttributeName: 'userId', AttributeType: 'S' as const },
+        { AttributeName: 'gsiPk', AttributeType: 'S' as const },
+        { AttributeName: 'lastConnectedTime', AttributeType: 'N' as const },
+      ],
+      KeySchema: [
+        { AttributeName: 'userId', KeyType: 'HASH' as const },
+      ],
+      GlobalSecondaryIndexes: [
+        {
+          IndexName: 'by-time',
+          KeySchema: [
+            { AttributeName: 'gsiPk', KeyType: 'HASH' as const },
+            { AttributeName: 'lastConnectedTime', KeyType: 'RANGE' as const },
           ],
           Projection: { ProjectionType: 'KEYS_ONLY' as const },
         },

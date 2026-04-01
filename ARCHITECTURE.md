@@ -328,7 +328,7 @@ async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvel
 - **Constructor**: `constructor(db, tableEnvVar = 'TABLE_NAME')` — `tableEnvVar` is the name of the env var holding the DynamoDB table name
 - **Key Schema**: `pkAttribute` and `skAttribute` properties (default `'pk'`/`'sk'`), overridable by subclasses for dedicated key schemas (e.g., `userId`/`creationTime` for Notifications)
 - **Query Methods**:
-  - `query()`: Query by partition key with optional sort key range, uses `pkAttribute`/`skAttribute`
+  - `query()`: Query by partition key with optional sort key range, uses `pkAttribute`/`skAttribute`; supports GSI queries via optional `index` parameter
   - `countByPk()`: Count items by partition key, uses `pkAttribute`/`skAttribute`
   - `sqlWrite()`: Execute write operations (single or transaction)
   - `sqlRead()`: Execute read queries with pagination
@@ -351,9 +351,9 @@ export const userConnectionsTable = new UserConnections(dynamodb);
 - `threadFollowsTable` - Thread follow management
 - `threadEventsTable` - Thread messages and events
 - `notificationsTable` - User notifications
-- `validationsTable` - Live activity validations
-- `validationCountsTable` - Daily validation aggregates
-- `activeUsersTable` - Active user tracking for stats
+- `validationsTable` - Live activity validations (dedicated table `TABLE_STATS`)
+- `validationCountsTable` - Daily validation aggregates (dedicated table `TABLE_STATS`)
+- `activeUsersTable` - Active user tracking for stats (dedicated table `TABLE_ACTIVE_USERS`)
 
 **Rationale**: Table classes are stateless (only hold a reference to the shared `dynamodb` client). Singletons eliminate redundant instantiation and simplify function signatures by removing dependency injection parameters.
 
@@ -389,19 +389,23 @@ await userConnectionsTable.insert(connectionId, userId);
 
 **Validations** (`src/dbmodels/validations.ts`)
 - Stores successful item validations from grade_saved events (where validated=true and score_improved=true)
-- Schema: `pk` (`{stage}#VALIDATIONS`), `sk` (envelope time in milliseconds), `participantId`, `itemId`, `answerId`, `ttl` (2 weeks)
+- Stored in a **dedicated table** (`TABLE_STATS` env var, name: `alg-sls-{stage}-stats`)
+- Schema: `pk` (`VALIDATIONS`), `sk` (envelope time in milliseconds), `participantId`, `itemId`, `answerId`, `ttl` (2 weeks)
 - Single global partition key (not scoped to a user or thread)
 - Used by the REST endpoint to return the latest validations and compute exact 24h counts
 
 **ValidationCounts** (`src/dbmodels/validation-counts.ts`)
 - Stores aggregated validation counters in UTC day buckets
-- Schema: `pk` (`{stage}#VALIDATIONS#DAY`), `sk` (`YYYYMMDD` UTC day key), `count`, `ttl` (2 years)
+- Stored in a **dedicated table** (`TABLE_STATS` env var, shared with Validations)
+- Schema: `pk` (`VALIDATIONS#DAY`), `sk` (`YYYYMMDD` UTC day key), `count`, `ttl` (2 years)
 - Updated atomically (`ADD count :increment`) from the `grade_saved` ingestion flow
 - Used by the `/validations/stats` endpoint for rolling `30d` and `1y` counters
 
 **ActiveUsers** (`src/dbmodels/active-users.ts`)
 - Tracks distinct users who have connected via WebSocket for rolling stats
-- Schema: `pk` (`{stage}#ACTIVE_USERS`), `sk` (userId as NumberValue), `lastConnectedTime` (ms), `ttl` (1 year)
+- Stored in a **dedicated table** (`TABLE_ACTIVE_USERS` env var, name: `alg-sls-{stage}-active-users`)
+- Schema: `userId` (S, partition key), `lastConnectedTime` (ms), `ttl` (1 year), `gsiPk` (`"ALL"`)
+- GSI `by-time`: pk = `gsiPk` (S, always `"ALL"`), sk = `lastConnectedTime` (N) — enables efficient time-range queries
 - Upserted on every WebSocket connect (deduplicates by userId)
 - Used by `/validations/stats` for active user counts over 24h/30d/1y windows
 
@@ -535,13 +539,32 @@ Typed error hierarchy for better error handling:
 
 ### DynamoDB Table Schema
 
-**Main table** (`TABLE_NAME` env var) — single table design with composite keys:
+**Main table** (`TABLE_NAME` env var) — single table design with composite keys (forum models):
 
 ```
 - Partition Key (pk): STRING - Composite key identifying entity type
 - Sort Key (sk): NUMBER - Timestamp or identifier
 - Attributes: Varies by entity type
 - TTL: Enabled on 'ttl' attribute (auto-cleanup)
+- Billing: PAY_PER_REQUEST (on-demand)
+```
+
+**Stats table** (`TABLE_STATS` env var, name: `alg-sls-{stage}-stats`) — dedicated table:
+
+```
+- Partition Key (pk): STRING - Entity type (VALIDATIONS or VALIDATIONS#DAY)
+- Sort Key (sk): NUMBER - Timestamp or day key
+- TTL: Enabled on 'ttl' attribute (auto-cleanup)
+- Billing: PAY_PER_REQUEST (on-demand)
+```
+
+**Active Users table** (`TABLE_ACTIVE_USERS` env var, name: `alg-sls-{stage}-active-users`) — dedicated table:
+
+```
+- Partition Key (userId): STRING - The user ID
+- No sort key
+- GSI "by-time": pk=gsiPk (S, always "ALL"), sk=lastConnectedTime (N), projection KEYS_ONLY
+- TTL: Enabled on 'ttl' attribute (auto-cleanup, 1 year)
 - Billing: PAY_PER_REQUEST (on-demand)
 ```
 
@@ -607,9 +630,9 @@ sk: {timestamp}
 userId: string
 ```
 
-#### Validations
+#### Validations (dedicated table: `TABLE_STATS`)
 ```
-pk: {STAGE}#VALIDATIONS
+pk: VALIDATIONS
 sk: {envelope time in milliseconds}
 participantId: string
 itemId: string
@@ -617,9 +640,9 @@ answerId: string
 ttl: {current time + 2 weeks} (seconds since epoch)
 ```
 
-#### Validation Daily Counts
+#### Validation Daily Counts (dedicated table: `TABLE_STATS`)
 ```
-pk: {STAGE}#VALIDATIONS#DAY
+pk: VALIDATIONS#DAY
 sk: {YYYYMMDD in UTC}
 count: number
 ttl: {day start + 2 years} (seconds since epoch)
@@ -635,23 +658,23 @@ readTime?: number (milliseconds, when marked as read)
 ttl: {creationTime/1000 + ~5184000} (~60 days, in seconds since epoch)
 ```
 
-#### Active Users
+#### Active Users (dedicated table: `TABLE_ACTIVE_USERS`)
 ```
-pk: {STAGE}#ACTIVE_USERS
-sk: {userId as DynamoDB Number} (numeric userId used directly via NumberValue.from)
+userId: string (partition key)
 lastConnectedTime: number (ms since epoch, updated on each WebSocket connect)
 ttl: {lastConnectedTime + 1 year} (seconds since epoch)
+gsiPk: "ALL" (fixed constant for GSI partition)
 ```
 One entry per user who has connected via WebSocket. Upserted on every connect (PutItem overwrites
-with latest timestamp). Used by `ActiveUsers.countWindows()` which queries all entries,
-projects `lastConnectedTime`, and counts client-side for 24h/30d/1y windows (viable because
-user count is bounded at <50k).
+with latest timestamp). GSI `by-time` (pk=gsiPk, sk=lastConnectedTime) enables efficient
+time-range queries. Used by `ActiveUsers.countWindows()` which queries the GSI with the largest
+window's cutoff, then partitions results client-side for 24h/30d/1y windows.
 
 ### Key Design Patterns
 
 1. **Composite Keys**: Embed multiple identifiers in partition key for efficient querying (main table)
-2. **Dedicated Tables**: Models with distinct access patterns get their own table and key schema (e.g., notifications with `userId`/`creationTime`, connections with `connectionId` only + GSIs)
-3. **Stage Isolation**: Table names include the stage (`alg-sls-{stage}-*`); main table uses env prefix in pk
+2. **Dedicated Tables**: Models with distinct access patterns get their own table and key schema (e.g., notifications with `userId`/`creationTime`, connections with `connectionId` + GSIs, active-users with `userId` + GSI, stats with `pk`/`sk`)
+3. **Stage Isolation**: Table names include the stage (`alg-sls-{stage}-*`)
 4. **Time-Based Sorting**: Use timestamps as sort keys for chronological ordering
 5. **TTL Cleanup**: Automatic removal of expired subscriptions
 6. **Discriminated Unions**: Type-safe event handling with Zod schemas
@@ -740,9 +763,11 @@ user count is bounded at <50k).
 
 - `STAGE`: Deployment stage (local, test, dev, production)
 - `NO_SIG_CHECK`: Skip JWT signature verification (dev only, defaults to '0')
-- `TABLE_NAME`: DynamoDB main table name (forum, stats, active-users models)
+- `TABLE_NAME`: DynamoDB main table name (forum models)
 - `TABLE_NOTIFICATIONS`: DynamoDB notifications table name (computed as `alg-sls-{stage}-notifications`)
 - `TABLE_CONNECTIONS`: DynamoDB connections table name (computed as `alg-sls-{stage}-connections`)
+- `TABLE_STATS`: DynamoDB stats table name (computed as `alg-sls-{stage}-stats`)
+- `TABLE_ACTIVE_USERS`: DynamoDB active users table name (computed as `alg-sls-{stage}-active-users`)
 - `BACKEND_PUBLIC_KEY`: JWT verification public key (PEM format)
 - `APIGW_ENDPOINT`: API Gateway endpoint for WebSocket messages
 - `OPS_BUCKET`: S3 bucket for deployment artifacts
@@ -899,7 +924,7 @@ async function remove(req: Request, resp: Response) {
 
 - **Batch Size**: DynamoDB batch operations limited to 25 items
 - **WebSocket Broadcast**: Sequential sends to subscribers
-- **Shared Table**: Forum, stats, and active-users data still share one DynamoDB table
+- **Shared Table**: Forum data still uses the shared DynamoDB table (notifications, connections, stats, and active-users have been split into dedicated tables)
 
 ### Optimization Strategies
 
