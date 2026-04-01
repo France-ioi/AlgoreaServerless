@@ -6,6 +6,7 @@ let dynamoProcess: ChildProcess;
 export default async (): Promise<void> => {
   // Set test environment variables
   process.env.TABLE_NAME = 'algorea-forum-test';
+  process.env.TABLE_NOTIFICATIONS = 'alg-sls-test-notifications';
   process.env.STAGE = 'test';
   process.env.APIGW_ENDPOINT = 'http://localhost:3001';
   process.env.BACKEND_PUBLIC_KEY = ''; // Will be set by token generator in tests
@@ -54,27 +55,43 @@ export default async (): Promise<void> => {
     }
   }
 
-  // Create table
-  try {
-    await dynamodb.createTable({
+  // Create tables
+  const tables = [
+    {
       TableName: 'algorea-forum-test',
-      BillingMode: 'PAY_PER_REQUEST',
       AttributeDefinitions: [
-        { AttributeName: 'pk', AttributeType: 'S' },
-        { AttributeName: 'sk', AttributeType: 'N' },
+        { AttributeName: 'pk', AttributeType: 'S' as const },
+        { AttributeName: 'sk', AttributeType: 'N' as const },
       ],
       KeySchema: [
-        { AttributeName: 'pk', KeyType: 'HASH' },
-        { AttributeName: 'sk', KeyType: 'RANGE' },
+        { AttributeName: 'pk', KeyType: 'HASH' as const },
+        { AttributeName: 'sk', KeyType: 'RANGE' as const },
       ],
-    });
-    console.log('DynamoDB table created successfully');
-  } catch (error: any) {
-    if (error.name === 'ResourceInUseException') {
-      console.log('Table already exists, continuing...');
-    } else {
-      console.error('Error creating table:', error.message);
-      throw error;
+    },
+    {
+      TableName: 'alg-sls-test-notifications',
+      AttributeDefinitions: [
+        { AttributeName: 'userId', AttributeType: 'S' as const },
+        { AttributeName: 'creationTime', AttributeType: 'N' as const },
+      ],
+      KeySchema: [
+        { AttributeName: 'userId', KeyType: 'HASH' as const },
+        { AttributeName: 'creationTime', KeyType: 'RANGE' as const },
+      ],
+    },
+  ];
+
+  for (const table of tables) {
+    try {
+      await dynamodb.createTable({ BillingMode: 'PAY_PER_REQUEST', ...table });
+      console.log(`DynamoDB table ${table.TableName} created successfully`);
+    } catch (error: any) {
+      if (error.name === 'ResourceInUseException') {
+        console.log(`Table ${table.TableName} already exists, continuing...`);
+      } else {
+        console.error(`Error creating table ${table.TableName}:`, error.message);
+        throw error;
+      }
     }
   }
 

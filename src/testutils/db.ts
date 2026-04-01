@@ -8,6 +8,12 @@ const getTableName = (): string => {
   return tableName;
 };
 
+const getNotificationsTableName = (): string => {
+  const tableName = process.env.TABLE_NOTIFICATIONS;
+  if (!tableName) throw new Error('TABLE_NOTIFICATIONS environment variable not set');
+  return tableName;
+};
+
 const putItem = async (data: Record<string, unknown>): Promise<void> => {
   await docClient.send(new PutCommand({
     TableName: getTableName(),
@@ -24,17 +30,25 @@ export const getAll = async (): Promise<Record<string, unknown>[]> => {
   return (result.Items ?? []) as Record<string, unknown>[];
 };
 
-export const deleteAll = async (): Promise<void> => {
-  const items = await getAll();
+const clearTableByKeys = async (
+  tableName: string,
+  pkAttr: string,
+  skAttr: string,
+): Promise<void> => {
+  const result = await docClient.send(new ScanCommand({ TableName: tableName }));
+  const items = (result.Items ?? []) as Record<string, unknown>[];
   await Promise.all(items.map(item => {
-    if (!item.pk || !item.sk) return;
+    if (item[pkAttr] === undefined || item[skAttr] === undefined) return;
     return docClient.send(new DeleteCommand({
-      TableName: getTableName(),
-      Key: { pk: item.pk, sk: item.sk },
+      TableName: tableName,
+      Key: { [pkAttr]: item[pkAttr], [skAttr]: item[skAttr] },
     }));
   }));
 };
 
 export const clearTable = async (): Promise<void> => {
-  await deleteAll();
+  await Promise.all([
+    clearTableByKeys(getTableName(), 'pk', 'sk'),
+    clearTableByKeys(getNotificationsTableName(), 'userId', 'creationTime'),
+  ]);
 };

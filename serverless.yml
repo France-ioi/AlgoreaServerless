@@ -29,6 +29,7 @@ provider:
     NO_SIG_CHECK: ${env:NO_SIG_CHECK, '0'}
     BACKEND_PUBLIC_KEY: ${env:BACKEND_PUBLIC_KEY}
     TABLE_NAME: ${env:TABLE_NAME}
+    TABLE_NOTIFICATIONS: alg-sls-${opt:stage, 'dev'}-notifications
     APIGW_ENDPOINT: ${env:APIGW_ENDPOINT}
   runtime: nodejs20.x
   deploymentMethod: direct
@@ -54,6 +55,7 @@ provider:
             - "dynamodb:PartiQL*"
           Resource:
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/${env:TABLE_NAME}"
+            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-notifications"
 functions:
 
   server:
@@ -78,3 +80,24 @@ plugins:
   - serverless-dynamodb
   - serverless-offline
   - serverless-prune-plugin
+
+resources:
+  Resources:
+    NotificationsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: alg-sls-${opt:stage, 'dev'}-notifications
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: creationTime
+            AttributeType: "N"
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: creationTime
+            KeyType: RANGE

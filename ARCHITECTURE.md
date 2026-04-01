@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: March 25, 2026
+**Last Updated**: April 1, 2026
 
 ## Overview
 
@@ -121,8 +121,8 @@ AlgoreaServerless/
 ├── .cursor/                # AI assistant context
 │   ├── rules/              # Coding rules and standards
 │   └── plans/              # Implementation plans
-├── db/                     # Database configuration
-│   └── dynamodb.cloudformation.yaml
+├── scripts/                # Migration and utility scripts
+│   └── migrate-notifications.ts  # Notification table migration
 ├── src/                    # Source code
 │   ├── auth/              # Shared authentication module
 │   │   ├── jwt.ts         # JWT verification and token extraction
@@ -325,7 +325,11 @@ async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvel
 
 #### Base Table Class (`src/dbmodels/table.ts`)
 - **Table**: Abstract base class for all models
+- **Constructor**: `constructor(db, tableEnvVar = 'TABLE_NAME')` — `tableEnvVar` is the name of the env var holding the DynamoDB table name
+- **Key Schema**: `pkAttribute` and `skAttribute` properties (default `'pk'`/`'sk'`), overridable by subclasses for dedicated key schemas (e.g., `userId`/`creationTime` for Notifications)
 - **Query Methods**:
+  - `query()`: Query by partition key with optional sort key range, uses `pkAttribute`/`skAttribute`
+  - `countByPk()`: Count items by partition key, uses `pkAttribute`/`skAttribute`
   - `sqlWrite()`: Execute write operations (single or transaction)
   - `sqlRead()`: Execute read queries with pagination
   - `batchUpdate()`: Batch write operations (max 25 items)
@@ -411,8 +415,9 @@ await userConnectionsTable.insert(connectionId, userId);
 - Used by `/validations/stats` for active user counts over 24h/30d/1y windows
 
 **Notifications** (`src/dbmodels/notifications.ts`)
-- Stores per-user notifications with auto-expiration
-- Schema: `pk` ({stage}#USER#{userId}#NOTIF), `sk` (creation time ms), `notificationType`, `payload`, `readTime`, `ttl`
+- Stores per-user notifications with auto-expiration in a **dedicated table** (`TABLE_NOTIFICATIONS` env var, name computed as `alg-sls-{stage}-notifications`)
+- Dedicated key schema: `userId` (S, partition key), `creationTime` (N, sort key) — overrides `Table` base class defaults via `pkAttribute`/`skAttribute`
+- Additional attributes: `notificationType`, `payload`, `readTime`, `ttl`
 - TTL: ~2 months (auto-cleanup via DynamoDB TTL)
 - `readTime`: timestamp when marked as read (undefined = unread)
 - Supports listing, deletion, and read status management
@@ -539,13 +544,21 @@ Typed error hierarchy for better error handling:
 
 ### DynamoDB Table Schema
 
-Single table design with composite keys:
+**Main table** (`TABLE_NAME` env var) — single table design with composite keys:
 
 ```
-Table: alg-serverless-fioi-*
 - Partition Key (pk): STRING - Composite key identifying entity type
 - Sort Key (sk): NUMBER - Timestamp or identifier
 - Attributes: Varies by entity type
+- TTL: Enabled on 'ttl' attribute (auto-cleanup)
+- Billing: PAY_PER_REQUEST (on-demand)
+```
+
+**Notifications table** (`TABLE_NOTIFICATIONS` env var, name: `alg-sls-{stage}-notifications`) — dedicated table:
+
+```
+- Partition Key (userId): STRING - The user who owns the notification
+- Sort Key (creationTime): NUMBER - Creation time in milliseconds
 - TTL: Enabled on 'ttl' attribute (auto-cleanup)
 - Billing: PAY_PER_REQUEST (on-demand)
 ```
@@ -606,14 +619,14 @@ count: number
 ttl: {day start + 2 years} (seconds since epoch)
 ```
 
-#### User Notifications
+#### User Notifications (dedicated table: `TABLE_NOTIFICATIONS`)
 ```
-pk: {STAGE}#USER#{userId}#NOTIF
-sk: {timestamp} (creation time in milliseconds)
+userId: string (partition key)
+creationTime: number (sort key, creation time in milliseconds)
 notificationType: string
 payload: Record<string, unknown>
 readTime?: number (milliseconds, when marked as read)
-ttl: {timestamp + ~5184000} (~60 days, in seconds since epoch)
+ttl: {creationTime/1000 + ~5184000} (~60 days, in seconds since epoch)
 ```
 
 #### Connected Users (Presence)
@@ -642,11 +655,12 @@ user count is bounded at <50k).
 
 ### Key Design Patterns
 
-1. **Composite Keys**: Embed multiple identifiers in partition key for efficient querying
-2. **Stage Isolation**: Environment prefix prevents data mixing across stages
-3. **Time-Based Sorting**: Use timestamps as sort keys for chronological ordering
-4. **TTL Cleanup**: Automatic removal of expired subscriptions
-5. **Discriminated Unions**: Type-safe event handling with Zod schemas
+1. **Composite Keys**: Embed multiple identifiers in partition key for efficient querying (main table)
+2. **Dedicated Tables**: Models with distinct access patterns get their own table and key schema (e.g., notifications with `userId`/`creationTime`)
+3. **Stage Isolation**: Table names include the stage (`alg-sls-{stage}-*`); main table uses env prefix in pk
+4. **Time-Based Sorting**: Use timestamps as sort keys for chronological ordering
+5. **TTL Cleanup**: Automatic removal of expired subscriptions
+6. **Discriminated Unions**: Type-safe event handling with Zod schemas
 
 ## Request/Response Flow Examples
 
@@ -732,7 +746,8 @@ user count is bounded at <50k).
 
 - `STAGE`: Deployment stage (local, test, dev, production)
 - `NO_SIG_CHECK`: Skip JWT signature verification (dev only, defaults to '0')
-- `TABLE_NAME`: DynamoDB table name
+- `TABLE_NAME`: DynamoDB main table name (all models except notifications)
+- `TABLE_NOTIFICATIONS`: DynamoDB notifications table name (computed as `alg-sls-{stage}-notifications`)
 - `BACKEND_PUBLIC_KEY`: JWT verification public key (PEM format)
 - `APIGW_ENDPOINT`: API Gateway endpoint for WebSocket messages
 - `OPS_BUCKET`: S3 bucket for deployment artifacts
@@ -1477,8 +1492,9 @@ All endpoints require identity token authentication (Bearer token in Authorizati
 
 ### Database Model
 
-- **PK**: `{stage}#USER#{userId}#NOTIF`
-- **SK**: Creation time (milliseconds)
+Stored in a **dedicated table** (`TABLE_NOTIFICATIONS`, name: `alg-sls-{stage}-notifications`):
+- **userId** (S): Partition key — the user who owns the notification
+- **creationTime** (N): Sort key — creation time in milliseconds
 - **TTL**: ~2 months (auto-cleanup)
 - **readTime**: Timestamp when marked as read (undefined = unread)
 
