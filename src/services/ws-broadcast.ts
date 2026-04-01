@@ -1,6 +1,5 @@
 import { ConnectionId, WsMessage, isClosedConnection, logSendResults, wsClient } from '../websocket-client';
 import { userConnectionsTable } from '../dbmodels/user-connections';
-import { liveActivitySubscriptionsTable } from '../dbmodels/live-activity-subscriptions';
 import { threadSubscriptionsTable } from '../forum/dbmodels/thread-subscriptions';
 import { threadIdSchema } from '../forum/dbmodels/thread';
 
@@ -23,9 +22,8 @@ export interface BroadcastResult<T> {
 
 /**
  * Cleans up a gone WebSocket connection by removing:
- * 1. The user connection entry
+ * 1. The user connection entry (also removes it from live-activity-subscribers GSI automatically)
  * 2. The thread subscription (if any, via stored threadId + connectionId)
- * 3. The live activity subscription (if any, via direct connectionId delete)
  *
  * @param connectionId - The connection to clean up
  * @returns The userId if the connection was found, undefined otherwise
@@ -38,8 +36,6 @@ export async function cleanupGoneConnection(connectionId: ConnectionId): Promise
   if (threadId.success) {
     await threadSubscriptionsTable.deleteByConnectionId(threadId.data, connectionId);
   }
-
-  await liveActivitySubscriptionsTable.deleteByConnectionId(connectionId); // no-op if not subscribed
 
   return { userId: connInfo.userId };
 }

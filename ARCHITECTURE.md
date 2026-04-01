@@ -122,7 +122,8 @@ AlgoreaServerless/
 │   ├── rules/              # Coding rules and standards
 │   └── plans/              # Implementation plans
 ├── scripts/                # Migration and utility scripts
-│   └── migrate-notifications.ts  # Notification table migration
+│   ├── migrate-notifications.ts  # Notification table migration
+│   └── migrate-connections.ts    # Connections table migration
 ├── src/                    # Source code
 │   ├── auth/              # Shared authentication module
 │   │   ├── jwt.ts         # JWT verification and token extraction
@@ -131,9 +132,8 @@ AlgoreaServerless/
 │   │   └── *.spec.ts      # Authentication tests
 │   ├── dbmodels/          # Shared database models and base classes
 │   │   ├── active-users.ts  # Active user tracking for stats
-│   │   ├── live-activity-subscriptions.ts  # Live activity subscription model
 │   │   ├── notifications.ts  # User notifications model
-│   │   ├── user-connections.ts  # WebSocket user connections model
+│   │   ├── user-connections.ts  # WebSocket connections + live activity subscriptions
 │   │   ├── validations.ts  # Live activity validations model
 │   │   └── table.ts       # Base table class
 │   ├── events/            # Shared event definitions (schema + defineEvent)
@@ -346,8 +346,7 @@ export const userConnectionsTable = new UserConnections(dynamodb);
 ```
 
 **Available singletons**:
-- `userConnectionsTable` - User WebSocket connections
-- `liveActivitySubscriptionsTable` - Live activity subscription management
+- `userConnectionsTable` - User WebSocket connections and live activity subscriptions (dedicated table `TABLE_CONNECTIONS`)
 - `threadSubscriptionsTable` - Thread subscription management
 - `threadFollowsTable` - Thread follow management
 - `threadEventsTable` - Thread messages and events
@@ -387,14 +386,6 @@ await userConnectionsTable.insert(connectionId, userId);
 - Schema: `pk` (thread identifier + #FOLLOW), `sk` (follow time), `userId`
 - Unlike subscriptions, follows persist across sessions
 - Used to determine who should receive notifications about thread activity
-
-**LiveActivitySubscriptions** (`src/dbmodels/live-activity-subscriptions.ts`)
-- Manages WebSocket connection subscriptions to live activity updates
-- Schema: `pk` (`{stage}#LIVE_ACTIVITY#SUB`), `sk` (connectionId encoded as number), `connectionId` (string, debugging only), `ttl` (2 hours)
-- The sk is the connectionId base64 bytes interpreted as a big-endian unsigned integer (via `connectionIdToNumberValue`), enabling direct delete by connectionId without a query
-- No userId stored; the connection is already authenticated on `$connect`
-- Single partition key for all subscribers (global, not scoped to a thread)
-- Auto-cleanup via DynamoDB TTL
 
 **Validations** (`src/dbmodels/validations.ts`)
 - Stores successful item validations from grade_saved events (where validated=true and score_improved=true)
@@ -563,6 +554,17 @@ Typed error hierarchy for better error handling:
 - Billing: PAY_PER_REQUEST (on-demand)
 ```
 
+**Connections table** (`TABLE_CONNECTIONS` env var, name: `alg-sls-{stage}-connections`) — dedicated table:
+
+```
+- Partition Key (connectionId): STRING - WebSocket connection ID
+- No sort key
+- GSI "user-connections": pk=userId (S), sk=connectionId (S), projection ALL
+- Sparse GSI "live-activity-subscribers": pk=liveActivityPk (S), sk=connectionId (S), projection KEYS_ONLY
+- TTL: Enabled on 'ttl' attribute (auto-cleanup, 2 hours)
+- Billing: PAY_PER_REQUEST (on-demand)
+```
+
 ### Entity Types
 
 #### Thread Events
@@ -586,13 +588,17 @@ userId: string
 ttl: {timestamp + 7200} (2 hours)
 ```
 
-#### Live Activity Subscriptions
+#### WebSocket Connections (dedicated table: `TABLE_CONNECTIONS`)
 ```
-pk: {STAGE}#LIVE_ACTIVITY#SUB
-sk: {connectionId as number} (base64 → big-endian unsigned integer, stored as DynamoDB Number)
-connectionId: string (debugging only, not read back)
-ttl: {timestamp + 7200} (2 hours)
+connectionId: string (partition key)
+userId: string
+creationTime: number (ms since epoch)
+ttl: {timestamp + 7200} (2 hours, seconds since epoch)
+liveActivityPk?: "LIVE_ACTIVITY_SUB" (sparse GSI key, only set when subscribed to live activity)
+subscriptionThreadId?: { participantId, itemId } (metadata stored by thread subscription handler)
 ```
+One item per WebSocket connection. GSI "user-connections" enables lookup by userId.
+Sparse GSI "live-activity-subscribers" only contains items with liveActivityPk attribute set.
 
 #### Thread Follows
 ```
@@ -629,18 +635,6 @@ readTime?: number (milliseconds, when marked as read)
 ttl: {creationTime/1000 + ~5184000} (~60 days, in seconds since epoch)
 ```
 
-#### Connected Users (Presence)
-```
-pk: {STAGE}#CONNECTED_USERS
-sk: {userId as DynamoDB Number} (numeric userId used directly via NumberValue.from)
-userId: string (for debugging/inspection)
-ttl: {timestamp + 7200} (2 hours, same as WebSocket connection TTL)
-```
-One entry per connected user. Upserted on connect (PutItem with refreshed TTL), deleted on last disconnect
-(after verifying no remaining u2c entries). Used by `UserConnections.countDistinctUsers()` which queries
-this partition with `Select: 'COUNT'` and a TTL filter to exclude expired-but-not-yet-cleaned entries.
-Also returned as `connectedUsers` on `GET /sls/stats`.
-
 #### Active Users
 ```
 pk: {STAGE}#ACTIVE_USERS
@@ -656,7 +650,7 @@ user count is bounded at <50k).
 ### Key Design Patterns
 
 1. **Composite Keys**: Embed multiple identifiers in partition key for efficient querying (main table)
-2. **Dedicated Tables**: Models with distinct access patterns get their own table and key schema (e.g., notifications with `userId`/`creationTime`)
+2. **Dedicated Tables**: Models with distinct access patterns get their own table and key schema (e.g., notifications with `userId`/`creationTime`, connections with `connectionId` only + GSIs)
 3. **Stage Isolation**: Table names include the stage (`alg-sls-{stage}-*`); main table uses env prefix in pk
 4. **Time-Based Sorting**: Use timestamps as sort keys for chronological ordering
 5. **TTL Cleanup**: Automatic removal of expired subscriptions
@@ -746,8 +740,9 @@ user count is bounded at <50k).
 
 - `STAGE`: Deployment stage (local, test, dev, production)
 - `NO_SIG_CHECK`: Skip JWT signature verification (dev only, defaults to '0')
-- `TABLE_NAME`: DynamoDB main table name (all models except notifications)
+- `TABLE_NAME`: DynamoDB main table name (forum, stats, active-users models)
 - `TABLE_NOTIFICATIONS`: DynamoDB notifications table name (computed as `alg-sls-{stage}-notifications`)
+- `TABLE_CONNECTIONS`: DynamoDB connections table name (computed as `alg-sls-{stage}-connections`)
 - `BACKEND_PUBLIC_KEY`: JWT verification public key (PEM format)
 - `APIGW_ENDPOINT`: API Gateway endpoint for WebSocket messages
 - `OPS_BUCKET`: S3 bucket for deployment artifacts
@@ -904,7 +899,7 @@ async function remove(req: Request, resp: Response) {
 
 - **Batch Size**: DynamoDB batch operations limited to 25 items
 - **WebSocket Broadcast**: Sequential sends to subscribers
-- **Single Table**: All data in one DynamoDB table
+- **Shared Table**: Forum, stats, and active-users data still share one DynamoDB table
 
 ### Optimization Strategies
 

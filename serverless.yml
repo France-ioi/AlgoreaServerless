@@ -30,6 +30,7 @@ provider:
     BACKEND_PUBLIC_KEY: ${env:BACKEND_PUBLIC_KEY}
     TABLE_NAME: ${env:TABLE_NAME}
     TABLE_NOTIFICATIONS: alg-sls-${opt:stage, 'dev'}-notifications
+    TABLE_CONNECTIONS: alg-sls-${opt:stage, 'dev'}-connections
     APIGW_ENDPOINT: ${env:APIGW_ENDPOINT}
   runtime: nodejs20.x
   deploymentMethod: direct
@@ -56,6 +57,8 @@ provider:
           Resource:
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/${env:TABLE_NAME}"
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-notifications"
+            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections"
+            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections/index/*"
 functions:
 
   server:
@@ -101,3 +104,38 @@ resources:
             KeyType: HASH
           - AttributeName: creationTime
             KeyType: RANGE
+    ConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: alg-sls-${opt:stage, 'dev'}-connections
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: liveActivityPk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: user-connections
+            KeySchema:
+              - AttributeName: userId
+                KeyType: HASH
+              - AttributeName: connectionId
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: live-activity-subscribers
+            KeySchema:
+              - AttributeName: liveActivityPk
+                KeyType: HASH
+              - AttributeName: connectionId
+                KeyType: RANGE
+            Projection:
+              ProjectionType: KEYS_ONLY
