@@ -87,13 +87,17 @@ function extractConnectionId(pk: string, stage: string): string | undefined {
   return pk.slice(prefix.length, -suffix.length);
 }
 
+const BIGINT_0 = BigInt(0);
+const BIGINT_8 = BigInt(8);
+const BIGINT_FF = BigInt(0xff);
+
 function numberValueToConnectionId(nv: NumberValue): string {
   let n = BigInt(nv.value);
-  if (n === 0n) return Buffer.from([ 0 ]).toString('base64');
+  if (n === BIGINT_0) return Buffer.from([ 0 ]).toString('base64');
   const bytes: number[] = [];
-  while (n > 0n) {
-    bytes.unshift(Number(n & 0xffn));
-    n >>= 8n;
+  while (n > BIGINT_0) {
+    bytes.unshift(Number(n & BIGINT_FF));
+    n >>= BIGINT_8;
   }
   return Buffer.from(bytes).toString('base64');
 }
