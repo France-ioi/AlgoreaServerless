@@ -38,6 +38,17 @@ This is an AWS Serverless application using:
 - Use `.editorconfig` for basic editor config
 - Always run `npm run lint` after changes
 
+## Comments
+- Do NOT add obvious, narrating comments (e.g., `// increment counter`, `// return result`).
+- DO add comments when a non-trivial choice has been made and the reasoning is not self-evident from the code. Examples:
+  - Why a particular algorithm, data structure, or approach was chosen over alternatives
+  - Why a value is hardcoded or why a specific threshold/constant was picked (e.g., `const chunkSize = 25; // the max size of 'RequestItems' for the dynamoDB API`)
+  - DynamoDB constraints or API limitations that motivate the code shape
+  - Non-obvious performance considerations or trade-offs (e.g., batch size limits, TTL choices)
+  - Business logic constraints that aren't apparent from the code alone
+  - Why something is intentionally left out or guarded (e.g., explaining when a conditional gate would need to change)
+- When refactoring or rewriting code, **preserve all existing explanatory comments**. Move them to the appropriate new location if the code they describe has moved. Only remove a comment if the code change makes the comment factually obsolete.
+
 # Testing
 
 - Run tests with `npm test`
