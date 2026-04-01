@@ -38,10 +38,12 @@ export function wsConnectionTtl(): number {
 
 export class Table {
   protected tableName: string;
+  protected readonly pkAttribute: string = 'pk';
+  protected readonly skAttribute: string = 'sk';
 
-  constructor(protected db: DynamoDBDocumentClient) {
-    const tableName = process.env.TABLE_NAME;
-    if (tableName === undefined || !tableName.length) throw new Error('env variable "TABLE_NAME" not set!');
+  constructor(protected db: DynamoDBDocumentClient, tableEnvVar = 'TABLE_NAME') {
+    const tableName = process.env[tableEnvVar];
+    if (!tableName?.length) throw new Error(`env variable "${tableEnvVar}" not set!`);
     this.tableName = tableName;
   }
 
@@ -151,19 +153,19 @@ export class Table {
   }): Promise<number> {
     try {
       const expressionValues: Record<string, unknown> = { ':pk': pk };
-      let keyCondition = 'pk = :pk';
+      let keyCondition = `${this.pkAttribute} = :pk`;
       let filterExpression: string | undefined;
       let expressionNames: Record<string, string> | undefined;
 
       if (options?.skRange?.start !== undefined && options.skRange.end !== undefined) {
-        keyCondition += ' AND sk BETWEEN :skStart AND :skEnd';
+        keyCondition += ` AND ${this.skAttribute} BETWEEN :skStart AND :skEnd`;
         expressionValues[':skStart'] = options.skRange.start;
         expressionValues[':skEnd'] = options.skRange.end;
       } else if (options?.skRange?.start !== undefined) {
-        keyCondition += ' AND sk >= :skStart';
+        keyCondition += ` AND ${this.skAttribute} >= :skStart`;
         expressionValues[':skStart'] = options.skRange.start;
       } else if (options?.skRange?.end !== undefined) {
-        keyCondition += ' AND sk <= :skEnd';
+        keyCondition += ` AND ${this.skAttribute} <= :skEnd`;
         expressionValues[':skEnd'] = options.skRange.end;
       }
 
@@ -207,17 +209,17 @@ export class Table {
   }): Promise<Record<string, unknown>[]> {
     try {
       const expressionValues: Record<string, unknown> = { ':pk': params.pk };
-      let keyCondition = 'pk = :pk';
+      let keyCondition = `${this.pkAttribute} = :pk`;
 
       if (params.skRange?.start !== undefined && params.skRange?.end !== undefined) {
-        keyCondition += ' AND sk BETWEEN :skStart AND :skEnd';
+        keyCondition += ` AND ${this.skAttribute} BETWEEN :skStart AND :skEnd`;
         expressionValues[':skStart'] = params.skRange.start;
         expressionValues[':skEnd'] = params.skRange.end;
       } else if (params.skRange?.start !== undefined) {
-        keyCondition += ' AND sk >= :skStart';
+        keyCondition += ` AND ${this.skAttribute} >= :skStart`;
         expressionValues[':skStart'] = params.skRange.start;
       } else if (params.skRange?.end !== undefined) {
-        keyCondition += ' AND sk <= :skEnd';
+        keyCondition += ` AND ${this.skAttribute} <= :skEnd`;
         expressionValues[':skEnd'] = params.skRange.end;
       }
 
