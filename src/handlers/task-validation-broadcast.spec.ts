@@ -10,7 +10,6 @@ jest.mock('../websocket-client', () => ({
 import { handleGradeSaved } from './task-validation-broadcast';
 import { GradeSavedPayload } from '../events/grade-saved';
 import { EventEnvelope } from '../utils/lambda-eventbus-server';
-import { LiveActivitySubscriptions } from '../dbmodels/live-activity-subscriptions';
 import { UserConnections } from '../dbmodels/user-connections';
 import { docClient } from '../dynamodb';
 
@@ -40,17 +39,14 @@ function createMockEnvelope(): EventEnvelope {
   };
 }
 
-// Valid base64 connectionIds (first byte must be non-zero for number encoding round-trip)
 const connA = 'AQ==';
 const connB = 'Ag==';
 const connGone = 'BA==';
 
 describe('live-activity handleGradeSaved', () => {
-  let liveActivitySubs: LiveActivitySubscriptions;
   let userConnections: UserConnections;
 
   beforeEach(async () => {
-    liveActivitySubs = new LiveActivitySubscriptions(docClient);
     userConnections = new UserConnections(docClient);
     await clearTable();
     jest.clearAllMocks();
@@ -59,13 +55,15 @@ describe('live-activity handleGradeSaved', () => {
   });
 
   it('should skip when validated is false', async () => {
-    await liveActivitySubs.insert(connA);
+    await userConnections.insert(connA, '50001');
+    await userConnections.subscribeLiveActivity(connA);
     await handleGradeSaved(createMockPayload({ validated: false }), createMockEnvelope());
     expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('should skip when score_improved is false', async () => {
-    await liveActivitySubs.insert(connA);
+    await userConnections.insert(connA, '50001');
+    await userConnections.subscribeLiveActivity(connA);
     await handleGradeSaved(createMockPayload({ score_improved: false }), createMockEnvelope());
     expect(mockSend).not.toHaveBeenCalled();
   });
@@ -76,8 +74,10 @@ describe('live-activity handleGradeSaved', () => {
   });
 
   it('should notify all live activity subscribers on validation', async () => {
-    await liveActivitySubs.insert(connA);
-    await liveActivitySubs.insert(connB);
+    await userConnections.insert(connA, '50001');
+    await userConnections.insert(connB, '50002');
+    await userConnections.subscribeLiveActivity(connA);
+    await userConnections.subscribeLiveActivity(connB);
 
     const payload = createMockPayload();
     await handleGradeSaved(payload, createMockEnvelope());
@@ -97,9 +97,8 @@ describe('live-activity handleGradeSaved', () => {
   it('should clean up gone connections after broadcast', async () => {
     await userConnections.insert(connA, '50001');
     await userConnections.insert(connGone, '50002');
-
-    await liveActivitySubs.insert(connA);
-    await liveActivitySubs.insert(connGone);
+    await userConnections.subscribeLiveActivity(connA);
+    await userConnections.subscribeLiveActivity(connGone);
 
     mockSend.mockImplementation((connectionIds) => Promise.resolve(connectionIds.map((id: string) => {
       if (id === connGone) {
@@ -112,7 +111,8 @@ describe('live-activity handleGradeSaved', () => {
 
     await handleGradeSaved(createMockPayload(), createMockEnvelope());
 
-    const subscribers = await liveActivitySubs.getSubscribers();
+    // Deleting the connection item automatically removes it from the sparse GSI
+    const subscribers = await userConnections.getLiveActivitySubscribers();
     expect(subscribers.map(s => s.connectionId)).not.toContain(connGone);
 
     const goneUserConns = await userConnections.getAll('50002');

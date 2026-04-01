@@ -1,6 +1,6 @@
 import { EventEnvelope } from '../utils/lambda-eventbus-server';
 import { GradeSavedPayload } from '../events/grade-saved';
-import { liveActivitySubscriptionsTable } from '../dbmodels/live-activity-subscriptions';
+import { userConnectionsTable } from '../dbmodels/user-connections';
 import { LiveActivityMessageAction } from '../ws-messages';
 import { broadcastAndCleanup } from '../services/ws-broadcast';
 
@@ -13,7 +13,7 @@ export async function handleGradeSaved(payload: GradeSavedPayload, envelope: Eve
   if (!payload.validated || !payload.score_improved) return;
 
   const time = new Date(envelope.time).getTime();
-  const subscribers = await liveActivitySubscriptionsTable.getSubscribers();
+  const subscribers = await userConnectionsTable.getLiveActivitySubscribers();
   const wsMessage = {
     action: LiveActivityMessageAction.Validation as const,
     participantId: payload.participant_id,

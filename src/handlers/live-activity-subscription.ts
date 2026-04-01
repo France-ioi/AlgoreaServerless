@@ -1,4 +1,4 @@
-import { liveActivitySubscriptionsTable } from '../dbmodels/live-activity-subscriptions';
+import { userConnectionsTable } from '../dbmodels/user-connections';
 import { WsRequest } from '../utils/lambda-ws-server';
 
 /**
@@ -7,12 +7,12 @@ import { WsRequest } from '../utils/lambda-ws-server';
  * is already authenticated on $connect via identity token.
  */
 export async function subscribe(request: WsRequest): Promise<void> {
-  await liveActivitySubscriptionsTable.insert(request.connectionId());
+  await userConnectionsTable.subscribeLiveActivity(request.connectionId());
 }
 
 /**
  * Unsubscribe from live activity updates.
  */
 export async function unsubscribe(request: WsRequest): Promise<void> {
-  await liveActivitySubscriptionsTable.deleteByConnectionId(request.connectionId());
+  await userConnectionsTable.unsubscribeLiveActivity(request.connectionId());
 }

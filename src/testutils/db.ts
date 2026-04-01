@@ -14,6 +14,12 @@ const getNotificationsTableName = (): string => {
   return tableName;
 };
 
+const getConnectionsTableName = (): string => {
+  const tableName = process.env.TABLE_CONNECTIONS;
+  if (!tableName) throw new Error('TABLE_CONNECTIONS environment variable not set');
+  return tableName;
+};
+
 const putItem = async (data: Record<string, unknown>): Promise<void> => {
   await docClient.send(new PutCommand({
     TableName: getTableName(),
@@ -46,9 +52,25 @@ const clearTableByKeys = async (
   }));
 };
 
+const clearTableByPk = async (
+  tableName: string,
+  pkAttr: string,
+): Promise<void> => {
+  const result = await docClient.send(new ScanCommand({ TableName: tableName }));
+  const items = (result.Items ?? []) as Record<string, unknown>[];
+  await Promise.all(items.map(item => {
+    if (item[pkAttr] === undefined) return;
+    return docClient.send(new DeleteCommand({
+      TableName: tableName,
+      Key: { [pkAttr]: item[pkAttr] },
+    }));
+  }));
+};
+
 export const clearTable = async (): Promise<void> => {
   await Promise.all([
     clearTableByKeys(getTableName(), 'pk', 'sk'),
     clearTableByKeys(getNotificationsTableName(), 'userId', 'creationTime'),
+    clearTableByPk(getConnectionsTableName(), 'connectionId'),
   ]);
 };
