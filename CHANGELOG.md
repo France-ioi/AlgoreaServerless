@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.4.1 - 2026-04-01
+- migrate WebSocket connections to a separate stage-specific DynamoDB table
+
 ## 2.4.0 - 2026-04-01
 - new stats service: connected users count, active users count, and validation counts (last 24h, 30d, 1y)
 - migrate notifications to a separate stage-specific DynamoDB table
