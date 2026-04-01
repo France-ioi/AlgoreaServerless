@@ -1,6 +1,6 @@
 import { ValidationCounts, validationDayTtl } from './validation-counts';
 import { docClient } from '../dynamodb';
-import { clearTable, getAll } from '../testutils/db';
+import { clearTable, getAllStats } from '../testutils/db';
 
 describe('ValidationCounts', () => {
   let validationCounts: ValidationCounts;
@@ -16,9 +16,8 @@ describe('ValidationCounts', () => {
       await validationCounts.incrementDay(time);
       await validationCounts.incrementDay(time);
 
-      const items = await getAll();
-      const stage = process.env.STAGE || 'dev';
-      const dayItems = items.filter(item => item.pk === `${stage}#VALIDATIONS#DAY`);
+      const items = await getAllStats();
+      const dayItems = items.filter(item => item.pk === 'VALIDATIONS#DAY');
       const dayEntry = dayItems[0] as { sk: { value: string }, count: { value: string }, ttl: { value: string } };
 
       expect(dayItems).toHaveLength(1);

@@ -206,20 +206,23 @@ export class Table {
     projectionAttributes?: string[],
     limit?: number,
     scanIndexForward?: boolean,
+    index?: { name: string, pkAttribute: string, skAttribute: string },
   }): Promise<Record<string, unknown>[]> {
     try {
+      const pkAttr = params.index?.pkAttribute ?? this.pkAttribute;
+      const skAttr = params.index?.skAttribute ?? this.skAttribute;
       const expressionValues: Record<string, unknown> = { ':pk': params.pk };
-      let keyCondition = `${this.pkAttribute} = :pk`;
+      let keyCondition = `${pkAttr} = :pk`;
 
       if (params.skRange?.start !== undefined && params.skRange?.end !== undefined) {
-        keyCondition += ` AND ${this.skAttribute} BETWEEN :skStart AND :skEnd`;
+        keyCondition += ` AND ${skAttr} BETWEEN :skStart AND :skEnd`;
         expressionValues[':skStart'] = params.skRange.start;
         expressionValues[':skEnd'] = params.skRange.end;
       } else if (params.skRange?.start !== undefined) {
-        keyCondition += ` AND ${this.skAttribute} >= :skStart`;
+        keyCondition += ` AND ${skAttr} >= :skStart`;
         expressionValues[':skStart'] = params.skRange.start;
       } else if (params.skRange?.end !== undefined) {
-        keyCondition += ` AND ${this.skAttribute} <= :skEnd`;
+        keyCondition += ` AND ${skAttr} <= :skEnd`;
         expressionValues[':skEnd'] = params.skRange.end;
       }
 
@@ -249,6 +252,7 @@ export class Table {
       do {
         const output = await this.db.send(new QueryCommand({
           TableName: this.tableName,
+          IndexName: params.index?.name,
           KeyConditionExpression: keyCondition,
           ExpressionAttributeValues: expressionValues,
           ExpressionAttributeNames: Object.keys(expressionNames).length > 0 ? expressionNames : undefined,

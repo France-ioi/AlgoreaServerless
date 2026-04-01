@@ -31,6 +31,8 @@ provider:
     TABLE_NAME: ${env:TABLE_NAME}
     TABLE_NOTIFICATIONS: alg-sls-${opt:stage, 'dev'}-notifications
     TABLE_CONNECTIONS: alg-sls-${opt:stage, 'dev'}-connections
+    TABLE_STATS: alg-sls-${opt:stage, 'dev'}-stats
+    TABLE_ACTIVE_USERS: alg-sls-${opt:stage, 'dev'}-active-users
     APIGW_ENDPOINT: ${env:APIGW_ENDPOINT}
   runtime: nodejs20.x
   deploymentMethod: direct
@@ -59,6 +61,9 @@ provider:
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-notifications"
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections"
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections/index/*"
+            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-stats"
+            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-active-users"
+            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-active-users/index/*"
 functions:
 
   server:
@@ -136,6 +141,51 @@ resources:
               - AttributeName: liveActivityPk
                 KeyType: HASH
               - AttributeName: connectionId
+                KeyType: RANGE
+            Projection:
+              ProjectionType: KEYS_ONLY
+    StatsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: alg-sls-${opt:stage, 'dev'}-stats
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: "N"
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+    ActiveUsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: alg-sls-${opt:stage, 'dev'}-active-users
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: gsiPk
+            AttributeType: S
+          - AttributeName: lastConnectedTime
+            AttributeType: "N"
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: by-time
+            KeySchema:
+              - AttributeName: gsiPk
+                KeyType: HASH
+              - AttributeName: lastConnectedTime
                 KeyType: RANGE
             Projection:
               ProjectionType: KEYS_ONLY

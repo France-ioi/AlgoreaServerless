@@ -20,6 +20,18 @@ const getConnectionsTableName = (): string => {
   return tableName;
 };
 
+const getStatsTableName = (): string => {
+  const tableName = process.env.TABLE_STATS;
+  if (!tableName) throw new Error('TABLE_STATS environment variable not set');
+  return tableName;
+};
+
+const getActiveUsersTableName = (): string => {
+  const tableName = process.env.TABLE_ACTIVE_USERS;
+  if (!tableName) throw new Error('TABLE_ACTIVE_USERS environment variable not set');
+  return tableName;
+};
+
 const putItem = async (data: Record<string, unknown>): Promise<void> => {
   await docClient.send(new PutCommand({
     TableName: getTableName(),
@@ -33,6 +45,16 @@ export const loadFixture = async (data: Record<string, unknown>[]): Promise<void
 
 export const getAll = async (): Promise<Record<string, unknown>[]> => {
   const result = await docClient.send(new ScanCommand({ TableName: getTableName() }));
+  return (result.Items ?? []) as Record<string, unknown>[];
+};
+
+export const getAllStats = async (): Promise<Record<string, unknown>[]> => {
+  const result = await docClient.send(new ScanCommand({ TableName: getStatsTableName() }));
+  return (result.Items ?? []) as Record<string, unknown>[];
+};
+
+export const getAllActiveUsers = async (): Promise<Record<string, unknown>[]> => {
+  const result = await docClient.send(new ScanCommand({ TableName: getActiveUsersTableName() }));
   return (result.Items ?? []) as Record<string, unknown>[];
 };
 
@@ -72,5 +94,7 @@ export const clearTable = async (): Promise<void> => {
     clearTableByKeys(getTableName(), 'pk', 'sk'),
     clearTableByKeys(getNotificationsTableName(), 'userId', 'creationTime'),
     clearTableByPk(getConnectionsTableName(), 'connectionId'),
+    clearTableByKeys(getStatsTableName(), 'pk', 'sk'),
+    clearTableByPk(getActiveUsersTableName(), 'userId'),
   ]);
 };

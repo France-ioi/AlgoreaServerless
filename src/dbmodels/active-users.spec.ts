@@ -1,6 +1,6 @@
 import { ActiveUsers } from './active-users';
 import { docClient } from '../dynamodb';
-import { clearTable, getAll } from '../testutils/db';
+import { clearTable, getAllActiveUsers } from '../testutils/db';
 
 describe('ActiveUsers', () => {
   let activeUsers: ActiveUsers;
@@ -14,16 +14,14 @@ describe('ActiveUsers', () => {
     it('should create an entry for a new user', async () => {
       await activeUsers.insert('12345');
 
-      const items = await getAll();
-      const stage = process.env.STAGE || 'dev';
-      const entries = items.filter(item => item.pk === `${stage}#ACTIVE_USERS`);
-
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({
-        pk: `${stage}#ACTIVE_USERS`,
+      const items = await getAllActiveUsers();
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        userId: '12345',
+        gsiPk: 'ALL',
       });
-      expect(entries[0]).toHaveProperty('lastConnectedTime');
-      expect(entries[0]).toHaveProperty('ttl');
+      expect(items[0]).toHaveProperty('lastConnectedTime');
+      expect(items[0]).toHaveProperty('ttl');
     });
 
     it('should upsert (overwrite) when the same user connects again', async () => {
@@ -31,12 +29,9 @@ describe('ActiveUsers', () => {
       const before = Date.now();
       await activeUsers.insert('12345');
 
-      const items = await getAll();
-      const stage = process.env.STAGE || 'dev';
-      const entries = items.filter(item => item.pk === `${stage}#ACTIVE_USERS`);
-
-      expect(entries).toHaveLength(1);
-      const lastConnectedTime = Number((entries[0]!.lastConnectedTime as { value: string }).value);
+      const items = await getAllActiveUsers();
+      expect(items).toHaveLength(1);
+      const lastConnectedTime = Number((items[0]!.lastConnectedTime as { value: string }).value);
       expect(lastConnectedTime).toBeGreaterThanOrEqual(before);
     });
 
@@ -45,11 +40,8 @@ describe('ActiveUsers', () => {
       await activeUsers.insert('222');
       await activeUsers.insert('333');
 
-      const items = await getAll();
-      const stage = process.env.STAGE || 'dev';
-      const entries = items.filter(item => item.pk === `${stage}#ACTIVE_USERS`);
-
-      expect(entries).toHaveLength(3);
+      const items = await getAllActiveUsers();
+      expect(items).toHaveLength(3);
     });
   });
 

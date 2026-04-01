@@ -1,3 +1,4 @@
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { z } from 'zod';
 import { Table } from './table';
 import { docClient, safeNumber } from '../dynamodb';
@@ -5,8 +6,7 @@ import { safeParseArray } from '../utils/zod-utils';
 export const VALIDATION_DAY_TTL_SECONDS = 2 * 365 * 24 * 60 * 60;
 
 function dayPk(): string {
-  const stage = process.env.STAGE || 'dev';
-  return `${stage}#VALIDATIONS#DAY`;
+  return 'VALIDATIONS#DAY';
 }
 
 function utcDayStartMs(timeMs: number): number {
@@ -38,6 +38,9 @@ const validationDayCountSchema = z.object({
  * One entry per UTC day.
  */
 export class ValidationCounts extends Table {
+  constructor(db: DynamoDBDocumentClient) {
+    super(db, 'TABLE_STATS');
+  }
 
   async incrementDay(timeMs: number): Promise<void> {
     await this.incrementCounter(
