@@ -123,7 +123,8 @@ AlgoreaServerless/
 │   └── plans/              # Implementation plans
 ├── scripts/                # Migration and utility scripts
 │   ├── migrate-notifications.ts  # Notification table migration
-│   └── migrate-connections.ts    # Connections table migration
+│   ├── migrate-connections.ts    # Connections table migration
+│   └── migrate-forum.ts         # Forum table migration
 ├── src/                    # Source code
 │   ├── auth/              # Shared authentication module
 │   │   ├── jwt.ts         # JWT verification and token extraction
@@ -324,8 +325,8 @@ async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvel
 - Support for PartiQL queries
 
 #### Base Table Class (`src/dbmodels/table.ts`)
-- **Table**: Abstract base class for all models
-- **Constructor**: `constructor(db, tableEnvVar = 'TABLE_NAME')` — `tableEnvVar` is the name of the env var holding the DynamoDB table name
+- **Table**: Abstract base class for all models (cannot be instantiated directly)
+- **Constructor**: `constructor(db, tableEnvVar: string)` — each subclass must pass the env var name for its table
 - **Key Schema**: `pkAttribute` and `skAttribute` properties (default `'pk'`/`'sk'`), overridable by subclasses for dedicated key schemas (e.g., `userId`/`creationTime` for Notifications)
 - **Query Methods**:
   - `query()`: Query by partition key with optional sort key range, uses `pkAttribute`/`skAttribute`; supports GSI queries via optional `index` parameter
@@ -347,9 +348,9 @@ export const userConnectionsTable = new UserConnections(dynamodb);
 
 **Available singletons**:
 - `userConnectionsTable` - User WebSocket connections and live activity subscriptions (dedicated table `TABLE_CONNECTIONS`)
-- `threadSubscriptionsTable` - Thread subscription management
-- `threadFollowsTable` - Thread follow management
-- `threadEventsTable` - Thread messages and events
+- `threadSubscriptionsTable` - Thread subscription management (dedicated table `TABLE_FORUM`)
+- `threadFollowsTable` - Thread follow management (dedicated table `TABLE_FORUM`)
+- `threadEventsTable` - Thread messages and events (dedicated table `TABLE_FORUM`)
 - `notificationsTable` - User notifications
 - `validationsTable` - Live activity validations (dedicated table `TABLE_STATS`)
 - `validationCountsTable` - Daily validation aggregates (dedicated table `TABLE_STATS`)
@@ -370,19 +371,19 @@ await userConnectionsTable.insert(connectionId, userId);
 #### Data Models
 
 **ThreadEvents** (`src/forum/dbmodels/thread-events.ts`)
-- Stores forum messages and events
+- Stored in a **dedicated table** (`TABLE_FORUM` env var, shared with ThreadFollows and ThreadSubscriptions)
 - Schema: `pk` (thread identifier), `sk` (timestamp), `label` (event type), `data` (event payload)
 - Discriminated union types using Zod for type-safe event handling
 - Supports batch insertion and querying with limits
 
 **ThreadSubscriptions** (`src/forum/dbmodels/thread-subscriptions.ts`)
-- Manages WebSocket connection subscriptions to threads
+- Stored in a **dedicated table** (`TABLE_FORUM` env var, shared with ThreadEvents and ThreadFollows)
 - Schema: `pk` (thread identifier), `sk` (subscription time), `connectionId`, `userId`, `ttl` (2 hours)
 - Auto-cleanup of stale connections via DynamoDB TTL
 - Supports subscription management and connection cleanup
 
 **ThreadFollows** (`src/forum/dbmodels/thread-follows.ts`)
-- Manages persistent user follows for threads (for notifications)
+- Stored in a **dedicated table** (`TABLE_FORUM` env var, shared with ThreadEvents and ThreadSubscriptions)
 - Schema: `pk` (thread identifier + #FOLLOW), `sk` (follow time), `userId`
 - Unlike subscriptions, follows persist across sessions
 - Used to determine who should receive notifications about thread activity
@@ -539,12 +540,12 @@ Typed error hierarchy for better error handling:
 
 ### DynamoDB Table Schema
 
-**Main table** (`TABLE_NAME` env var) — single table design with composite keys (forum models):
+**Forum table** (`TABLE_FORUM` env var, name: `alg-sls-{stage}-forum`) — dedicated table:
 
 ```
 - Partition Key (pk): STRING - Composite key identifying entity type
 - Sort Key (sk): NUMBER - Timestamp or identifier
-- Attributes: Varies by entity type
+- Attributes: Varies by entity type (messages, follows, subscriptions)
 - TTL: Enabled on 'ttl' attribute (auto-cleanup)
 - Billing: PAY_PER_REQUEST (on-demand)
 ```
@@ -590,9 +591,9 @@ Typed error hierarchy for better error handling:
 
 ### Entity Types
 
-#### Thread Events
+#### Thread Events (dedicated table: `TABLE_FORUM`)
 ```
-pk: {STAGE}#THREAD#{participantId}#{itemId}#EVENTS
+pk: THREAD#{participantId}#{itemId}#EVENTS
 sk: {timestamp}
 label: "forum.message"
 data: {
@@ -602,9 +603,9 @@ data: {
 }
 ```
 
-#### Thread Subscriptions
+#### Thread Subscriptions (dedicated table: `TABLE_FORUM`)
 ```
-pk: {STAGE}#THREAD#{participantId}#{itemId}#SUB
+pk: THREAD#{participantId}#{itemId}#SUB
 sk: {timestamp}
 connectionId: string
 userId: string
@@ -623,9 +624,9 @@ subscriptionThreadId?: { participantId, itemId } (metadata stored by thread subs
 One item per WebSocket connection. GSI "user-connections" enables lookup by userId.
 Sparse GSI "live-activity-subscribers" only contains items with liveActivityPk attribute set.
 
-#### Thread Follows
+#### Thread Follows (dedicated table: `TABLE_FORUM`)
 ```
-pk: {STAGE}#THREAD#{participantId}#{itemId}#FOLLOW
+pk: THREAD#{participantId}#{itemId}#FOLLOW
 sk: {timestamp}
 userId: string
 ```
@@ -672,8 +673,8 @@ window's cutoff, then partitions results client-side for 24h/30d/1y windows.
 
 ### Key Design Patterns
 
-1. **Composite Keys**: Embed multiple identifiers in partition key for efficient querying (main table)
-2. **Dedicated Tables**: Models with distinct access patterns get their own table and key schema (e.g., notifications with `userId`/`creationTime`, connections with `connectionId` + GSIs, active-users with `userId` + GSI, stats with `pk`/`sk`)
+1. **Composite Keys**: Embed multiple identifiers in partition key for efficient querying (forum and stats tables)
+2. **Dedicated Tables**: Each model group has its own table and key schema (forum with `pk`/`sk`, notifications with `userId`/`creationTime`, connections with `connectionId` + GSIs, active-users with `userId` + GSI, stats with `pk`/`sk`)
 3. **Stage Isolation**: Table names include the stage (`alg-sls-{stage}-*`)
 4. **Time-Based Sorting**: Use timestamps as sort keys for chronological ordering
 5. **TTL Cleanup**: Automatic removal of expired subscriptions
@@ -725,7 +726,7 @@ window's cutoff, then partitions results client-side for 24h/30d/1y windows.
 
 4. Database Operation
    - Insert subscription record
-   - pk: {stage}#THREAD#{participantId}#{itemId}#SUB
+   - pk: THREAD#{participantId}#{itemId}#SUB
    - sk: current timestamp
    - connectionId: from API Gateway
    - ttl: current time + 2 hours
@@ -763,7 +764,7 @@ window's cutoff, then partitions results client-side for 24h/30d/1y windows.
 
 - `STAGE`: Deployment stage (local, test, dev, production)
 - `NO_SIG_CHECK`: Skip JWT signature verification (dev only, defaults to '0')
-- `TABLE_NAME`: DynamoDB main table name (forum models)
+- `TABLE_FORUM`: DynamoDB forum table name (computed as `alg-sls-{stage}-forum`)
 - `TABLE_NOTIFICATIONS`: DynamoDB notifications table name (computed as `alg-sls-{stage}-notifications`)
 - `TABLE_CONNECTIONS`: DynamoDB connections table name (computed as `alg-sls-{stage}-connections`)
 - `TABLE_STATS`: DynamoDB stats table name (computed as `alg-sls-{stage}-stats`)
@@ -924,7 +925,7 @@ async function remove(req: Request, resp: Response) {
 
 - **Batch Size**: DynamoDB batch operations limited to 25 items
 - **WebSocket Broadcast**: Sequential sends to subscribers
-- **Shared Table**: Forum data still uses the shared DynamoDB table (notifications, connections, stats, and active-users have been split into dedicated tables)
+- **Single-Partition Models**: Validations and ValidationCounts share a single partition key which may throttle under very high write load
 
 ### Optimization Strategies
 

@@ -28,7 +28,7 @@ provider:
     API_BASE: ${env:API_BASE, 'sls'}
     NO_SIG_CHECK: ${env:NO_SIG_CHECK, '0'}
     BACKEND_PUBLIC_KEY: ${env:BACKEND_PUBLIC_KEY}
-    TABLE_NAME: ${env:TABLE_NAME}
+    TABLE_FORUM: alg-sls-${opt:stage, 'dev'}-forum
     TABLE_NOTIFICATIONS: alg-sls-${opt:stage, 'dev'}-notifications
     TABLE_CONNECTIONS: alg-sls-${opt:stage, 'dev'}-connections
     TABLE_STATS: alg-sls-${opt:stage, 'dev'}-stats
@@ -57,7 +57,7 @@ provider:
             - "dynamodb:DeleteItem"
             - "dynamodb:PartiQL*"
           Resource:
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/${env:TABLE_NAME}"
+            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-forum"
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-notifications"
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections"
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections/index/*"
@@ -144,6 +144,24 @@ resources:
                 KeyType: RANGE
             Projection:
               ProjectionType: KEYS_ONLY
+    ForumTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: alg-sls-${opt:stage, 'dev'}-forum
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: "N"
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
     StatsTable:
       Type: AWS::DynamoDB::Table
       Properties:

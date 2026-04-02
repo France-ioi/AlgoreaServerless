@@ -1,8 +1,8 @@
+import { DynamoDBDocumentClient, NumberValue } from '@aws-sdk/lib-dynamodb';
 import { Table } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { z } from 'zod';
 import { safeNumber, docClient } from '../../dynamodb';
-import { NumberValue } from '@aws-sdk/lib-dynamodb';
 import { id64 } from '../../utils/id64';
 import { DBError } from '../../utils/errors';
 /**
@@ -18,8 +18,7 @@ export function threadFollowTtlAfterClose(): number {
 }
 
 function pk(thread: ThreadId): string {
-  const stage = process.env.STAGE || 'dev';
-  return `${stage}#THREAD#${thread.participantId}#${thread.itemId}#FOLLOW`;
+  return `THREAD#${thread.participantId}#${thread.itemId}#FOLLOW`;
 }
 
 const threadFollowSchema = z.object({
@@ -37,6 +36,10 @@ export type ThreadFollow = z.infer<typeof threadFollowSchema>;
  * - ttl: optional auto-deletion time (seconds since epoch, DynamoDB TTL format)
  */
 export class ThreadFollows extends Table {
+
+  constructor(db: DynamoDBDocumentClient) {
+    super(db, 'TABLE_FORUM');
+  }
 
   /**
    * Check if an entry exists for a user on a thread.

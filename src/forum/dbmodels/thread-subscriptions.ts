@@ -1,3 +1,4 @@
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { ConnectionId } from '../../websocket-client';
 import { Table, wsConnectionTtl } from '../../dbmodels/table';
 import { ThreadId } from './thread';
@@ -7,8 +8,7 @@ import { safeParseArray } from '../../utils/zod-utils';
 import { connectionIdToNumberValue, dbConnectionId } from '../../utils/connection-id-number';
 
 function pk(thread: ThreadId): string {
-  const stage = process.env.STAGE || 'dev';
-  return `${stage}#THREAD#${thread.participantId}#${thread.itemId}#SUB`;
+  return `THREAD#${thread.participantId}#${thread.itemId}#SUB`;
 }
 
 /**
@@ -29,6 +29,10 @@ function pk(thread: ThreadId): string {
  * - userId: the user id of the subscriber
  */
 export class ThreadSubscriptions extends Table {
+
+  constructor(db: DynamoDBDocumentClient) {
+    super(db, 'TABLE_FORUM');
+  }
 
   async getSubscribers(threadId: ThreadId): Promise<{ connectionId: ConnectionId, userId: string }[]> {
     const results = await this.sqlRead({

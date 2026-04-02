@@ -36,12 +36,12 @@ export function wsConnectionTtl(): number {
   return Math.floor(Date.now() / 1000) + WS_CONNECTION_TTL_SECONDS;
 }
 
-export class Table {
+export abstract class Table {
   protected tableName: string;
   protected readonly pkAttribute: string = 'pk';
   protected readonly skAttribute: string = 'sk';
 
-  constructor(protected db: DynamoDBDocumentClient, tableEnvVar = 'TABLE_NAME') {
+  constructor(protected db: DynamoDBDocumentClient, tableEnvVar: string) {
     const tableName = process.env[tableEnvVar];
     if (!tableName?.length) throw new Error(`env variable "${tableEnvVar}" not set!`);
     this.tableName = tableName;

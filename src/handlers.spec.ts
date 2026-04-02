@@ -1,6 +1,6 @@
 // Set up environment variables before any imports
 process.env.APIGW_ENDPOINT = 'http://localhost:3001';
-process.env.TABLE_NAME = 'test-table';
+process.env.TABLE_FORUM = 'test-table';
 process.env.STAGE = 'test';
 
 import { globalHandler } from './handlers';
