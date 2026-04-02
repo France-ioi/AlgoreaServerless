@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.4.4 - 2026-04-02
+- fix missing DynamoDB scan permission for the forum table
+
 ## 2.4.3 - 2026-04-02
 - migrate forum to a separate stage-specific DynamoDB table
 
