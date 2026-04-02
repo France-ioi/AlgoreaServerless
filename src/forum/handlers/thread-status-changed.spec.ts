@@ -107,9 +107,9 @@ describe('handleThreadStatusChanged - follower behavior', () => {
       const followers = await threadFollows.getFollowers(testThreadId);
       expect(followers.map(f => f.userId).sort()).toEqual([ '201', '301', '401' ]);
 
-      const pk = `${process.env.STAGE}#THREAD#201#1000#FOLLOW`;
+      const pk = 'THREAD#201#1000#FOLLOW';
       const result = await dynamodb.executeStatement({
-        Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        Statement: `SELECT ttl FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
       });
       for (const item of result.Items ?? []) {
@@ -134,9 +134,9 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
       await handleThreadStatusChanged(payload);
 
-      const pk = `${process.env.STAGE}#THREAD#201#1000#FOLLOW`;
+      const pk = 'THREAD#201#1000#FOLLOW';
       const result = await dynamodb.executeStatement({
-        Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        Statement: `SELECT ttl FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
       });
       expect(result.Items).toHaveLength(2);
@@ -194,9 +194,9 @@ describe('handleThreadStatusChanged - follower behavior', () => {
 
       await handleThreadStatusChanged(payload);
 
-      const pk = `${process.env.STAGE}#THREAD#201#1000#FOLLOW`;
+      const pk = 'THREAD#201#1000#FOLLOW';
       const result = await dynamodb.executeStatement({
-        Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        Statement: `SELECT ttl FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
       });
       expect(result.Items).toHaveLength(1);

@@ -25,8 +25,7 @@ export const createMessages = (count: number, threadId: ThreadId, baseTime: numb
     uuid: string,
   },
 }> => {
-  const stage = process.env.STAGE || 'test';
-  const pk = `${stage}#THREAD#${threadId.participantId}#${threadId.itemId}#EVENTS`;
+  const pk = `THREAD#${threadId.participantId}#${threadId.itemId}#EVENTS`;
 
   return Array.from({ length: count }, (_, i) => ({
     pk,
@@ -50,8 +49,7 @@ export const createSubscriptions = (connectionIds: ConnectionId[], threadId: Thr
   userId: string,
   ttl: number,
 }> => {
-  const stage = process.env.STAGE || 'test';
-  const pk = `${stage}#THREAD#${threadId.participantId}#${threadId.itemId}#SUB`;
+  const pk = `THREAD#${threadId.participantId}#${threadId.itemId}#SUB`;
   const ttl = Math.floor(Date.now() / 1000) + 7200; // 2 hours from now
 
   return connectionIds.map((connectionId, i) => ({

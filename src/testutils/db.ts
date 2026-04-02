@@ -2,9 +2,9 @@
 import { PutCommand, ScanCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { docClient } from '../dynamodb';
 
-const getTableName = (): string => {
-  const tableName = process.env.TABLE_NAME;
-  if (!tableName) throw new Error('TABLE_NAME environment variable not set');
+const getForumTableName = (): string => {
+  const tableName = process.env.TABLE_FORUM;
+  if (!tableName) throw new Error('TABLE_FORUM environment variable not set');
   return tableName;
 };
 
@@ -34,7 +34,7 @@ const getActiveUsersTableName = (): string => {
 
 const putItem = async (data: Record<string, unknown>): Promise<void> => {
   await docClient.send(new PutCommand({
-    TableName: getTableName(),
+    TableName: getForumTableName(),
     Item: data,
   }));
 };
@@ -43,8 +43,8 @@ export const loadFixture = async (data: Record<string, unknown>[]): Promise<void
   await Promise.all(data.map(putItem));
 };
 
-export const getAll = async (): Promise<Record<string, unknown>[]> => {
-  const result = await docClient.send(new ScanCommand({ TableName: getTableName() }));
+export const getAllForum = async (): Promise<Record<string, unknown>[]> => {
+  const result = await docClient.send(new ScanCommand({ TableName: getForumTableName() }));
   return (result.Items ?? []) as Record<string, unknown>[];
 };
 
@@ -91,7 +91,7 @@ const clearTableByPk = async (
 
 export const clearTable = async (): Promise<void> => {
   await Promise.all([
-    clearTableByKeys(getTableName(), 'pk', 'sk'),
+    clearTableByKeys(getForumTableName(), 'pk', 'sk'),
     clearTableByKeys(getNotificationsTableName(), 'userId', 'creationTime'),
     clearTableByPk(getConnectionsTableName(), 'connectionId'),
     clearTableByKeys(getStatsTableName(), 'pk', 'sk'),

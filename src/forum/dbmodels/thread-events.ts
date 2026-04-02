@@ -1,3 +1,4 @@
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { Table } from '../../dbmodels/table';
 import { ThreadId } from './thread';
 import { literal, z } from 'zod';
@@ -31,8 +32,7 @@ type ThreadEvent = z.infer<typeof threadEventSchema>;
 type ThreadMessage = z.infer<typeof threadMessageSchema>;
 
 function pk(threadId: ThreadId): string {
-  const stage = process.env.STAGE || 'dev';
-  return `${stage}#THREAD#${threadId.participantId}#${threadId.itemId}#EVENTS`;
+  return `THREAD#${threadId.participantId}#${threadId.itemId}#EVENTS`;
 }
 
 /**
@@ -44,6 +44,10 @@ function pk(threadId: ThreadId): string {
  * - data: the event data
  */
 export class ThreadEvents extends Table {
+
+  constructor(db: DynamoDBDocumentClient) {
+    super(db, 'TABLE_FORUM');
+  }
 
   /**
    * Insert multiple thread events

@@ -127,7 +127,7 @@ describe('ThreadFollows', () => {
   });
 
   describe('setTtlForAllFollowers', () => {
-    const pk = `${process.env.STAGE}#THREAD#${threadId.participantId}#${threadId.itemId}#FOLLOW`;
+    const pk = `THREAD#${threadId.participantId}#${threadId.itemId}#FOLLOW`;
 
     it('should set TTL on all existing followers', async () => {
       await threadFollows.insert(threadId, '100');
@@ -138,7 +138,7 @@ describe('ThreadFollows', () => {
 
       // Verify TTL is set on both followers
       const result = await dynamodb.executeStatement({
-        Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        Statement: `SELECT ttl FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
       });
       expect(result.Items).toHaveLength(2);
@@ -154,7 +154,7 @@ describe('ThreadFollows', () => {
   });
 
   describe('removeTtlForAllFollowers', () => {
-    const pk = `${process.env.STAGE}#THREAD#${threadId.participantId}#${threadId.itemId}#FOLLOW`;
+    const pk = `THREAD#${threadId.participantId}#${threadId.itemId}#FOLLOW`;
 
     it('should remove TTL from all followers and return their userIds', async () => {
       // Add followers with TTL
@@ -169,7 +169,7 @@ describe('ThreadFollows', () => {
 
       // Verify TTL is removed from all followers
       const result = await dynamodb.executeStatement({
-        Statement: `SELECT ttl FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        Statement: `SELECT ttl FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         Parameters: [{ S: pk }],
       });
       expect(result.Items).toHaveLength(2);

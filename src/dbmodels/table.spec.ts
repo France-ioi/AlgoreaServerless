@@ -1,27 +1,36 @@
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { Table } from './table';
 import { safeNumber, docClient } from '../dynamodb';
-import { clearTable, getAll } from '../testutils/db';
+import { clearTable, getAllForum } from '../testutils/db';
+
+class TestTable extends Table {
+  constructor(db: DynamoDBDocumentClient) {
+    super(db, 'TABLE_FORUM');
+  }
+}
 
 describe('Table', () => {
   let table: Table;
 
   beforeEach(async () => {
-    table = new Table(docClient);
+    table = new TestTable(docClient);
     await clearTable();
   });
 
   describe('constructor', () => {
-    it('should throw error if TABLE_NAME is not set', () => {
-      const originalTableName = process.env.TABLE_NAME;
-      delete process.env.TABLE_NAME;
+    it('should throw error if env var is not set', () => {
+      expect(() => new TestTable(docClient)).not.toThrow();
 
-      expect(() => new Table(docClient)).toThrow('env variable "TABLE_NAME" not set!');
-
-      process.env.TABLE_NAME = originalTableName;
+      class MissingEnvTable extends Table {
+        constructor(db: DynamoDBDocumentClient) {
+          super(db, 'TABLE_NONEXISTENT');
+        }
+      }
+      expect(() => new MissingEnvTable(docClient)).toThrow('env variable "TABLE_NONEXISTENT" not set!');
     });
 
     it('should set tableName from environment variable', () => {
-      expect(table['tableName']).toBe(process.env.TABLE_NAME);
+      expect(table['tableName']).toBe(process.env.TABLE_FORUM);
     });
   });
 
@@ -35,7 +44,7 @@ describe('Table', () => {
 
       await table['batchUpdate'](items);
 
-      const result = await getAll();
+      const result = await getAllForum();
       expect(result.length).toBe(30);
     });
 
@@ -47,7 +56,7 @@ describe('Table', () => {
       const items = [{ pk: 'test-pk', sk: Date.now(), data: 'test-data' }];
       await expect(table['batchUpdate'](items)).resolves.not.toThrow();
 
-      const result = await getAll();
+      const result = await getAllForum();
       expect(result.length).toBe(1);
     });
   });
@@ -63,7 +72,7 @@ describe('Table', () => {
 
     it('should read items with PartiQL query', async () => {
       const results = await table['sqlRead']({
-        query: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         params: [ 'test-pk-1' ],
       });
 
@@ -73,7 +82,7 @@ describe('Table', () => {
 
     it('should return empty array when no results', async () => {
       const results = await table['sqlRead']({
-        query: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         params: [ 'non-existent-pk' ],
       });
 
@@ -82,7 +91,7 @@ describe('Table', () => {
 
     it('should handle queries with multiple parameters', async () => {
       const results = await table['sqlRead']({
-        query: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ? AND sk = ?`,
         params: [ 'test-pk-1', 1000 ],
       });
 
@@ -95,12 +104,12 @@ describe('Table', () => {
   describe('sqlWrite', () => {
     it('should insert item with PartiQL', async () => {
       await table['sqlWrite']({
-        query: `INSERT INTO "${process.env.TABLE_NAME}" VALUE {'pk': ?, 'sk': ?, 'data': ?}`,
+        query: `INSERT INTO "${process.env.TABLE_FORUM}" VALUE {'pk': ?, 'sk': ?, 'data': ?}`,
         params: [ 'test-pk', 123, 'test-data' ],
       });
 
       const results = await table['sqlRead']({
-        query: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         params: [ 'test-pk' ],
       });
 
@@ -114,12 +123,12 @@ describe('Table', () => {
       await table['batchUpdate']([{ pk: 'test-pk', sk: 123 }]);
 
       await table['sqlWrite']({
-        query: `DELETE FROM "${process.env.TABLE_NAME}" WHERE pk = ? AND sk = ?`,
+        query: `DELETE FROM "${process.env.TABLE_FORUM}" WHERE pk = ? AND sk = ?`,
         params: [ 'test-pk', 123 ],
       });
 
       const results = await table['sqlRead']({
-        query: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         params: [ 'test-pk' ],
       });
 
@@ -129,21 +138,21 @@ describe('Table', () => {
     it('should execute transaction with multiple statements', async () => {
       await table['sqlWrite']([
         {
-          query: `INSERT INTO "${process.env.TABLE_NAME}" VALUE {'pk': ?, 'sk': ?, 'data': ?}`,
+          query: `INSERT INTO "${process.env.TABLE_FORUM}" VALUE {'pk': ?, 'sk': ?, 'data': ?}`,
           params: [ 'test-pk-1', 100, 'data1' ],
         },
         {
-          query: `INSERT INTO "${process.env.TABLE_NAME}" VALUE {'pk': ?, 'sk': ?, 'data': ?}`,
+          query: `INSERT INTO "${process.env.TABLE_FORUM}" VALUE {'pk': ?, 'sk': ?, 'data': ?}`,
           params: [ 'test-pk-2', 200, 'data2' ],
         },
       ]);
 
       const results1 = await table['sqlRead']({
-        query: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         params: [ 'test-pk-1' ],
       });
       const results2 = await table['sqlRead']({
-        query: `SELECT * FROM "${process.env.TABLE_NAME}" WHERE pk = ?`,
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
         params: [ 'test-pk-2' ],
       });
 

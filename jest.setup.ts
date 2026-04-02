@@ -5,7 +5,7 @@ let dynamoProcess: ChildProcess;
 
 export default async (): Promise<void> => {
   // Set test environment variables
-  process.env.TABLE_NAME = 'algorea-forum-test';
+  process.env.TABLE_FORUM = 'alg-sls-test-forum';
   process.env.TABLE_NOTIFICATIONS = 'alg-sls-test-notifications';
   process.env.TABLE_CONNECTIONS = 'alg-sls-test-connections';
   process.env.TABLE_STATS = 'alg-sls-test-stats';
@@ -61,7 +61,7 @@ export default async (): Promise<void> => {
   // Create tables
   const tables = [
     {
-      TableName: 'algorea-forum-test',
+      TableName: 'alg-sls-test-forum',
       AttributeDefinitions: [
         { AttributeName: 'pk', AttributeType: 'S' as const },
         { AttributeName: 'sk', AttributeType: 'N' as const },
