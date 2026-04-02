@@ -22,7 +22,7 @@ function pk(thread: ThreadId): string {
  * - Follow = user-specific, persistent, for notifications
  *
  * Database schema:
- * - pk: stage#THREAD#{participantId}#{itemId}#SUB
+ * - pk: THREAD#{participantId}#{itemId}#SUB
  * - sk: connectionId encoded as a number (base64 → big-endian unsigned integer)
  * - connectionId: the WebSocket connection id string (stored for debugging, not read back)
  * - ttl: auto-deletion time (seconds since epoch, DynamoDB TTL format, tied to WebSocket connection lifetime)

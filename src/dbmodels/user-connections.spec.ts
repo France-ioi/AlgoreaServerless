@@ -144,7 +144,7 @@ describe('UserConnections', () => {
     it('should set subscriptionKeys on a connection', async () => {
       await userConnections.insert(connA, '5001');
 
-      const subscriptionKeys = { pk: 'dev#THREAD#participant123#item456#SUB', sk: 1234567890 };
+      const subscriptionKeys = { pk: 'THREAD#participant123#item456#SUB', sk: 1234567890 };
       await userConnections.updateConnectionInfo(connA, { subscriptionKeys });
 
       const result = await dynamodb.executeStatement({
@@ -159,7 +159,7 @@ describe('UserConnections', () => {
     it('should remove subscriptionKeys when explicitly set to undefined', async () => {
       await userConnections.insert(connB, '5002');
       await userConnections.updateConnectionInfo(connB, {
-        subscriptionKeys: { pk: 'dev#THREAD#p#i#SUB', sk: 123 },
+        subscriptionKeys: { pk: 'THREAD#p#i#SUB', sk: 123 },
       });
 
       await userConnections.updateConnectionInfo(connB, { subscriptionKeys: undefined });
@@ -174,7 +174,7 @@ describe('UserConnections', () => {
     it('should be a no-op when no fields are specified', async () => {
       await userConnections.insert(connC, '5003');
       await userConnections.updateConnectionInfo(connC, {
-        subscriptionKeys: { pk: 'dev#THREAD#p#i#SUB', sk: 123 },
+        subscriptionKeys: { pk: 'THREAD#p#i#SUB', sk: 123 },
       });
 
       await userConnections.updateConnectionInfo(connC, {});
@@ -189,7 +189,7 @@ describe('UserConnections', () => {
     it('should not throw when connection does not exist', async () => {
       await expect(
         userConnections.updateConnectionInfo(connA, {
-          subscriptionKeys: { pk: 'dev#THREAD#p#i#SUB', sk: 123 },
+          subscriptionKeys: { pk: 'THREAD#p#i#SUB', sk: 123 },
         })
       ).resolves.not.toThrow();
     });
@@ -200,7 +200,7 @@ describe('UserConnections', () => {
 
     it('should return subscriptionKeys when present', async () => {
       await userConnections.insert(connG, '6001');
-      const subscriptionKeys = { pk: 'dev#THREAD#part123#item456#SUB', sk: 9876543210 };
+      const subscriptionKeys = { pk: 'THREAD#part123#item456#SUB', sk: 9876543210 };
       await userConnections.updateConnectionInfo(connG, { subscriptionKeys });
 
       const result = await userConnections.delete(connG);
