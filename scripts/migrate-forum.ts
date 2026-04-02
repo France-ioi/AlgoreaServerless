@@ -20,7 +20,7 @@
 /* eslint-disable no-console, @typescript-eslint/naming-convention */
 
 import { DynamoDB } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand, NumberValue } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
 
 const BATCH_SIZE = 25; // DynamoDB BatchWriteItem limit
 
@@ -89,12 +89,6 @@ function classifyForumItem(pk: string, stagePrefix: string): ForumType | undefin
   return undefined;
 }
 
-function toPlainNumber(val: unknown): number | undefined {
-  if (val instanceof NumberValue) return Number(val.value);
-  if (typeof val === 'number') return val;
-  return undefined;
-}
-
 async function migrate(): Promise<void> {
   const { stage, sourceTable, profile, region, dryRun } = parseArgs();
   const targetTable = `alg-sls-${stage}-forum`;
@@ -140,12 +134,7 @@ async function migrate(): Promise<void> {
 
       const newPk = pk.slice(stagePrefix.length);
 
-      const newItem: Record<string, unknown> = { pk: newPk };
-      for (const [ key, value ] of Object.entries(item)) {
-        if (key === 'pk') continue;
-        const plainNum = toPlainNumber(value);
-        newItem[key] = plainNum !== undefined ? plainNum : value;
-      }
+      const newItem: Record<string, unknown> = { ...item, pk: newPk };
 
       if (dryRun) {
         console.log(`[dry-run] Would write: pk=${newPk}, sk=${String(item.sk)}, type=${forumType}`);
