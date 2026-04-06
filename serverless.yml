@@ -33,6 +33,7 @@ provider:
     TABLE_CONNECTIONS: alg-sls-${opt:stage, 'dev'}-connections
     TABLE_STATS: alg-sls-${opt:stage, 'dev'}-stats
     TABLE_ACTIVE_USERS: alg-sls-${opt:stage, 'dev'}-active-users
+    TABLE_USER_TASK_ACTIVITIES: alg-sls-${opt:stage, 'dev'}-user-task-activities
     APIGW_ENDPOINT: ${env:APIGW_ENDPOINT}
   runtime: nodejs20.x
   deploymentMethod: direct
@@ -65,6 +66,7 @@ provider:
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-stats"
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-active-users"
             - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-active-users/index/*"
+            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-user-task-activities"
 functions:
 
   server:
@@ -208,3 +210,18 @@ resources:
                 KeyType: RANGE
             Projection:
               ProjectionType: KEYS_ONLY
+    UserTaskActivitiesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: alg-sls-${opt:stage, 'dev'}-user-task-activities
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: time
+            AttributeType: "N"
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: time
+            KeyType: RANGE

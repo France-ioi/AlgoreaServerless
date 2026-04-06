@@ -32,6 +32,12 @@ const getActiveUsersTableName = (): string => {
   return tableName;
 };
 
+const getUserTaskActivitiesTableName = (): string => {
+  const tableName = process.env.TABLE_USER_TASK_ACTIVITIES;
+  if (!tableName) throw new Error('TABLE_USER_TASK_ACTIVITIES environment variable not set');
+  return tableName;
+};
+
 const putItem = async (data: Record<string, unknown>): Promise<void> => {
   await docClient.send(new PutCommand({
     TableName: getForumTableName(),
@@ -96,5 +102,6 @@ export const clearTable = async (): Promise<void> => {
     clearTableByPk(getConnectionsTableName(), 'connectionId'),
     clearTableByKeys(getStatsTableName(), 'pk', 'sk'),
     clearTableByPk(getActiveUsersTableName(), 'userId'),
+    clearTableByKeys(getUserTaskActivitiesTableName(), 'pk', 'time'),
   ]);
 };

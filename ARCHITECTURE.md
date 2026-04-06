@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: April 1, 2026
+**Last Updated**: April 6, 2026
 
 ## Overview
 
@@ -130,11 +130,13 @@ AlgoreaServerless/
 │   │   ├── jwt.ts         # JWT verification and token extraction
 │   │   ├── identity-token.ts      # Identity token parsing
 │   │   ├── identity-token-middleware.ts  # Identity token middleware
+│   │   ├── task-token.ts  # Task token parsing and middleware
 │   │   └── *.spec.ts      # Authentication tests
 │   ├── dbmodels/          # Shared database models and base classes
 │   │   ├── active-users.ts  # Active user tracking for stats
 │   │   ├── notifications.ts  # User notifications model
 │   │   ├── user-connections.ts  # WebSocket connections + live activity subscriptions
+│   │   ├── user-task-activities.ts  # User task activity log (sessions + scores)
 │   │   ├── validations.ts  # Live activity validations model
 │   │   └── table.ts       # Base table class
 │   ├── events/            # Shared event definitions (schema + defineEvent)
@@ -144,12 +146,15 @@ AlgoreaServerless/
 │   ├── handlers/          # App-level request handlers
 │   │   ├── task-validation-storage.ts  # Root-level grade_saved event handler (validations)
 │   │   ├── task-validation-broadcast.ts  # Broadcasts validations to live activity subscribers
+│   │   ├── task-activity-score.ts  # grade_saved event handler (score activity log)
+│   │   ├── task-sessions.ts  # Task session handlers (start/continue/stop)
 │   │   ├── live-activity-subscription.ts  # Live activity WS handlers
 │   │   ├── notifications.ts  # Notification handlers
 │   │   └── validations.ts  # Validation REST handlers
 │   ├── routes/            # App-level route registration
 │   │   ├── live-activity.ts  # Live activity WS action registration
 │   │   ├── notifications.ts  # Notification routes
+│   │   ├── task-activities.ts  # Task session routes + score activity event handler
 │   │   └── validations.ts  # Validation routes + event handler registration
 │   ├── forum/             # Forum feature module
 │   │   ├── routes.ts      # Route and action registration
@@ -244,6 +249,10 @@ Built on the `lambda-api` library with:
   - `GET /` - Return rolling counters plus live WebSocket user count: `{ validations: { last24h, last30d, last1y }, activeUsers: { last24h, last30d, last1y }, connectedUsers }` where `connectedUsers` is the number of distinct users with at least one open connection (`userConnectionsTable.countDistinctUsers()`), requires identity token
 - **Validation Routes** (`/sls/validations`):
   - `GET /` - List latest 30 validations (newest first, requires identity token)
+- **Task Session Routes** (`/sls/task-session`):
+  - `POST /start/:attemptId` - Start a work session (requires task token)
+  - `POST /continue/:attemptId` - Continue/keep-alive a work session (requires task token)
+  - `POST /stop` - Stop a work session (requires task token)
 - **Common Routes**:
   - `OPTIONS /*` - CORS preflight handling
 
@@ -316,6 +325,7 @@ async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvel
 
 #### Root-Level Event Handlers
 - `grade_saved` - Persists a validation record when both `validated=true` and `score_improved=true`
+- `grade_saved` - Logs every grade_saved event as a score activity in the user-task-activities table
 
 ### 5. Database Layer
 
@@ -355,6 +365,7 @@ export const userConnectionsTable = new UserConnections(dynamodb);
 - `validationsTable` - Live activity validations (dedicated table `TABLE_STATS`)
 - `validationCountsTable` - Daily validation aggregates (dedicated table `TABLE_STATS`)
 - `activeUsersTable` - Active user tracking for stats (dedicated table `TABLE_ACTIVE_USERS`)
+- `userTaskActivitiesTable` - User task activity log — sessions and scores (dedicated table `TABLE_USER_TASK_ACTIVITIES`)
 
 **Rationale**: Table classes are stateless (only hold a reference to the shared `dynamodb` client). Singletons eliminate redundant instantiation and simplify function signatures by removing dependency injection parameters.
 
@@ -410,6 +421,15 @@ await userConnectionsTable.insert(connectionId, userId);
 - Upserted on every WebSocket connect (deduplicates by userId)
 - Used by `/validations/stats` for active user counts over 24h/30d/1y windows
 
+**UserTaskActivities** (`src/dbmodels/user-task-activities.ts`)
+- Logs user activities on tasks (work sessions and score updates) in a **dedicated table** (`TABLE_USER_TASK_ACTIVITIES` env var, name: `alg-sls-{stage}-user-task-activities`)
+- Key schema: `pk` (S, partition key), `time` (N, sort key) — overrides `skAttribute` to `'time'`
+- Two entity types via pk prefix:
+  - `score#{item_id}#{participant_id}`: score updates from grade_saved events. Attributes: `answerId`, `attemptId`, `validated`, `score`
+  - `session#{item_id}#{participant_id}`: work sessions. Attributes: `attemptId` (optional), `latestUpdateTime`, `endTime` (optional)
+- Session management: stale sessions (latestUpdateTime older than 4min 30s) are auto-closed
+- No TTL — records are kept indefinitely
+
 **Notifications** (`src/dbmodels/notifications.ts`)
 - Stores per-user notifications with auto-expiration in a **dedicated table** (`TABLE_NOTIFICATIONS` env var, name computed as `alg-sls-{stage}-notifications`)
 - Dedicated key schema: `userId` (S, partition key), `creationTime` (N, sort key) — overrides `Table` base class defaults via `pkAttribute`/`skAttribute`
@@ -463,6 +483,20 @@ Domain-specific token parsing for forum thread operations:
   - `extractTokenFromHttp(headers)`: Extracts and parses from HTTP headers
   - `extractTokenFromWs(body)`: Extracts and parses from WebSocket message
 - **Middleware**: `requireThreadToken` attaches parsed token to request as `req.threadToken`
+
+#### Task Token Module (`src/auth/task-token.ts`)
+
+Domain-specific token parsing for task session operations:
+- **Token Sources**: HTTP Authorization header (Bearer) only
+- **Token Origin**: Generated by AlgoreaBackend when a user opens a task
+- **Token Payload** (relevant fields):
+  - `idUser`: User's group ID (used as `participantId`)
+  - `idItemLocal`: Item ID
+  - `date`: Token date in `dd-mm-yyyy` format (must be yesterday/today/tomorrow UTC)
+- **Functions**:
+  - `parseTaskToken(token, publicKey)`: Validates signature, checks date, and transforms to TaskToken
+- **Middleware**: `requireTaskToken` attaches parsed token to request as `req.taskToken`
+- **Usage**: Used by task session endpoints (start/continue/stop)
 
 #### Portal Token Module (`src/portal/token.ts`)
 
@@ -578,6 +612,15 @@ Typed error hierarchy for better error handling:
 - Billing: PAY_PER_REQUEST (on-demand)
 ```
 
+**User Task Activities table** (`TABLE_USER_TASK_ACTIVITIES` env var, name: `alg-sls-{stage}-user-task-activities`) — dedicated table:
+
+```
+- Partition Key (pk): STRING - Composite key with entity prefix (score# or session#)
+- Sort Key (time): NUMBER - Event time or session start time (milliseconds)
+- No TTL
+- Billing: PAY_PER_REQUEST (on-demand)
+```
+
 **Connections table** (`TABLE_CONNECTIONS` env var, name: `alg-sls-{stage}-connections`) — dedicated table:
 
 ```
@@ -659,6 +702,25 @@ readTime?: number (milliseconds, when marked as read)
 ttl: {creationTime/1000 + ~5184000} (~60 days, in seconds since epoch)
 ```
 
+#### Score Activities (dedicated table: `TABLE_USER_TASK_ACTIVITIES`)
+```
+pk: score#{item_id}#{participant_id}
+time: {envelope time in milliseconds}
+answerId: string
+attemptId: string
+validated: boolean
+score: number
+```
+
+#### Session Activities (dedicated table: `TABLE_USER_TASK_ACTIVITIES`)
+```
+pk: session#{item_id}#{participant_id}
+time: {session start time in milliseconds}
+attemptId?: string
+latestUpdateTime: number (milliseconds, updated by keep-alive)
+endTime?: number (milliseconds, set when session ends)
+```
+
 #### Active Users (dedicated table: `TABLE_ACTIVE_USERS`)
 ```
 userId: string (partition key)
@@ -674,7 +736,7 @@ window's cutoff, then partitions results client-side for 24h/30d/1y windows.
 ### Key Design Patterns
 
 1. **Composite Keys**: Embed multiple identifiers in partition key for efficient querying (forum and stats tables)
-2. **Dedicated Tables**: Each model group has its own table and key schema (forum with `pk`/`sk`, notifications with `userId`/`creationTime`, connections with `connectionId` + GSIs, active-users with `userId` + GSI, stats with `pk`/`sk`)
+2. **Dedicated Tables**: Each model group has its own table and key schema (forum with `pk`/`sk`, notifications with `userId`/`creationTime`, connections with `connectionId` + GSIs, active-users with `userId` + GSI, stats with `pk`/`sk`, user-task-activities with `pk`/`time`)
 3. **Stage Isolation**: Table names include the stage (`alg-sls-{stage}-*`)
 4. **Time-Based Sorting**: Use timestamps as sort keys for chronological ordering
 5. **TTL Cleanup**: Automatic removal of expired subscriptions
@@ -769,6 +831,7 @@ window's cutoff, then partitions results client-side for 24h/30d/1y windows.
 - `TABLE_CONNECTIONS`: DynamoDB connections table name (computed as `alg-sls-{stage}-connections`)
 - `TABLE_STATS`: DynamoDB stats table name (computed as `alg-sls-{stage}-stats`)
 - `TABLE_ACTIVE_USERS`: DynamoDB active users table name (computed as `alg-sls-{stage}-active-users`)
+- `TABLE_USER_TASK_ACTIVITIES`: DynamoDB user task activities table name (computed as `alg-sls-{stage}-user-task-activities`)
 - `BACKEND_PUBLIC_KEY`: JWT verification public key (PEM format)
 - `APIGW_ENDPOINT`: API Gateway endpoint for WebSocket messages
 - `OPS_BUCKET`: S3 bucket for deployment artifacts

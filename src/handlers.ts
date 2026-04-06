@@ -7,6 +7,7 @@ import { portalRoutes } from './portal/routes';
 import { notificationRoutes } from './routes/notifications';
 import { statsRoutes } from './routes/stats';
 import { validationRoutes, validationEventHandlers } from './routes/validations';
+import { taskActivityRoutes, taskActivityEventHandlers } from './routes/task-activities';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
 import { liveActivityWsActions, liveActivityEventHandlers } from './routes/live-activity';
@@ -34,6 +35,7 @@ api.register(portalRoutes, { prefix: '/portal' });
 api.register(notificationRoutes, { prefix: '/notifications' });
 api.register(statsRoutes, { prefix: '/stats' });
 api.register(validationRoutes, { prefix: '/validations' });
+api.register(taskActivityRoutes, { prefix: '/task-session' });
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,6 +64,7 @@ const ebServer = createEventBusServer();
 ebServer.register(forumEventHandlers);
 ebServer.register(validationEventHandlers);
 ebServer.register(liveActivityEventHandlers);
+ebServer.register(taskActivityEventHandlers);
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////
