@@ -106,7 +106,6 @@ export class UserTaskActivities extends Table {
   async getAllSessions(itemId: string, participantId: string): Promise<Session[]> {
     const results = await this.query({
       pk: sessionPk(itemId, participantId),
-      scanIndexForward: true,
     });
     return safeParseArray(results, sessionSchema, 'session');
   }

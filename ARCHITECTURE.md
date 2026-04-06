@@ -137,6 +137,7 @@ AlgoreaServerless/
 │   │   ├── notifications.ts  # User notifications model
 │   │   ├── user-connections.ts  # WebSocket connections + live activity subscriptions
 │   │   ├── user-task-activities.ts  # User task activity log (sessions + scores)
+│   │   ├── user-task-stats.ts  # Per-user per-task cumulative stats (time spent, score milestones)
 │   │   ├── validations.ts  # Live activity validations model
 │   │   └── table.ts       # Base table class
 │   ├── events/            # Shared event definitions (schema + defineEvent)
@@ -430,6 +431,14 @@ await userConnectionsTable.insert(connectionId, userId);
 - Session management: stale sessions (latestUpdateTime older than 4min 30s) are auto-closed
 - No TTL — records are kept indefinitely
 
+**UserTaskStats** (`src/dbmodels/user-task-stats.ts`)
+- Stores per-user per-task cumulative statistics in a **dedicated table** (`TABLE_USER_TASK_STATS` env var, name: `alg-sls-{stage}-user-task-stats`)
+- Key schema: `itemId` (S, partition key), `groupId` (S, sort key)
+- Attributes: `total_time_spent`, `abstime_begin`, `time_to_reach_10`..`time_to_reach_100`, `abstime_10`..`abstime_100`
+- Updated by `onSessionEnded` (accumulates time spent) and `onGradeSavedStats` (sets score milestone timestamps)
+- Uses DynamoDB `UpdateCommand` with `ADD` for atomic counter increments and `if_not_exists` for idempotent milestone writes
+- No TTL — records are kept indefinitely
+
 **Notifications** (`src/dbmodels/notifications.ts`)
 - Stores per-user notifications with auto-expiration in a **dedicated table** (`TABLE_NOTIFICATIONS` env var, name computed as `alg-sls-{stage}-notifications`)
 - Dedicated key schema: `userId` (S, partition key), `creationTime` (N, sort key) — overrides `Table` base class defaults via `pkAttribute`/`skAttribute`
@@ -621,6 +630,15 @@ Typed error hierarchy for better error handling:
 - Billing: PAY_PER_REQUEST (on-demand)
 ```
 
+**User Task Stats table** (`TABLE_USER_TASK_STATS` env var, name: `alg-sls-{stage}-user-task-stats`) — dedicated table:
+
+```
+- Partition Key (itemId): STRING - Task/item identifier
+- Sort Key (groupId): STRING - Group identifier (users are groups in the domain model)
+- No TTL
+- Billing: PAY_PER_REQUEST (on-demand)
+```
+
 **Connections table** (`TABLE_CONNECTIONS` env var, name: `alg-sls-{stage}-connections`) — dedicated table:
 
 ```
@@ -736,7 +754,7 @@ window's cutoff, then partitions results client-side for 24h/30d/1y windows.
 ### Key Design Patterns
 
 1. **Composite Keys**: Embed multiple identifiers in partition key for efficient querying (forum and stats tables)
-2. **Dedicated Tables**: Each model group has its own table and key schema (forum with `pk`/`sk`, notifications with `userId`/`creationTime`, connections with `connectionId` + GSIs, active-users with `userId` + GSI, stats with `pk`/`sk`, user-task-activities with `pk`/`time`)
+2. **Dedicated Tables**: Each model group has its own table and key schema (forum with `pk`/`sk`, notifications with `userId`/`creationTime`, connections with `connectionId` + GSIs, active-users with `userId` + GSI, stats with `pk`/`sk`, user-task-activities with `pk`/`time`, user-task-stats with `itemId`/`groupId`)
 3. **Stage Isolation**: Table names include the stage (`alg-sls-{stage}-*`)
 4. **Time-Based Sorting**: Use timestamps as sort keys for chronological ordering
 5. **TTL Cleanup**: Automatic removal of expired subscriptions
@@ -832,6 +850,7 @@ window's cutoff, then partitions results client-side for 24h/30d/1y windows.
 - `TABLE_STATS`: DynamoDB stats table name (computed as `alg-sls-{stage}-stats`)
 - `TABLE_ACTIVE_USERS`: DynamoDB active users table name (computed as `alg-sls-{stage}-active-users`)
 - `TABLE_USER_TASK_ACTIVITIES`: DynamoDB user task activities table name (computed as `alg-sls-{stage}-user-task-activities`)
+- `TABLE_USER_TASK_STATS`: DynamoDB user task stats table name (computed as `alg-sls-{stage}-user-task-stats`)
 - `BACKEND_PUBLIC_KEY`: JWT verification public key (PEM format)
 - `APIGW_ENDPOINT`: API Gateway endpoint for WebSocket messages
 - `OPS_BUCKET`: S3 bucket for deployment artifacts

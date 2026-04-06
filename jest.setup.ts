@@ -11,6 +11,7 @@ export default async (): Promise<void> => {
   process.env.TABLE_STATS = 'alg-sls-test-stats';
   process.env.TABLE_ACTIVE_USERS = 'alg-sls-test-active-users';
   process.env.TABLE_USER_TASK_ACTIVITIES = 'alg-sls-test-user-task-activities';
+  process.env.TABLE_USER_TASK_STATS = 'alg-sls-test-user-task-stats';
   process.env.STAGE = 'test';
   process.env.APIGW_ENDPOINT = 'http://localhost:3001';
   process.env.BACKEND_PUBLIC_KEY = ''; // Will be set by token generator in tests
@@ -153,6 +154,17 @@ export default async (): Promise<void> => {
       KeySchema: [
         { AttributeName: 'pk', KeyType: 'HASH' as const },
         { AttributeName: 'time', KeyType: 'RANGE' as const },
+      ],
+    },
+    {
+      TableName: 'alg-sls-test-user-task-stats',
+      AttributeDefinitions: [
+        { AttributeName: 'itemId', AttributeType: 'S' as const },
+        { AttributeName: 'groupId', AttributeType: 'S' as const },
+      ],
+      KeySchema: [
+        { AttributeName: 'itemId', KeyType: 'HASH' as const },
+        { AttributeName: 'groupId', KeyType: 'RANGE' as const },
       ],
     },
   ];

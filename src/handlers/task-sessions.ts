@@ -5,6 +5,7 @@ import { created } from '../utils/rest-responses';
 import {
   userTaskActivitiesTable, Session, KEEP_ALIVE_INTERVAL_MS, STALE_THRESHOLD_MS,
 } from '../dbmodels/user-task-activities';
+import { onSessionEnded } from './user-task-stats';
 
 function isStale(session: Session, now: number): boolean {
   return session.latestUpdateTime < now - STALE_THRESHOLD_MS;
@@ -17,10 +18,9 @@ function isStale(session: Session, now: number): boolean {
 async function closeStaleSession(
   itemId: string, participantId: string, session: Session,
 ): Promise<void> {
-  await userTaskActivitiesTable.setEndTime(
-    itemId, participantId, session.time,
-    session.latestUpdateTime + KEEP_ALIVE_INTERVAL_MS / 2,
-  );
+  const endTime = session.latestUpdateTime + KEEP_ALIVE_INTERVAL_MS / 2;
+  await userTaskActivitiesTable.setEndTime(itemId, participantId, session.time, endTime);
+  await onSessionEnded(itemId, participantId, session.time, endTime);
 }
 
 function requireAttemptId(query: Record<string, string | undefined>): string {
@@ -116,6 +116,7 @@ async function stop(req: RequestWithTaskToken, resp: Response): Promise<ReturnTy
       await closeStaleSession(itemId, participantId, last);
     } else {
       await userTaskActivitiesTable.setEndTime(itemId, participantId, last.time, now);
+      await onSessionEnded(itemId, participantId, last.time, now);
       return created(resp);
     }
   } else if (last && last.endTime !== undefined && !isStale(last, now)) {
@@ -123,10 +124,12 @@ async function stop(req: RequestWithTaskToken, resp: Response): Promise<ReturnTy
     return created(resp);
   }
 
-  await userTaskActivitiesTable.insertSession(itemId, participantId, now - KEEP_ALIVE_INTERVAL_MS / 2, {
+  const sessionTime = now - KEEP_ALIVE_INTERVAL_MS / 2;
+  await userTaskActivitiesTable.insertSession(itemId, participantId, sessionTime, {
     latestUpdateTime: now,
     endTime: now,
   });
+  await onSessionEnded(itemId, participantId, sessionTime, now);
   return created(resp);
 }
 
