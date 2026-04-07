@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.5.0 - 2026-04-07
+- add `/task-session` REST endpoints (start, continue, stop) with task token to track work sessions on a task
+- add per-user per-task cumulative stats (time spent, score milestones) updated from sessions and grade events
+- add optional `result_started_at` on the first session to mark a true first activity; stats expose `missingEarlierActivity` when earlier participation may be missing
+
 ## 2.4.4 - 2026-04-02
 - fix missing DynamoDB scan permission for the forum table
 
