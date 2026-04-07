@@ -277,5 +277,32 @@ describe('user-task-stats handlers', () => {
       expect(stat?.time_to_reach_20).toBe(5000);
       expect(stat?.time_to_reach_30).toBe(5000);
     });
+
+    it('should set missingEarlierActivity when first session lacks firstActivity', async () => {
+      await activitiesTable.insertSession(itemId, groupId, 1000, {
+        latestUpdateTime: 2000,
+        endTime: 2000,
+      });
+      await onGradeSavedStats(makePayload({ score: 10 }), 3000);
+      const stat = await statsTable.get(itemId, groupId);
+      expect(stat?.missingEarlierActivity).toBe(true);
+    });
+
+    it('should not set missingEarlierActivity when first session has firstActivity', async () => {
+      await activitiesTable.insertSession(itemId, groupId, 1000, {
+        latestUpdateTime: 2000,
+        endTime: 2000,
+        firstActivity: true,
+      });
+      await onGradeSavedStats(makePayload({ score: 10 }), 3000);
+      const stat = await statsTable.get(itemId, groupId);
+      expect(stat?.missingEarlierActivity).toBe(false);
+    });
+
+    it('should set missingEarlierActivity when there are no sessions', async () => {
+      await onGradeSavedStats(makePayload({ score: 10 }), 5000);
+      const stat = await statsTable.get(itemId, groupId);
+      expect(stat?.missingEarlierActivity).toBe(true);
+    });
   });
 });

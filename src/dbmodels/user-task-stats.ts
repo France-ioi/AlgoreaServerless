@@ -14,12 +14,16 @@ import { DBError } from '../utils/errors';
  * - time_to_reach_N / abstime_N (N = 10..100): cumulative session time and
  *   absolute time when the score first reached the N-percent threshold.
  *   These are kept at the minimum observed value to handle out-of-order events.
+ * - missingEarlierActivity: true when the chronologically first session for this user/item
+ *   was not marked with `firstActivity`, meaning the user may have started the task before
+ *   data collection began and the stats may be incomplete.
  */
 export const userTaskStatSchema = z.object({
   itemId: z.string(),
   groupId: z.string(),
   total_time_spent: safeNumber.optional(),
   abstime_begin: safeNumber.optional(),
+  missingEarlierActivity: z.boolean().optional(),
   time_to_reach_10: safeNumber.optional(),
   time_to_reach_20: safeNumber.optional(),
   time_to_reach_30: safeNumber.optional(),
@@ -91,9 +95,10 @@ export class UserTaskStats extends Table {
    */
   async updateScoreLevels(itemId: string, groupId: string, updates: {
     abstime_begin?: number,
+    missingEarlierActivity?: boolean,
     levels: Array<{ level: number, timeToReach: number, abstime: number }>,
   }): Promise<void> {
-    if (updates.levels.length === 0 && updates.abstime_begin === undefined) return;
+    if (updates.levels.length === 0 && updates.abstime_begin === undefined && updates.missingEarlierActivity === undefined) return;
 
     const setExpressions: string[] = [];
     const expressionValues: Record<string, unknown> = {};
@@ -101,6 +106,11 @@ export class UserTaskStats extends Table {
     if (updates.abstime_begin !== undefined) {
       setExpressions.push('abstime_begin = if_not_exists(abstime_begin, :abstime_begin)');
       expressionValues[':abstime_begin'] = updates.abstime_begin;
+    }
+
+    if (updates.missingEarlierActivity !== undefined) {
+      setExpressions.push('missingEarlierActivity = :mea');
+      expressionValues[':mea'] = updates.missingEarlierActivity;
     }
 
     for (const { level, timeToReach, abstime } of updates.levels) {

@@ -106,6 +106,50 @@ describe('UserTaskActivities', () => {
       expect(result?.endTime).toBe(now + 1000);
     });
 
+    it('should insert a session with firstActivity flag', async () => {
+      const now = Date.now();
+      await table.insertSession(itemId, participantId, now, {
+        attemptId: 'att-1',
+        latestUpdateTime: now,
+        firstActivity: true,
+      });
+
+      const result = await table.getLastSession(itemId, participantId);
+      expect(result).toEqual({
+        time: now,
+        attemptId: 'att-1',
+        latestUpdateTime: now,
+        firstActivity: true,
+      });
+    });
+
+    it('should return the chronologically earliest session via getFirstSession', async () => {
+      const base = Date.now();
+      await table.insertSession(itemId, participantId, base, {
+        attemptId: 'att-1',
+        latestUpdateTime: base,
+        endTime: base + 1000,
+        firstActivity: true,
+      });
+      await table.insertSession(itemId, participantId, base + 2000, {
+        attemptId: 'att-2',
+        latestUpdateTime: base + 2000,
+      });
+
+      const first = await table.getFirstSession(itemId, participantId);
+      expect(first?.attemptId).toBe('att-1');
+      expect(first?.time).toBe(base);
+      expect(first?.firstActivity).toBe(true);
+
+      const last = await table.getLastSession(itemId, participantId);
+      expect(last?.attemptId).toBe('att-2');
+    });
+
+    it('should return undefined from getFirstSession when no session exists', async () => {
+      const result = await table.getFirstSession(itemId, participantId);
+      expect(result).toBeUndefined();
+    });
+
     it('should isolate sessions between different item/participant pairs', async () => {
       const now = Date.now();
       await table.insertSession('item-A', 'user-X', now, {

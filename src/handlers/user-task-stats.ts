@@ -61,8 +61,11 @@ export async function onGradeSavedStats(payload: GradeSavedPayload, envelopeTime
     }
   }
 
+  const missingEarlierActivity = sessions[0]?.firstActivity !== true;
+
   await userTaskStatsTable.updateScoreLevels(payload.item_id, payload.participant_id, {
     abstime_begin: existingStat ? undefined : envelopeTimeMs,
+    missingEarlierActivity,
     levels,
   });
 }

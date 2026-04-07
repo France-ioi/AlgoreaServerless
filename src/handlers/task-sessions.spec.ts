@@ -27,8 +27,9 @@ class SessionSimulator {
     );
   }
 
-  async start(now: number, attemptId: string): Promise<void> {
+  async start(now: number, attemptId: string, resultStartedAt?: number): Promise<void> {
     const last = await this.table.getLastSession(this.itemId, this.participantId);
+    const isFirstSession = last === undefined;
     if (last && last.endTime === undefined) {
       if (this.isStale(last, now)) {
         await this.closeStaleSession(last);
@@ -37,8 +38,12 @@ class SessionSimulator {
         return;
       }
     }
+    const firstActivity = isFirstSession
+      && resultStartedAt !== undefined
+      && now <= resultStartedAt + 60_000;
     await this.table.insertSession(this.itemId, this.participantId, now, {
       attemptId, latestUpdateTime: now,
+      ...(firstActivity ? { firstActivity: true } : {}),
     });
   }
 
@@ -368,6 +373,57 @@ describe('task session logic', () => {
       expect(sessions).toHaveLength(1);
       expect(sessions[0]?.endTime).toBe(t0 + min(5));
       expect(sessions[0]?.time).toBe(t0 + min(5) - KEEP_ALIVE_INTERVAL_MS / 2);
+    });
+  });
+
+  describe('firstActivity flag', () => {
+    let sim: SessionSimulator;
+    let t0: number;
+
+    beforeEach(() => {
+      sim = new SessionSimulator(table, itemId, participantId);
+      t0 = 1_700_000_000_000;
+    });
+
+    it('should set firstActivity when first session and resultStartedAt within 1min', async () => {
+      await sim.start(t0, 'att-1', t0 - 10_000);
+
+      const session = await table.getLastSession(itemId, participantId);
+      expect(session?.firstActivity).toBe(true);
+    });
+
+    it('should not set firstActivity when resultStartedAt is older than 1min', async () => {
+      await sim.start(t0, 'att-1', t0 - 61_000);
+
+      const session = await table.getLastSession(itemId, participantId);
+      expect(session?.firstActivity).toBeUndefined();
+    });
+
+    it('should not set firstActivity when a previous session exists', async () => {
+      await sim.start(t0, 'att-1');
+      await sim.stop(t0 + min(5));
+      await sim.start(t0 + min(10), 'att-2', t0 + min(10) - 5_000);
+
+      const session = await table.getLastSession(itemId, participantId);
+      expect(session?.firstActivity).toBeUndefined();
+    });
+
+    it('should not set firstActivity when resultStartedAt is not provided', async () => {
+      await sim.start(t0, 'att-1');
+
+      const session = await table.getLastSession(itemId, participantId);
+      expect(session?.firstActivity).toBeUndefined();
+    });
+
+    it('should not set firstActivity when a stale session exists', async () => {
+      await sim.start(t0, 'att-1');
+      // Wait long enough for the session to become stale, then start again with resultStartedAt
+      const laterTime = t0 + STALE_THRESHOLD_MS + 10_000;
+      await sim.start(laterTime, 'att-2', laterTime - 5_000);
+
+      const sessions = await table.getAllSessions(itemId, participantId);
+      expect(sessions).toHaveLength(2);
+      expect(sessions[1]?.firstActivity).toBeUndefined();
     });
   });
 });

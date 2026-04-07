@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: April 6, 2026
+**Last Updated**: April 7, 2026
 
 ## Overview
 
@@ -251,7 +251,7 @@ Built on the `lambda-api` library with:
 - **Validation Routes** (`/sls/validations`):
   - `GET /` - List latest 30 validations (newest first, requires identity token)
 - **Task Session Routes** (`/sls/task-session`):
-  - `POST /start/:attemptId` - Start a work session (requires task token)
+  - `POST /start/:attemptId` - Start a work session (requires task token). Optional query param `result_started_at` (ISO 8601): when provided on the very first session and within 1 minute, marks the session with `firstActivity` to distinguish users whose data collection started from the beginning.
   - `POST /continue/:attemptId` - Continue/keep-alive a work session (requires task token)
   - `POST /stop` - Stop a work session (requires task token)
 - **Common Routes**:
@@ -427,14 +427,14 @@ await userConnectionsTable.insert(connectionId, userId);
 - Key schema: `pk` (S, partition key), `time` (N, sort key) — overrides `skAttribute` to `'time'`
 - Two entity types via pk prefix:
   - `score#{item_id}#{participant_id}`: score updates from grade_saved events. Attributes: `answerId`, `attemptId`, `validated`, `score`
-  - `session#{item_id}#{participant_id}`: work sessions. Attributes: `attemptId` (optional), `latestUpdateTime`, `endTime` (optional)
+  - `session#{item_id}#{participant_id}`: work sessions. Attributes: `attemptId` (optional), `latestUpdateTime`, `endTime` (optional), `firstActivity` (optional boolean, set on the very first session when the frontend provides a valid `result_started_at` timestamp within 1 minute)
 - Session management: stale sessions (latestUpdateTime older than 4min 30s) are auto-closed
 - No TTL — records are kept indefinitely
 
 **UserTaskStats** (`src/dbmodels/user-task-stats.ts`)
 - Stores per-user per-task cumulative statistics in a **dedicated table** (`TABLE_USER_TASK_STATS` env var, name: `alg-sls-{stage}-user-task-stats`)
 - Key schema: `itemId` (S, partition key), `groupId` (S, sort key)
-- Attributes: `total_time_spent`, `abstime_begin`, `time_to_reach_10`..`time_to_reach_100`, `abstime_10`..`abstime_100`
+- Attributes: `total_time_spent`, `abstime_begin`, `missingEarlierActivity` (boolean, true when the first session lacks `firstActivity` — indicates incomplete data), `time_to_reach_10`..`time_to_reach_100`, `abstime_10`..`abstime_100`
 - Updated by `onSessionEnded` (accumulates time spent) and `onGradeSavedStats` (sets score milestone timestamps)
 - Uses DynamoDB `UpdateCommand` with `ADD` for atomic counter increments and `if_not_exists` for idempotent milestone writes
 - No TTL — records are kept indefinitely

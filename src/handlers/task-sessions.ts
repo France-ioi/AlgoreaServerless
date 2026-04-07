@@ -29,6 +29,21 @@ function requireAttemptId(query: Record<string, string | undefined>): string {
   return attemptId;
 }
 
+const FIRST_ACTIVITY_TOLERANCE_MS = 60_000; // 1 minute
+
+/**
+ * Parses the optional `result_started_at` query parameter (ISO 8601, e.g. "2024-01-15T10:30:00Z").
+ * This is the time at which the task attempt was created in the backend. It is used to detect
+ * whether this is the user's very first activity on this task (see `firstActivity` session flag).
+ */
+function parseResultStartedAt(query: Record<string, string | undefined>): number | undefined {
+  const raw = query['result_started_at'];
+  if (raw === undefined) return undefined;
+  const ms = new Date(raw).getTime();
+  if (Number.isNaN(ms)) throw new DecodingError('result_started_at must be a valid ISO 8601 date');
+  return ms;
+}
+
 /**
  * Called when the user opens a task. Three cases:
  * - Active session exists and is fresh → treat as a keep-alive (update latestUpdateTime).
@@ -39,9 +54,11 @@ function requireAttemptId(query: Record<string, string | undefined>): string {
 async function start(req: RequestWithTaskToken, resp: Response): Promise<ReturnType<typeof created>> {
   const { itemId, participantId } = req.taskToken;
   const attemptId = requireAttemptId(req.query);
+  const resultStartedAt = parseResultStartedAt(req.query);
   const now = Date.now();
 
   const last = await userTaskActivitiesTable.getLastSession(itemId, participantId);
+  const isFirstSession = last === undefined;
 
   if (last && last.endTime === undefined) {
     if (isStale(last, now)) {
@@ -52,9 +69,16 @@ async function start(req: RequestWithTaskToken, resp: Response): Promise<ReturnT
     }
   }
 
+  // Mark as firstActivity when we can confirm the user just started working on this task:
+  // no prior session exists, the backend-provided start time was supplied, and we're within tolerance.
+  const firstActivity = isFirstSession
+    && resultStartedAt !== undefined
+    && now <= resultStartedAt + FIRST_ACTIVITY_TOLERANCE_MS;
+
   await userTaskActivitiesTable.insertSession(itemId, participantId, now, {
     attemptId,
     latestUpdateTime: now,
+    ...(firstActivity ? { firstActivity: true } : {}),
   });
   return created(resp);
 }

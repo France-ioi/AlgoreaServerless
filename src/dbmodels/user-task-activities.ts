@@ -21,6 +21,12 @@ export const sessionSchema = z.object({
   attemptId: z.string().optional(),
   latestUpdateTime: safeNumber,
   endTime: safeNumber.optional(),
+  /**
+   * Set on the very first session for a user/item pair when the frontend provides a valid resultStartedAt timestamp.
+   * Used to identify users whose activity data is complete from the start, so that stats can exclude users who had
+   * already begun working on a task before this stat collection was set up (their data would be partial/misleading).
+   */
+  firstActivity: z.boolean().optional(),
 });
 
 export type Session = z.infer<typeof sessionSchema>;
@@ -57,29 +63,35 @@ export class UserTaskActivities extends Table {
     attemptId?: string,
     latestUpdateTime: number,
     endTime?: number,
+    firstActivity?: boolean,
   }): Promise<void> {
-    const pk = sessionPk(itemId, participantId);
-    if (attrs.attemptId !== undefined && attrs.endTime !== undefined) {
-      await this.sqlWrite({
-        query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'time': ?, 'latestUpdateTime': ?, 'attemptId': ?, 'endTime': ? }`,
-        params: [ pk, time, attrs.latestUpdateTime, attrs.attemptId, attrs.endTime ],
-      });
-    } else if (attrs.attemptId !== undefined) {
-      await this.sqlWrite({
-        query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'time': ?, 'latestUpdateTime': ?, 'attemptId': ? }`,
-        params: [ pk, time, attrs.latestUpdateTime, attrs.attemptId ],
-      });
-    } else if (attrs.endTime !== undefined) {
-      await this.sqlWrite({
-        query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'time': ?, 'latestUpdateTime': ?, 'endTime': ? }`,
-        params: [ pk, time, attrs.latestUpdateTime, attrs.endTime ],
-      });
-    } else {
-      await this.sqlWrite({
-        query: `INSERT INTO "${this.tableName}" VALUE { 'pk': ?, 'time': ?, 'latestUpdateTime': ? }`,
-        params: [ pk, time, attrs.latestUpdateTime ],
-      });
-    }
+    const fields: Record<string, unknown> = {
+      pk: sessionPk(itemId, participantId),
+      time,
+      latestUpdateTime: attrs.latestUpdateTime,
+    };
+    if (attrs.attemptId !== undefined) fields.attemptId = attrs.attemptId;
+    if (attrs.endTime !== undefined) fields.endTime = attrs.endTime;
+    if (attrs.firstActivity !== undefined) fields.firstActivity = attrs.firstActivity;
+
+    const entries = Object.entries(fields);
+    const valuePairs = entries.map(([ k ]) => `'${k}': ?`).join(', ');
+    await this.sqlWrite({
+      query: `INSERT INTO "${this.tableName}" VALUE { ${valuePairs} }`,
+      params: entries.map(([ , v ]) => v),
+    });
+  }
+
+  async getFirstSession(itemId: string, participantId: string): Promise<Session | undefined> {
+    const results = await this.query({
+      pk: sessionPk(itemId, participantId),
+      limit: 1,
+      scanIndexForward: true,
+    });
+    if (results.length === 0) return undefined;
+    const parsed = sessionSchema.safeParse(results[0]);
+    if (!parsed.success) return undefined;
+    return parsed.data;
   }
 
   async updateLatestTime(itemId: string, participantId: string, time: number, latestUpdateTime: number): Promise<void> {
