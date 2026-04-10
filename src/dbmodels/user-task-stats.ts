@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { Table } from './table';
 import { z } from 'zod';
 import { safeNumber, docClient } from '../dynamodb';
@@ -66,6 +66,31 @@ export class UserTaskStats extends Table {
     const parsed = userTaskStatSchema.safeParse(results[0]);
     if (!parsed.success) return undefined;
     return parsed.data;
+  }
+
+  async getAllByItem(itemId: string): Promise<UserTaskStat[]> {
+    const results: UserTaskStat[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+    try {
+      do {
+        const output = await this.db.send(new QueryCommand({
+          TableName: this.tableName,
+          KeyConditionExpression: 'itemId = :pk',
+          FilterExpression: 'attribute_not_exists(missingEarlierActivity) OR missingEarlierActivity <> :t',
+          ExpressionAttributeValues: { ':pk': itemId, ':t': true },
+          ExclusiveStartKey: lastEvaluatedKey,
+        }));
+        for (const item of output.Items ?? []) {
+          const parsed = userTaskStatSchema.safeParse(item);
+          if (parsed.success) results.push(parsed.data);
+        }
+        lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+      } while (lastEvaluatedKey);
+    } catch (err) {
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, itemId, { cause: err });
+      else throw err;
+    }
+    return results;
   }
 
   /**
