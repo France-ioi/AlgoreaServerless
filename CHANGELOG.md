@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.6.0 - 2026-04-10
+- add `GET /task-stats` endpoint returning aggregated per-item statistics (user count, median time, score distribution) via permissions token
+- skip session tracking when the task token is read-only (observation and answer review modes)
+
 ## 2.5.0 - 2026-04-07
 - add `/task-session` REST endpoints (start, continue, stop) with task token to track work sessions on a task
 - add per-user per-task cumulative stats (time spent, score milestones) updated from sessions and grade events
