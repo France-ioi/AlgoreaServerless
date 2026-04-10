@@ -46,7 +46,43 @@ describe('TaskToken', () => {
       expect(result).toEqual({
         participantId: '42',
         itemId: '100',
+        submissionPossible: true,
       });
+    });
+
+    it('should parse bSubmissionPossible=false', async () => {
+      mockVerifyJwt.mockResolvedValue({
+        idUser: '42',
+        idItemLocal: '100',
+        date: todayDateStr(),
+        bSubmissionPossible: false,
+      });
+
+      const result = await parseTaskToken('token', 'key');
+      expect(result.submissionPossible).toBe(false);
+    });
+
+    it('should parse bSubmissionPossible="false" (string)', async () => {
+      mockVerifyJwt.mockResolvedValue({
+        idUser: '42',
+        idItemLocal: '100',
+        date: todayDateStr(),
+        bSubmissionPossible: 'false',
+      });
+
+      const result = await parseTaskToken('token', 'key');
+      expect(result.submissionPossible).toBe(false);
+    });
+
+    it('should default submissionPossible to true when field is missing', async () => {
+      mockVerifyJwt.mockResolvedValue({
+        idUser: '42',
+        idItemLocal: '100',
+        date: todayDateStr(),
+      });
+
+      const result = await parseTaskToken('token', 'key');
+      expect(result.submissionPossible).toBe(true);
     });
 
     it('should accept a token dated yesterday', async () => {
