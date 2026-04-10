@@ -62,9 +62,11 @@ export async function onGradeSavedStats(payload: GradeSavedPayload, envelopeTime
   }
 
   const missingEarlierActivity = sessions[0]?.firstActivity !== true;
+  const currentScore = Math.max(payload.score, existingStat?.current_score ?? 0);
 
   await userTaskStatsTable.updateScoreLevels(payload.item_id, payload.participant_id, {
     abstime_begin: existingStat ? undefined : envelopeTimeMs,
+    current_score: currentScore,
     missingEarlierActivity,
     levels,
   });

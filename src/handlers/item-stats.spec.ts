@@ -56,16 +56,15 @@ describe('computeItemStats', () => {
     const stats = [
       makeStat({ total_time_spent: 5000 }),
       makeStat({ total_time_spent: 15000 }),
-      makeStat({ total_time_spent: 30000, time_to_reach_10: 20000 }),
+      makeStat({ total_time_spent: 30000, current_score: 10 }),
     ];
-    // Users 1 and 2 have score 0 (no time_to_reach_10), user 3 has score >= 10
     expect(computeItemStats(stats).medianDropoutTimeLowScore).toBe(10000);
   });
 
   it('should compute avgScore', () => {
     const stats = [
-      makeStat({ time_to_reach_10: 1000, time_to_reach_20: 2000 }), // score 20
-      makeStat({ time_to_reach_10: 1000 }), // score 10
+      makeStat({ current_score: 20 }),
+      makeStat({ current_score: 10 }),
       makeStat({}), // score 0
     ];
     expect(computeItemStats(stats).avgScore).toBe(10); // (20+10+0)/3
@@ -85,9 +84,9 @@ describe('computeItemStats', () => {
 
   it('should compute pctUsersAbove correctly', () => {
     const stats = [
-      makeStat({ time_to_reach_10: 1000, time_to_reach_20: 2000, time_to_reach_100: 5000 }),
-      makeStat({ time_to_reach_10: 3000, time_to_reach_20: 4000 }),
-      makeStat({ time_to_reach_10: 2000 }),
+      makeStat({ current_score: 100, time_to_reach_10: 1000, time_to_reach_20: 2000, time_to_reach_100: 5000 }),
+      makeStat({ current_score: 20, time_to_reach_10: 3000, time_to_reach_20: 4000 }),
+      makeStat({ current_score: 10, time_to_reach_10: 2000 }),
       makeStat({}),
     ];
     const result = computeItemStats(stats);
@@ -118,18 +117,17 @@ describe('computeItemStats', () => {
     expect(dist10.pctByTime[60]).toBe(75);
   });
 
-  it('should detect the highest score threshold reached', () => {
+  it('should use current_score for avgScore', () => {
     const stats = [
-      makeStat({
-        time_to_reach_10: 1000,
-        time_to_reach_20: 2000,
-        time_to_reach_30: 3000,
-        time_to_reach_40: 4000,
-        time_to_reach_50: 5000,
-      }),
+      makeStat({ current_score: 75 }),
+      makeStat({ current_score: 25 }),
     ];
-    // Score should be 50 (highest threshold with time_to_reach_XX defined)
     expect(computeItemStats(stats).avgScore).toBe(50);
+  });
+
+  it('should default to 0 when current_score is absent', () => {
+    const stats = [ makeStat({}) ];
+    expect(computeItemStats(stats).avgScore).toBe(0);
   });
 
 });

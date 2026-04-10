@@ -16,13 +16,6 @@ function getTimeToReach(stat: UserTaskStat, level: ScoreThreshold): number | und
   return stat[`time_to_reach_${level}`];
 }
 
-function getUserScore(stat: UserTaskStat): number {
-  for (let i = scoreThresholds.length - 1; i >= 0; i--) {
-    if (getTimeToReach(stat, scoreThresholds[i]!) !== undefined) return scoreThresholds[i]!;
-  }
-  return 0;
-}
-
 interface ScoreDistributionEntry {
   score: number,
   pctUsersAbove: number,
@@ -54,9 +47,9 @@ export function computeItemStats(stats: UserTaskStat[]): ItemStatsResponse {
 
   const timeSpentValues = stats.map(s => s.total_time_spent).filter((v): v is number => v !== undefined);
   const timeToValidateValues = stats.map(s => s.time_to_reach_100).filter((v): v is number => v !== undefined);
-  const scores = stats.map(getUserScore);
+  const scores = stats.map(s => s.current_score ?? 0);
   const dropoutTimes = stats
-    .filter(s => getUserScore(s) < 10 && s.total_time_spent !== undefined)
+    .filter(s => (s.current_score ?? 0) < 10 && s.total_time_spent !== undefined)
     .map(s => s.total_time_spent!);
 
   const scoreDistribution: ScoreDistributionEntry[] = scoreThresholds.map(threshold => {
