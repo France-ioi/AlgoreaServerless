@@ -34,6 +34,8 @@ export type Session = z.infer<typeof sessionSchema>;
 /**
  * UserTaskActivities - Log of user activities on tasks
  *
+ * Key: pk (string, composite), sk = time (number, ms)
+ *
  * Two entity types via pk prefix:
  * - score#{item_id}#{participant_id}: score updates from grade_saved events
  *   sk (time) = event envelope time (ms)

@@ -8,6 +8,8 @@ import { DBError } from '../utils/errors';
 /**
  * UserTaskStats — per-item per-group cumulative statistics.
  *
+ * Key: pk = itemId (string), sk = groupId (string)
+ *
  * Attributes:
  * - total_time_spent: accumulated session durations (ms)
  * - abstime_begin: absolute time (ms since epoch) of the first recorded activity

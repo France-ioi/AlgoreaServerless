@@ -36,6 +36,8 @@ const validationDayCountSchema = z.object({
 /**
  * Daily aggregated validation counts.
  * One entry per UTC day.
+ *
+ * Key: pk = "VALIDATIONS#DAY" (string, fixed), sk (number, YYYYMMDD date key)
  */
 export class ValidationCounts extends Table {
   constructor(db: DynamoDBDocumentClient) {

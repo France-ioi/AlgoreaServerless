@@ -20,8 +20,10 @@ const BY_TIME_INDEX = {
 
 /**
  * Tracks distinct users who have connected via WebSocket.
- * One item per user (pk = userId), upserted on each connect with the latest timestamp.
+ * One item per user, upserted on each connect with the latest timestamp.
  * Used for rolling "active users" counts over 24h / 30d / 1y windows.
+ *
+ * Key: pk = userId (string), no sort key
  *
  * GSI `by-time` (pk = gsiPk "ALL", sk = lastConnectedTime) enables efficient
  * time-range queries without fetching all items.
