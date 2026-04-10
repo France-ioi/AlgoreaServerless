@@ -85,6 +85,7 @@ describe('user-task-stats handlers', () => {
       await onGradeSavedStats(makePayload({ score: 30 }), envelopeTime);
 
       const stat = await statsTable.get(itemId, groupId);
+      expect(stat?.current_score).toBe(30);
       expect(stat?.time_to_reach_10).toBe(3000);
       expect(stat?.time_to_reach_20).toBe(3000);
       expect(stat?.time_to_reach_30).toBe(3000);
@@ -303,6 +304,23 @@ describe('user-task-stats handlers', () => {
       await onGradeSavedStats(makePayload({ score: 10 }), 5000);
       const stat = await statsTable.get(itemId, groupId);
       expect(stat?.missingEarlierActivity).toBe(true);
+    });
+
+    it('should store current_score and keep the max across events', async () => {
+      await onGradeSavedStats(makePayload({ score: 45 }), 3000);
+      const stat1 = await statsTable.get(itemId, groupId);
+      expect(stat1?.current_score).toBe(45);
+
+      await onGradeSavedStats(makePayload({ score: 70 }), 5000);
+      const stat2 = await statsTable.get(itemId, groupId);
+      expect(stat2?.current_score).toBe(70);
+    });
+
+    it('should not decrease current_score when a lower-score event arrives late', async () => {
+      await onGradeSavedStats(makePayload({ score: 80 }), 5000);
+      await onGradeSavedStats(makePayload({ score: 30 }), 3000);
+      const stat = await statsTable.get(itemId, groupId);
+      expect(stat?.current_score).toBe(80);
     });
   });
 });

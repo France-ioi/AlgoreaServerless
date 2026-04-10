@@ -8,6 +8,7 @@ import { notificationRoutes } from './routes/notifications';
 import { statsRoutes } from './routes/stats';
 import { validationRoutes, validationEventHandlers } from './routes/validations';
 import { taskActivityRoutes, taskActivityEventHandlers } from './routes/task-activities';
+import { taskStatsRoutes } from './routes/task-stats';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
 import { liveActivityWsActions, liveActivityEventHandlers } from './routes/live-activity';
@@ -36,6 +37,7 @@ api.register(notificationRoutes, { prefix: '/notifications' });
 api.register(statsRoutes, { prefix: '/stats' });
 api.register(validationRoutes, { prefix: '/validations' });
 api.register(taskActivityRoutes, { prefix: '/task-session' });
+api.register(taskStatsRoutes, { prefix: '/task-stats' });
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { Table } from './table';
 import { z } from 'zod';
 import { safeNumber, docClient } from '../dynamodb';
@@ -16,6 +16,7 @@ import { DBError } from '../utils/errors';
  * - time_to_reach_N / abstime_N (N = 10..100): cumulative session time and
  *   absolute time when the score first reached the N-percent threshold.
  *   These are kept at the minimum observed value to handle out-of-order events.
+ * - current_score: the user's best score (0-100), updated on each grade_saved with score_improved.
  * - missingEarlierActivity: true when the chronologically first session for this user/item
  *   was not marked with `firstActivity`, meaning the user may have started the task before
  *   data collection began and the stats may be incomplete.
@@ -25,6 +26,7 @@ export const userTaskStatSchema = z.object({
   groupId: z.string(),
   total_time_spent: safeNumber.optional(),
   abstime_begin: safeNumber.optional(),
+  current_score: safeNumber.optional(),
   missingEarlierActivity: z.boolean().optional(),
   time_to_reach_10: safeNumber.optional(),
   time_to_reach_20: safeNumber.optional(),
@@ -68,6 +70,31 @@ export class UserTaskStats extends Table {
     return parsed.data;
   }
 
+  async getAllByItem(itemId: string): Promise<UserTaskStat[]> {
+    const results: UserTaskStat[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+    try {
+      do {
+        const output = await this.db.send(new QueryCommand({
+          TableName: this.tableName,
+          KeyConditionExpression: 'itemId = :pk',
+          FilterExpression: 'attribute_not_exists(missingEarlierActivity) OR missingEarlierActivity <> :t',
+          ExpressionAttributeValues: { ':pk': itemId, ':t': true },
+          ExclusiveStartKey: lastEvaluatedKey,
+        }));
+        for (const item of output.Items ?? []) {
+          const parsed = userTaskStatSchema.safeParse(item);
+          if (parsed.success) results.push(parsed.data);
+        }
+        lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+      } while (lastEvaluatedKey);
+    } catch (err) {
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, itemId, { cause: err });
+      else throw err;
+    }
+    return results;
+  }
+
   /**
    * Atomically adds duration to total_time_spent (creates the item if needed).
    * abstime_begin is set only on the first call (if_not_exists).
@@ -97,10 +124,14 @@ export class UserTaskStats extends Table {
    */
   async updateScoreLevels(itemId: string, groupId: string, updates: {
     abstime_begin?: number,
+    current_score?: number,
     missingEarlierActivity?: boolean,
     levels: Array<{ level: number, timeToReach: number, abstime: number }>,
   }): Promise<void> {
-    if (updates.levels.length === 0 && updates.abstime_begin === undefined && updates.missingEarlierActivity === undefined) return;
+    if (
+      updates.levels.length === 0 && updates.abstime_begin === undefined
+      && updates.missingEarlierActivity === undefined && updates.current_score === undefined
+    ) return;
 
     const setExpressions: string[] = [];
     const expressionValues: Record<string, unknown> = {};
@@ -108,6 +139,11 @@ export class UserTaskStats extends Table {
     if (updates.abstime_begin !== undefined) {
       setExpressions.push('abstime_begin = if_not_exists(abstime_begin, :abstime_begin)');
       expressionValues[':abstime_begin'] = updates.abstime_begin;
+    }
+
+    if (updates.current_score !== undefined) {
+      setExpressions.push('current_score = :current_score');
+      expressionValues[':current_score'] = updates.current_score;
     }
 
     if (updates.missingEarlierActivity !== undefined) {
