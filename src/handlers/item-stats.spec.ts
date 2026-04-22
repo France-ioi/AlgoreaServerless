@@ -17,7 +17,7 @@ describe('computeItemStats', () => {
       userCount: 0,
       medianTimeSpent: null,
       medianTimeToValidate: null,
-      medianDropoutTimeLowScore: null,
+      bounceRate: null,
       avgScore: null,
       scoreDistribution: [],
     });
@@ -52,13 +52,63 @@ describe('computeItemStats', () => {
     expect(computeItemStats(stats).medianTimeToValidate).toBeNull();
   });
 
-  it('should compute medianDropoutTimeLowScore for users with score < 10', () => {
-    const stats = [
-      makeStat({ total_time_spent: 5000 }),
-      makeStat({ total_time_spent: 15000 }),
-      makeStat({ total_time_spent: 30000, current_score: 10 }),
-    ];
-    expect(computeItemStats(stats).medianDropoutTimeLowScore).toBe(10000);
+  describe('bounceRate', () => {
+    it('should count users with score 0 and time in [3s, threshold) as bounced', () => {
+      // No one reached score 10, so threshold falls back to 30s floor.
+      const stats = [
+        makeStat({ total_time_spent: 5_000 }), // bounced (3s <= 5s < 30s, score 0)
+        makeStat({ total_time_spent: 20_000 }), // bounced
+        makeStat({ total_time_spent: 60_000 }), // real visit, not bounced (>= 30s, struggler)
+        makeStat({ total_time_spent: 1_000 }), // accidental open, excluded from numerator AND denominator
+      ];
+      // 2 of 3 real visits bounced
+      expect(computeItemStats(stats).bounceRate).toBeCloseTo(66.67, 1);
+    });
+
+    it('should exclude accidental opens (time < MIN_VISIT_MS) from the denominator', () => {
+      const stats = [
+        makeStat({ total_time_spent: 5_000 }), // bounced
+        makeStat({ total_time_spent: 500 }), // excluded
+        makeStat({ total_time_spent: 1_000 }), // excluded
+      ];
+      // 1 of 1 real visit bounced
+      expect(computeItemStats(stats).bounceRate).toBe(100);
+    });
+
+    it('should return null when no real visit is recorded', () => {
+      const stats = [
+        makeStat({ total_time_spent: 500 }),
+        makeStat({}), // no time recorded at all
+      ];
+      expect(computeItemStats(stats).bounceRate).toBeNull();
+    });
+
+    it('should not count users with score > 0 as bounced', () => {
+      const stats = [
+        makeStat({ total_time_spent: 5_000, current_score: 10, time_to_reach_10: 5_000 }),
+        makeStat({ total_time_spent: 5_000 }), // bounced
+      ];
+      // median(time_to_reach_10) = 5000ms, threshold = max(30000, 0.3*5000) = 30000ms
+      // 1 of 2 users bounced
+      expect(computeItemStats(stats).bounceRate).toBe(50);
+    });
+
+    it('should calibrate threshold from median time_to_reach_10', () => {
+      // Median time_to_reach_10 = 200_000ms (200s), threshold = max(30s, 0.3*200s) = 60_000ms
+      const stats = [
+        makeStat({ total_time_spent: 200_000, current_score: 10, time_to_reach_10: 200_000 }),
+        makeStat({ total_time_spent: 50_000 }), // bounced (3s <= 50s < 60s, score 0)
+        makeStat({ total_time_spent: 70_000 }), // not bounced (>= 60s threshold)
+      ];
+      expect(computeItemStats(stats).bounceRate).toBeCloseTo(33.33, 1);
+    });
+
+    it('should return 0 when no users bounced', () => {
+      const stats = [
+        makeStat({ total_time_spent: 60_000, current_score: 10, time_to_reach_10: 60_000 }),
+      ];
+      expect(computeItemStats(stats).bounceRate).toBe(0);
+    });
   });
 
   it('should compute avgScore', () => {
