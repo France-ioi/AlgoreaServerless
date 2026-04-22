@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.6.1 - 2026-04-22
+- replace `medianDropoutTimeLowScore` with `bounceRate` in the `GET /task-stats` response
+
 ## 2.6.0 - 2026-04-10
 - add `GET /task-stats` endpoint returning aggregated per-item statistics (user count, median time, score distribution) via permissions token
 - skip session tracking when the task token is read-only (observation and answer review modes)
