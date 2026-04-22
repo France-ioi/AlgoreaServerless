@@ -114,13 +114,28 @@ async function backfill(): Promise<void> {
   let updated = 0;
   let fromActivity = 0;
   let fromThreshold = 0;
+  let pages = 0;
   let lastEvaluatedKey: Record<string, unknown> | undefined;
+  const startTime = Date.now();
+  let lastLogTime = startTime;
+
+  const logProgress = (force = false): void => {
+    const now = Date.now();
+    if (!force && now - lastLogTime < 5_000) return;
+    lastLogTime = now;
+    const elapsed = ((now - startTime) / 1000).toFixed(1);
+    const rate = scanned > 0 ? (scanned / ((now - startTime) / 1000)).toFixed(0) : '0';
+    console.log(
+      `[${elapsed}s] scanned=${scanned} (${rate}/s), updated=${updated}, skipped=${skipped}, pages=${pages}`,
+    );
+  };
 
   do {
     const output = await client.send(new ScanCommand({
       TableName: statsTable,
       ExclusiveStartKey: lastEvaluatedKey,
     }));
+    pages++;
 
     for (const item of (output.Items ?? []) as Record<string, unknown>[]) {
       scanned++;
@@ -162,11 +177,10 @@ async function backfill(): Promise<void> {
     }
 
     lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
-
-    if (scanned % 500 === 0 && scanned > 0) {
-      console.log(`Progress: scanned=${scanned}, updated=${updated}, skipped=${skipped}`);
-    }
+    logProgress();
   } while (lastEvaluatedKey);
+
+  logProgress(true);
 
   console.log('---');
   console.log(
