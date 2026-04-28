@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.6.2 - 2026-04-28
+- fix intermittent 500 on `POST /task-session/start` caused by retried DynamoDB inserts being treated as duplicate-key errors
+
 ## 2.6.1 - 2026-04-22
 - replace `medianDropoutTimeLowScore` with `bounceRate` in the `GET /task-stats` response
 
