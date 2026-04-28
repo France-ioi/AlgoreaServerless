@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: April 10, 2026
+**Last Updated**: April 28, 2026
 
 ## Overview
 
@@ -352,6 +352,8 @@ async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvel
   - `sqlWrite()`: Execute write operations (single or transaction)
   - `sqlRead()`: Execute read queries with pagination
   - `batchUpdate()`: Batch write operations (max 25 items)
+  - `upsert()`: Put an item, overwriting any existing item with the same key
+  - `insertIfNotExists()`: Conditional Put (uses `attribute_not_exists(<pk>)`); returns `false` instead of throwing when the row already exists. **Prefer this over PartiQL `INSERT INTO`** for write-once rows whose key uniquely identifies the logical event: it stays correct under the AWS SDK's automatic retries (a PartiQL INSERT that succeeded server-side but whose response was lost will throw `DuplicateItemException` on retry, surfaced to clients as a 500)
 - **Error Handling**: Wraps AWS errors with contextual information
 
 #### Singleton Pattern

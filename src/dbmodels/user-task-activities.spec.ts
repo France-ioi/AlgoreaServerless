@@ -160,6 +160,32 @@ describe('UserTaskActivities', () => {
       const result = await table.getLastSession('item-B', 'user-X');
       expect(result).toBeUndefined();
     });
+
+    // Simulates an AWS SDK auto-retry of insertSession after a transient failure where the
+    // first attempt actually committed the row. `insertSession` must treat the existing row
+    // as success (no exception, original row preserved) rather than surfacing a 500.
+    it('should be a no-op when the same (itemId, participantId, time) is inserted twice', async () => {
+      const now = Date.now();
+      await table.insertSession(itemId, participantId, now, {
+        attemptId: 'att-1',
+        latestUpdateTime: now,
+      });
+
+      await expect(
+        table.insertSession(itemId, participantId, now, {
+          attemptId: 'att-1',
+          latestUpdateTime: now,
+        }),
+      ).resolves.not.toThrow();
+
+      const sessions = await table.getAllSessions(itemId, participantId);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0]).toEqual({
+        time: now,
+        attemptId: 'att-1',
+        latestUpdateTime: now,
+      });
+    });
   });
 
   describe('scores', () => {

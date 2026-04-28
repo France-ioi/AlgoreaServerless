@@ -67,21 +67,22 @@ export class UserTaskActivities extends Table {
     endTime?: number,
     firstActivity?: boolean,
   }): Promise<void> {
-    const fields: Record<string, unknown> = {
+    const item: Record<string, unknown> = {
       pk: sessionPk(itemId, participantId),
       time,
       latestUpdateTime: attrs.latestUpdateTime,
     };
-    if (attrs.attemptId !== undefined) fields.attemptId = attrs.attemptId;
-    if (attrs.endTime !== undefined) fields.endTime = attrs.endTime;
-    if (attrs.firstActivity !== undefined) fields.firstActivity = attrs.firstActivity;
+    if (attrs.attemptId !== undefined) item.attemptId = attrs.attemptId;
+    if (attrs.endTime !== undefined) item.endTime = attrs.endTime;
+    if (attrs.firstActivity !== undefined) item.firstActivity = attrs.firstActivity;
 
-    const entries = Object.entries(fields);
-    const valuePairs = entries.map(([ k ]) => `'${k}': ?`).join(', ');
-    await this.sqlWrite({
-      query: `INSERT INTO "${this.tableName}" VALUE { ${valuePairs} }`,
-      params: entries.map(([ , v ]) => v),
-    });
+    // Use a conditional Put rather than `INSERT INTO`. An already-existing row at this
+    // (pk, time) is overwhelmingly an SDK-retried previous Put whose first attempt did
+    // commit before the response was lost — see `insertIfNotExists` for the full
+    // rationale. Since `time` is the wall-clock millisecond chosen by the handler, two
+    // logically distinct sessions cannot collide on it in practice, so silently treating
+    // the duplicate as success is correct and avoids surfacing a 500 to the client.
+    await this.insertIfNotExists(item);
   }
 
   async getFirstSession(itemId: string, participantId: string): Promise<Session | undefined> {

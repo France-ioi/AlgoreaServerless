@@ -160,4 +160,46 @@ describe('Table', () => {
       expect(results2).toHaveLength(1);
     });
   });
+
+  describe('insertIfNotExists', () => {
+    it('should insert a new item and return true', async () => {
+      const inserted = await table['insertIfNotExists']({ pk: 'test-pk', sk: 100, data: 'first' });
+      expect(inserted).toBe(true);
+
+      const results = await table['sqlRead']({
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
+        params: [ 'test-pk' ],
+      });
+      expect(results).toHaveLength(1);
+      expect(results[0]?.data).toBe('first');
+    });
+
+    it('should not overwrite an existing item and return false', async () => {
+      await table['insertIfNotExists']({ pk: 'test-pk', sk: 100, data: 'first' });
+      const inserted = await table['insertIfNotExists']({ pk: 'test-pk', sk: 100, data: 'second' });
+      expect(inserted).toBe(false);
+
+      const results = await table['sqlRead']({
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
+        params: [ 'test-pk' ],
+      });
+      expect(results).toHaveLength(1);
+      // The existing row must remain untouched (this is what makes the operation safe under
+      // SDK retries: a "duplicate" is recognized rather than overwritten).
+      expect(results[0]?.data).toBe('first');
+    });
+
+    it('should treat items with the same pk but different sk as distinct', async () => {
+      const insertedA = await table['insertIfNotExists']({ pk: 'test-pk', sk: 100, data: 'a' });
+      const insertedB = await table['insertIfNotExists']({ pk: 'test-pk', sk: 200, data: 'b' });
+      expect(insertedA).toBe(true);
+      expect(insertedB).toBe(true);
+
+      const results = await table['sqlRead']({
+        query: `SELECT * FROM "${process.env.TABLE_FORUM}" WHERE pk = ?`,
+        params: [ 'test-pk' ],
+      });
+      expect(results).toHaveLength(2);
+    });
+  });
 });
