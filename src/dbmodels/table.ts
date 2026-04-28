@@ -109,6 +109,43 @@ export abstract class Table {
     }
   }
 
+  /**
+   * Insert an item only if no item with the same primary key already exists.
+   * Returns `true` if the item was inserted, `false` if an item with the same primary key
+   * was already present.
+   *
+   * Why not just use a PartiQL `INSERT INTO` statement?
+   * The AWS SDK applies its default retry strategy (`STANDARD`, up to 3 attempts) to all
+   * DynamoDB calls including `ExecuteStatement`. PartiQL `INSERT INTO` is not idempotent:
+   * if the first attempt actually committed the row server-side but the response was lost
+   * (transient network issue, throttling response after the write, 5xx, …), the SDK will
+   * retry the same statement and the retry will fail with `DuplicateItemException`. That
+   * exception then bubbles up as a 500 even though the write actually succeeded the first
+   * time. Using a `PutCommand` with `attribute_not_exists(<pk>)` lets us recognise this
+   * case explicitly: a `ConditionalCheckFailedException` here means "an item is already
+   * there" — which, for write-once rows whose key uniquely identifies the logical event,
+   * is precisely what a successful retry of our own previous attempt looks like.
+   *
+   * Callers should use this method (rather than PartiQL `INSERT INTO`) for any row that
+   * is meant to be written exactly once and where seeing the row already there should be
+   * treated as success rather than as an error.
+   */
+  protected async insertIfNotExists(item: Record<string, unknown>): Promise<boolean> {
+    try {
+      await this.db.send(new PutCommand({
+        TableName: this.tableName,
+        Item: item,
+        ConditionExpression: 'attribute_not_exists(#pk)',
+        ExpressionAttributeNames: { '#pk': this.pkAttribute },
+      }));
+      return true;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'ConditionalCheckFailedException') return false;
+      if (err instanceof Error) throw new DBError(`[${err.name}] ${err.message}`, JSON.stringify(item), { cause: err });
+      throw err;
+    }
+  }
+
   protected async incrementCounter(key: TableKey, options?: { ttl?: number }): Promise<void> {
     try {
       const expressionNames: Record<string, string> = { '#count': 'count' };
