@@ -17,9 +17,6 @@ custom:
       heapMax: 1g
       migrate: true
       convertEmptyValues: true
-  prune:
-    automatic: true
-    number: 1
 
 provider:
   name: aws
@@ -92,7 +89,6 @@ plugins:
   - serverless-plugin-typescript
   - serverless-dynamodb
   - serverless-offline
-  - serverless-prune-plugin
 
 resources:
   Resources:
