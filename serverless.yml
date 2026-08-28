@@ -37,7 +37,7 @@ provider:
   deploymentMethod: direct
   deploymentBucket:
     name: ${env:OPS_BUCKET}
-  region: eu-west-3
+  region: ${env:AWS_DEFAULT_REGION, 'eu-west-3'}
   iam:
     role:
       statements:
