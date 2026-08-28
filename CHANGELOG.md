@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.6.3 - 2026-08-28
+- configure deploy region from `AWS_DEFAULT_REGION` (default `eu-west-3`)
+- report release build/ready status to ops from CI
+- remove automatic Lambda version pruning
+
 ## 2.6.2 - 2026-04-28
 - fix intermittent 500 on `POST /task-session/start` caused by retried DynamoDB inserts being treated as duplicate-key errors
 
