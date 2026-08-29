@@ -57,15 +57,15 @@ provider:
             - "dynamodb:DeleteItem"
             - "dynamodb:PartiQL*"
           Resource:
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-forum"
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-notifications"
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections"
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections/index/*"
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-stats"
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-active-users"
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-active-users/index/*"
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-user-task-activities"
-            - !Sub "arn:aws:dynamodb:eu-west-3:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-user-task-stats"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-forum"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-notifications"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-connections/index/*"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-stats"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-active-users"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-active-users/index/*"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-user-task-activities"
+            - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-user-task-stats"
 functions:
 
   server:
