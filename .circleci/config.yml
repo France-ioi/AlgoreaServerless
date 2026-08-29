@@ -132,9 +132,8 @@ workflows:
       - lint:
           requires:
             - setup
+      # Must not require setup: setup has no tag filter, so it never runs on tags.
       - notify-building:
-          requires:
-            - setup
           context: ops-notify
           filters:
             tags:
