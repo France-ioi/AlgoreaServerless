@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.6.5 - 2026-08-29
+- use deploy region in DynamoDB IAM resource ARNs instead of hardcoded `eu-west-3`
+
 ## 2.6.4 - 2026-08-29
 - fix release ops notification so it runs on version tags
 
