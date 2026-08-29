@@ -1,6 +1,9 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## 2.6.4 - 2026-08-29
+- fix release ops notification so it runs on version tags
+
 ## 2.6.3 - 2026-08-28
 - configure deploy region from `AWS_DEFAULT_REGION` (default `eu-west-3`)
 - report release build/ready status to ops from CI
