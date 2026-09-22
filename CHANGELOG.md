@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+- add async group-results ZIP export: `POST /group-results-exports` and `GET /group-results-exports/:exportId/download-url`
+- publish `group_results_export_requested` via EventBridge; handle `group_results_export_completed` with user notifications (`group_results_export.ready` / `.failed`)
+- add env/IAM for `EVENT_BUS_NAME`, `EXPORTS_BUCKET`, `EXPORTS_PREFIX`, and optional `EXPORTS_REGION`
+
 ## 2.6.5 - 2026-08-29
 - use deploy region in DynamoDB IAM resource ARNs instead of hardcoded `eu-west-3`
 

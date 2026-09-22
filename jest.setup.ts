@@ -16,6 +16,9 @@ export default async (): Promise<void> => {
   process.env.APIGW_ENDPOINT = 'http://localhost:3001';
   process.env.BACKEND_PUBLIC_KEY = ''; // Will be set by token generator in tests
   process.env.API_BASE = 'sls';
+  process.env.EVENT_BUS_NAME = 'algorea';
+  process.env.EXPORTS_BUCKET = 'test-exports-bucket';
+  process.env.EXPORTS_PREFIX = 'temp-files/signed-url-access/group-results-exports/test';
 
   // Start DynamoDB Local
   console.log('Starting DynamoDB Local...');

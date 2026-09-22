@@ -1,5 +1,5 @@
 import { generateKeyPair, exportSPKI, SignJWT, KeyLike } from 'jose';
-import { verifyJwt, extractBearerToken } from './jwt';
+import { verifyJwt, verifyJwtSignatureOnly, extractBearerToken } from './jwt';
 import { AuthenticationError, ServerError } from '../utils/errors';
 
 describe('JWT Module', () => {
@@ -66,6 +66,18 @@ describe('JWT Module', () => {
         .rejects.toThrow(AuthenticationError);
       await expect(verifyJwt(token, publicKeyPem))
         .rejects.toThrow('"exp" claim timestamp check failed');
+    });
+
+    it('verifyJwtSignatureOnly accepts expired JWT when signature is valid', async () => {
+      const expiredExp = Math.floor(Date.now() / 1000) - 30;
+      const token = await new SignJWT({ user_id: 'user123' })
+        .setProtectedHeader({ alg: 'RS512' })
+        .setExpirationTime(expiredExp)
+        .sign(privateKey);
+
+      await expect(verifyJwt(token, publicKeyPem)).rejects.toThrow(AuthenticationError);
+      const payload = await verifyJwtSignatureOnly(token, publicKeyPem);
+      expect(payload.user_id).toBe('user123');
     });
 
     it('should throw ServerError when public key is missing', async () => {
