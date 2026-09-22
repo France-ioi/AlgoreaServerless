@@ -1,7 +1,7 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 2.7.0 - 2026-09-22
 - add async group-results ZIP export: `POST /group-results-exports` and `GET /group-results-exports/:exportId/download-url`
 - publish `group_results_export_requested` via EventBridge; handle `group_results_export_completed` with user notifications (`group_results_export.ready` / `.failed`)
 - add env/IAM for `EVENT_BUS_NAME`, `EXPORTS_BUCKET`, `EXPORTS_PREFIX`, and optional `EXPORTS_REGION`
