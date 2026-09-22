@@ -1,7 +1,7 @@
 # AlgoreaServerless Architecture
 
 **This file is mainly targetted to agents.**
-**Last Updated**: April 28, 2026
+**Last Updated**: September 22, 2026
 
 ## Overview
 
@@ -144,8 +144,17 @@ AlgoreaServerless/
 │   │   └── table.ts       # Base table class
 │   ├── events/            # Shared event definitions (schema + defineEvent)
 │   │   ├── grade-saved.ts
+│   │   ├── group-results-export-completed.ts
 │   │   ├── submission-created.ts
 │   │   └── thread-status-changed.ts
+│   ├── group-results-exports/  # Async group-results ZIP export (REST + EventBridge)
+│   │   ├── routes.ts
+│   │   ├── token.ts       # group_results_token parsing + middleware
+│   │   ├── handlers/      # request-export, download-url, on-export-completed
+│   │   └── e2e/
+│   ├── lib/               # Shared AWS helpers
+│   │   ├── eventbridge.ts # Outbound PutEvents (publishEvent)
+│   │   └── exports-s3.ts  # Presigned PUT/GET + HeadObject for export ZIPs
 │   ├── handlers/          # App-level request handlers
 │   │   ├── task-validation-storage.ts  # Root-level grade_saved event handler (validations)
 │   │   ├── task-validation-broadcast.ts  # Broadcasts validations to live activity subscribers
@@ -334,6 +343,10 @@ async function handleGradeSaved(payload: GradeSavedPayload, envelope: EventEnvel
 #### Root-Level Event Handlers
 - `grade_saved` - Persists a validation record when both `validated=true` and `score_improved=true`
 - `grade_saved` - Logs every grade_saved event as a score activity in the user-task-activities table
+
+#### Group Results Export Event Handlers
+- `group_results_export_completed` - Notifies the user (`group_results_export.ready` / `.failed`) after the backend worker finishes
+- Outbound (produced by serverless via `publishEvent`): `group_results_export_requested` on bus `EVENT_BUS_NAME`
 
 ### 5. Database Layer
 
@@ -879,6 +892,10 @@ window's cutoff, then partitions results client-side for 24h/30d/1y windows.
 - `BACKEND_PUBLIC_KEY`: JWT verification public key (PEM format)
 - `APIGW_ENDPOINT`: API Gateway endpoint for WebSocket messages
 - `OPS_BUCKET`: S3 bucket for deployment artifacts
+- `EVENT_BUS_NAME`: EventBridge bus for outbound events (default `algorea`)
+- `EXPORTS_BUCKET`: S3 bucket for group-results ZIP objects (ops-provided)
+- `EXPORTS_PREFIX`: Key prefix including stage (`temp-files/signed-url-access/group-results-exports/${stage}`)
+- `EXPORTS_REGION`: Optional S3 region when the exports bucket is not in the Lambda region
 
 ### Stage-Specific Behavior
 
@@ -908,6 +925,8 @@ Lambda execution role requires:
 - `dynamodb:BatchWriteItem` - Batch operations
 - `dynamodb:DeleteItem` - Delete operations
 - `dynamodb:PartiQL*` - PartiQL query support
+- `events:PutEvents` - Publish `group_results_export_requested` on `EVENT_BUS_NAME`
+- `s3:PutObject`, `s3:GetObject` - Presign upload/download under `EXPORTS_PREFIX` (`HeadObject` via GetObject)
 
 ## Deployment
 
@@ -1636,6 +1655,26 @@ src/
 ```
 
 The handlers use the identity token middleware (`requireIdentityToken`) which extracts `userId` from the JWT token.
+
+## Group Results Export Feature
+
+Async ZIP export of group progress/answers. Serverless mints a job id, presigns an S3 PUT for the backend worker, publishes `group_results_export_requested`, then on `group_results_export_completed` notifies the user. Downloads use short-lived presigned GETs (identity token); ownership is enforced by embedding `user_id` in the S3 key.
+
+### REST API
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/sls/group-results-exports` | `group_results_token` | Request export → `202 { export_id, expires_at }` |
+| GET | `/sls/group-results-exports/:exportId/download-url` | identity token | Presigned GET → `200 { url, expires_in }` or `404 { error: "not_found" }` |
+
+S3 key: `${EXPORTS_PREFIX}/${user_id}/${export_id}.zip`. PUT Content-Disposition filename matches the backend pattern `groups_progress_with_answers_for_group-{id}-and_child_items_of-{ids}.zip`.
+
+### Notifications
+
+- `group_results_export.ready` — `{ exportId, groupId, groupName, items, filename, sizeBytes, expiresAt }`
+- `group_results_export.failed` — `{ exportId, groupId, groupName, items, error }`
+
+Completion handler verifies the token **signature only** (not `exp`); token claims are authoritative for `userId`/`groupId`.
 
 ## Related Documentation
 

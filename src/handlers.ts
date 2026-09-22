@@ -9,6 +9,10 @@ import { statsRoutes } from './routes/stats';
 import { validationRoutes, validationEventHandlers } from './routes/validations';
 import { taskActivityRoutes, taskActivityEventHandlers } from './routes/task-activities';
 import { taskStatsRoutes } from './routes/task-stats';
+import {
+  groupResultsExportRoutes,
+  groupResultsExportEventHandlers,
+} from './group-results-exports/routes';
 import errorHandlingMiddleware from './middlewares/error-handling';
 import corsMiddleware from './middlewares/cors';
 import { liveActivityWsActions, liveActivityEventHandlers } from './routes/live-activity';
@@ -38,6 +42,7 @@ api.register(statsRoutes, { prefix: '/stats' });
 api.register(validationRoutes, { prefix: '/validations' });
 api.register(taskActivityRoutes, { prefix: '/task-session' });
 api.register(taskStatsRoutes, { prefix: '/task-stats' });
+api.register(groupResultsExportRoutes, { prefix: '/group-results-exports' });
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,6 +72,7 @@ ebServer.register(forumEventHandlers);
 ebServer.register(validationEventHandlers);
 ebServer.register(liveActivityEventHandlers);
 ebServer.register(taskActivityEventHandlers);
+ebServer.register(groupResultsExportEventHandlers);
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////

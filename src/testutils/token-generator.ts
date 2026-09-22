@@ -32,15 +32,28 @@ export const getPublicKeyPem = (): string => {
 };
 
 /**
- * Generate a signed JWT token with custom payload
+ * Generate a signed JWT with an arbitrary payload (shared test key pair).
  */
-export const generateToken = async (
-  payload: Partial<ThreadToken> & { participantId: string, itemId: string, userId: string }
+export const signTestJwt = async (
+  payload: Record<string, unknown>,
+  expiresIn: string | number = '1h',
 ): Promise<string> => {
   if (privateKey === undefined) {
     throw new Error('Keys not initialized. Call initializeKeys() first.');
   }
 
+  return await new SignJWT(payload)
+    .setProtectedHeader({ alg: 'ES256' })
+    .setExpirationTime(expiresIn)
+    .sign(privateKey);
+};
+
+/**
+ * Generate a signed JWT token with custom payload
+ */
+export const generateToken = async (
+  payload: Partial<ThreadToken> & { participantId: string, itemId: string, userId: string }
+): Promise<string> => {
   const fullPayload = {
     participant_id: payload.participantId,
     item_id: payload.itemId,
@@ -50,10 +63,7 @@ export const generateToken = async (
     can_write: payload.canWrite ?? true,
   };
 
-  return await new SignJWT(fullPayload)
-    .setProtectedHeader({ alg: 'ES256' })
-    .setExpirationTime('1h')
-    .sign(privateKey);
+  return signTestJwt(fullPayload);
 };
 
 /**

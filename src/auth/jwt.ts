@@ -1,4 +1,4 @@
-import { importSPKI, jwtVerify, decodeJwt, JWTPayload } from 'jose';
+import { importSPKI, jwtVerify, decodeJwt, compactVerify, JWTPayload } from 'jose';
 import { AuthenticationError, ServerError } from '../utils/errors';
 
 /**
@@ -85,6 +85,33 @@ export async function verifyJwt(token: string, publicKeyPem?: string): Promise<J
   );
 
   return payload;
+}
+
+/**
+ * Verify JWT signature only — does not enforce `exp` / `nbf` clock claims.
+ * Used when a job may complete after the token's lifetime (e.g. group-results export).
+ */
+export async function verifyJwtSignatureOnly(
+  token: string,
+  publicKeyPem?: string,
+): Promise<JWTPayload> {
+  if (!shouldVerifySignature()) {
+    return decodeJwt(token);
+  }
+
+  if (!publicKeyPem) {
+    throw new ServerError('no backend public key found to verify the token');
+  }
+
+  const normalizedPem = normalizePem(publicKeyPem);
+  const publicKey = await importSPKI(normalizedPem, 'RS512');
+  try {
+    await compactVerify(token, publicKey);
+  } catch (err) {
+    throw new AuthenticationError(`JWT verification failed: ${(err as Error).message}`);
+  }
+
+  return decodeJwt(token);
 }
 
 /**

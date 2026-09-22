@@ -33,6 +33,11 @@ provider:
     TABLE_USER_TASK_ACTIVITIES: alg-sls-${opt:stage, 'dev'}-user-task-activities
     TABLE_USER_TASK_STATS: alg-sls-${opt:stage, 'dev'}-user-task-stats
     APIGW_ENDPOINT: ${env:APIGW_ENDPOINT}
+    EVENT_BUS_NAME: ${env:EVENT_BUS_NAME, 'algorea'}
+    # Empty default so CI (`sls dynamodb install`) can resolve; runtime rejects unset bucket.
+    EXPORTS_BUCKET: ${env:EXPORTS_BUCKET, ''}
+    EXPORTS_PREFIX: temp-files/signed-url-access/group-results-exports/${opt:stage, 'dev'}
+    EXPORTS_REGION: ${env:EXPORTS_REGION, ''}
   runtime: nodejs20.x
   deploymentMethod: direct
   deploymentBucket:
@@ -66,6 +71,17 @@ provider:
             - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-active-users/index/*"
             - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-user-task-activities"
             - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/alg-sls-${opt:stage, 'dev'}-user-task-stats"
+        - Effect: Allow
+          Action:
+            - "events:PutEvents"
+          Resource:
+            - !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:event-bus/${env:EVENT_BUS_NAME, 'algorea'}"
+        - Effect: Allow
+          Action:
+            - "s3:PutObject"
+            - "s3:GetObject"
+          Resource:
+            - "arn:aws:s3:::${env:EXPORTS_BUCKET, ''}/temp-files/signed-url-access/group-results-exports/${opt:stage, 'dev'}/*"
 functions:
 
   server:
