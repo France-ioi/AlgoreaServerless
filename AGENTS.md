@@ -1,98 +1,59 @@
-You are an expert in TypeScript and backend development. You write functional, maintainable, performant, and accessible code following TypeScript best practices.
+# Agent instructions
 
-The architecture of the project is documented in `ARCHITECTURE.md`.
+You are an expert in TypeScript and AWS serverless backends. Write functional, maintainable, performant TypeScript that matches this repo's patterns.
 
-# Project overview
+**Architecture map:** [`ARCHITECTURE.md`](ARCHITECTURE.md) — entry point, folders, request flow, conventions, deep-dive table. Read the map when structure or shared patterns change; read a deep-dive only when that branch is in scope. Update the file you changed.
 
-This is an AWS Serverless application using:
-- **Serverless Framework** for deployment
-- **AWS Lambda** for compute
-- **DynamoDB** for storage (single-table design with pk/sk keys)
-- **API Gateway** for HTTP REST and WebSocket APIs
+## Gates
 
-# Code quality
-
-## General guidelines
-- Files should not be longer than 300 lines
-- Keep `try` blocks as short as possible to catch only specific errors
-- Use Zod for runtime validation of external data (API inputs, DB results, tokens)
-
-## TypeScript best practices
-- Use strict type checking
-- Prefer type inference when the type is obvious
-- Avoid the `any` type; use `unknown` when type is uncertain
-- Use interfaces for object shapes, types for unions/intersections
-
-## Error handling
-- Use custom error classes from `src/utils/errors.ts` (AuthenticationError, DecodingError, ServerError, etc.)
-- Errors are handled by the error-handling middleware for HTTP, or caught in WsServer for WebSocket
-
-## REST response conventions
-- Use response helpers from `src/utils/rest-responses.ts` for consistent API responses
-- **POST** handlers that create resources: use `created(resp)` (returns 201)
-- **DELETE** handlers: use `deleted(resp)` (returns 200)
-- **GET** handlers: return the data directly (implicit 200)
-
-## Linting
-- Linting rules are defined in `.eslintrc.js`
-- Use `.editorconfig` for basic editor config
-- Always run `npm run lint` after changes
+- `npm run lint` and `npm test` pass. Tests start DynamoDB Local themselves; run `npm run dynamodb:install` once per machine.
+- Every added or changed behaviour has a colocated `*.spec.ts`. Mocking and e2e rules: [testing.md](docs/architecture/testing.md).
+- Portal REST changes update [`src/portal/openapi.yaml`](src/portal/openapi.yaml).
 
 ## Comments
-- Do NOT add obvious, narrating comments (e.g., `// increment counter`, `// return result`).
-- DO add comments when a non-trivial choice has been made and the reasoning is not self-evident from the code. Examples:
-  - Why a particular algorithm, data structure, or approach was chosen over alternatives
-  - Why a value is hardcoded or why a specific threshold/constant was picked (e.g., `const chunkSize = 25; // the max size of 'RequestItems' for the dynamoDB API`)
-  - DynamoDB constraints or API limitations that motivate the code shape
-  - Non-obvious performance considerations or trade-offs (e.g., batch size limits, TTL choices)
-  - Business logic constraints that aren't apparent from the code alone
-  - Why something is intentionally left out or guarded (e.g., explaining when a conditional gate would need to change)
-- When refactoring or rewriting code, **preserve all existing explanatory comments**. Move them to the appropriate new location if the code they describe has moved. Only remove a comment if the code change makes the comment factually obsolete.
 
-# Testing
+Write **why-comments** only: non-obvious choice, hardcoded threshold or limit, AWS/DynamoDB quirk, intentional omission. Skip narrating comments. On refactor, **preserve** existing explanatory comments (move them with the code); drop one only when the change makes it factually wrong.
 
-- Run tests with `npm test`
-- Tests use Jest with DynamoDB Local for integration tests
-- Test files are colocated with source files using `.spec.ts` suffix
-- E2E tests are in `e2e/` subdirectories
-- Mock external dependencies (Stripe, etc.) in tests
-- **Mocks must match actual API calls** - verify mocked methods/properties match what the code actually uses
-- **E2E tests with external services** should skip gracefully when the service isn't configured (e.g., missing Stripe product)
-- **Always add or update tests** when implementing new features or modifying existing functionality - check existing `.spec.ts` files for the modules you modify
+## Code
 
-# Database patterns
+- Files ≤ 300 lines.
+- `try` blocks wrap only the call whose specific error you handle.
+- Zod-validate every external input: request bodies, token payloads, event payloads, DynamoDB reads (parse numbers with `safeNumber`).
+- `unknown` over `any`; interfaces for object shapes, types for unions and intersections.
+- Throw the classes in `src/utils/errors.ts`; the HTTP middleware maps them to status codes.
+- REST responses: POST that creates returns `created(resp)` (201), DELETE returns `deleted(resp)` (200), GET returns the data. Helpers in `src/utils/rest-responses.ts`.
 
-- Single-table design: all entities share the same table with `pk` (string) and `sk` (number) keys
-- Use `Table` base class from `src/dbmodels/table.ts` for DB operations
-- **Never call `this.db` directly** in model classes — use the existing `Table` methods (`sqlRead`, `sqlWrite`, `query`, `upsert`, `incrementCounter`, `countByPk`, `batchUpdate`) or create new reusable methods in `Table` if none fit
-- Use PartiQL for queries via `sqlRead()` and `sqlWrite()` methods
-- TTL is used for auto-expiring records (e.g., WebSocket connections)
+## DynamoDB
 
-# Documentation and architecture
+- Each model group has its own **dedicated table and key schema** (not single-table). Tables, keys, GSIs, TTLs: [database.md](docs/architecture/database.md).
+- Models extend `Table` (`src/dbmodels/table.ts`) and go through its protected methods. When none fits, add a reusable method to `Table`. The raw `this.db.send` calls in `user-connections.ts` and `user-task-stats.ts` are gaps in `Table`: move them into `Table` methods when you touch that code.
+- PartiQL (`sqlRead` / `sqlWrite`) for reads, updates and deletes; `insertIfNotExists` for write-once rows, because PartiQL `INSERT` fails on SDK retries (rationale in `table.ts`).
+- A new table is declared in four places: `serverless.yml` resources, the IAM statement, the `TABLE_*` env var, and `jest.setup.ts`.
 
-- Save plans in the `.cursor/plans` directory
-- Update `src/portal/openapi.yaml` when modifying the portal REST API
+## Branch docs (read when in scope)
 
-## ARCHITECTURE.md updates
+| When | Doc |
+|------|-----|
+| Business rules / cross-service Algorea behavior | [domain.md](docs/agents/domain.md) |
+| New or changed EventBridge event (inbound or outbound) | [events.md](docs/architecture/events.md) |
+| New token type or auth check | [auth.md](docs/architecture/auth.md) |
 
-`ARCHITECTURE.md` is the source of truth for agents. **Always update it** when:
-- Adding or changing patterns (DI, singletons, middleware, etc.)
-- Adding new modules, services, or database models
-- Changing how components interact or data flows
-- Adding new endpoints or WebSocket actions
-- Modifying authentication or authorization flows
+Every other branch is listed in the map's deep-dive table.
 
-Keep the file under 1000 lines. Update the "Last Updated" date when making changes.
+## Workflow
 
-# Task completion checklist
+Save plans in `.cursor/plans/`.
 
-Before marking a task complete, verify:
-- [ ] Linting passes (`npm run lint`)
-- [ ] Tests pass (`npm test`)
-- [ ] `ARCHITECTURE.md` updated if architectural changes were made
-- [ ] `src/portal/openapi.yaml` updated if portal REST API was modified
+## Agent skills
 
-# Interactions
+### Issue tracker
 
-- When unsure about something, ask!
-- Never use the `cd` command in terminal
+Markdown under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` + `docs/adr/` (+ Algorea knowledge base). See `docs/agents/domain.md`.
