@@ -17,6 +17,9 @@ jspm_packages
 .cursor/features/*
 .cursor/plans/*
 
+# Local agent issue tracker (specs/tickets; not product source)
+.scratch/
+
 # DynamoDB Local
 .dynamodb/
 
