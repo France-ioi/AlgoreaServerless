@@ -1,79 +1,98 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-## 2.7.0 - 2026-09-22
+## [v2.7.0](https://github.com/France-ioi/AlgoreaServerless/compare/v2.6.5...v2.7.0) - 2026-09-22
+
 - add async group-results ZIP export: `POST /group-results-exports` and `GET /group-results-exports/:exportId/download-url`
 - publish `group_results_export_requested` via EventBridge; handle `group_results_export_completed` with user notifications (`group_results_export.ready` / `.failed`)
 - add env/IAM for `EVENT_BUS_NAME`, `EXPORTS_BUCKET`, `EXPORTS_PREFIX`, and optional `EXPORTS_REGION`
 
-## 2.6.5 - 2026-08-29
+## [v2.6.5](https://github.com/France-ioi/AlgoreaServerless/compare/v2.6.4...v2.6.5) - 2026-08-29
+
 - use deploy region in DynamoDB IAM resource ARNs instead of hardcoded `eu-west-3`
 
-## 2.6.4 - 2026-08-29
+## [v2.6.4](https://github.com/France-ioi/AlgoreaServerless/compare/v2.6.3...v2.6.4) - 2026-08-29
+
 - fix release ops notification so it runs on version tags
 
-## 2.6.3 - 2026-08-28
+## [v2.6.3](https://github.com/France-ioi/AlgoreaServerless/compare/v2.6.2...v2.6.3) - 2026-08-28
+
 - configure deploy region from `AWS_DEFAULT_REGION` (default `eu-west-3`)
 - report release build/ready status to ops from CI
 - remove automatic Lambda version pruning
 
-## 2.6.2 - 2026-04-28
+## [v2.6.2](https://github.com/France-ioi/AlgoreaServerless/compare/v2.6.1...v2.6.2) - 2026-04-28
+
 - fix intermittent 500 on `POST /task-session/start` caused by retried DynamoDB inserts being treated as duplicate-key errors
 
-## 2.6.1 - 2026-04-22
+## [v2.6.1](https://github.com/France-ioi/AlgoreaServerless/compare/v2.6.0...v2.6.1) - 2026-04-22
+
 - replace `medianDropoutTimeLowScore` with `bounceRate` in the `GET /task-stats` response
 
-## 2.6.0 - 2026-04-10
+## [v2.6.0](https://github.com/France-ioi/AlgoreaServerless/compare/v2.5.0...v2.6.0) - 2026-04-10
+
 - add `GET /task-stats` endpoint returning aggregated per-item statistics (user count, median time, score distribution) via permissions token
 - skip session tracking when the task token is read-only (observation and answer review modes)
 
-## 2.5.0 - 2026-04-07
+## [v2.5.0](https://github.com/France-ioi/AlgoreaServerless/compare/v2.4.4...v2.5.0) - 2026-04-07
+
 - add `/task-session` REST endpoints (start, continue, stop) with task token to track work sessions on a task
 - add per-user per-task cumulative stats (time spent, score milestones) updated from sessions and grade events
 - add optional `result_started_at` on the first session to mark a true first activity; stats expose `missingEarlierActivity` when earlier participation may be missing
 
-## 2.4.4 - 2026-04-02
+## [v2.4.4](https://github.com/France-ioi/AlgoreaServerless/compare/v2.4.3...v2.4.4) - 2026-04-02
+
 - fix missing DynamoDB scan permission for the forum table
 
-## 2.4.3 - 2026-04-02
+## [v2.4.3](https://github.com/France-ioi/AlgoreaServerless/compare/v2.4.2...v2.4.3) - 2026-04-02
+
 - migrate forum to a separate stage-specific DynamoDB table
 
-## 2.4.2 - 2026-04-01
+## [v2.4.2](https://github.com/France-ioi/AlgoreaServerless/compare/v2.4.1...v2.4.2) - 2026-04-01
+
 - migrate active users and stats to a separate stage-specific DynamoDB table
 
-## 2.4.1 - 2026-04-01
+## [v2.4.1](https://github.com/France-ioi/AlgoreaServerless/compare/v2.4.0...v2.4.1) - 2026-04-01
+
 - migrate WebSocket connections to a separate stage-specific DynamoDB table
 
-## 2.4.0 - 2026-04-01
+## [v2.4.0](https://github.com/France-ioi/AlgoreaServerless/compare/v2.3.1...v2.4.0) - 2026-04-01
+
 - new stats service: connected users count, active users count, and validation counts (last 24h, 30d, 1y)
 - migrate notifications to a separate stage-specific DynamoDB table
 
-## 2.3.1 - 2026-03-11
+## [v2.3.1](https://github.com/France-ioi/AlgoreaServerless/compare/v2.3.0...v2.3.1) - 2026-03-11
+
 - fix number values in notification payloads being returned as objects instead of plain numbers
 
-## 2.3.0 - 2026-03-11
+## [v2.3.0](https://github.com/France-ioi/AlgoreaServerless/compare/v2.2.0...v2.3.0) - 2026-03-11
 
 - rename `sk` to `time` in the GET /validations response and stop exposing internal DB fields
 
-## 2.2.0 - 2026-03-10
+## [v2.2.0](https://github.com/France-ioi/AlgoreaServerless/compare/v2.1.4...v2.2.0) - 2026-03-10
 
 - new rest service to get latest activities (global)
 - new WS messages to (un)subscribe to live activities (received by WS)
 - remove unused GitHub Actions
 
-## 2.1.4 - 2026-02-04
+## [v2.1.4](https://github.com/France-ioi/AlgoreaServerless/compare/v2.1.3...v2.1.4) - 2026-02-04
+
 - fix a bug on the GET follow service
 
-## 2.1.3 - 2026-02-04
+## [v2.1.3](https://github.com/France-ioi/AlgoreaServerless/compare/v2.1.2...v2.1.3) - 2026-02-04
+
 - respond with a 401 instead of a 500 when providing an identity token instead of a thread token
 
-## 2.1.2 - 2026-02-03
+## [v2.1.2](https://github.com/France-ioi/AlgoreaServerless/compare/v2.1.1...v2.1.2) - 2026-02-03
+
 - proper REST response for DELETE/POST follow and notification services
 
-## 2.1.1 - 2026-02-02
+## [v2.1.1](https://github.com/France-ioi/AlgoreaServerless/compare/v2.1.0...v2.1.1) - 2026-02-02
+
 - add a service to get the follow status
 
-## 2.1.0 - 2026-01-28
+## [v2.1.0](https://github.com/France-ioi/AlgoreaServerless/compare/v2.0.8...v2.1.0) - 2026-01-28
+
 - backend for the portal which interfaces with Stripe for paid content (still in progress)
 - handle websocket connect/disconnect: keep user<->connectionId binding
 - support for event-bus events
@@ -84,32 +103,41 @@ All notable changes to this project will be documented in this file.
 - add clean logging all accross the project
 - complete refactoring of the project
 
-## v2.0.8 - 2025-11-12
+## [v2.0.8](https://github.com/France-ioi/AlgoreaServerless/compare/v2.0.7...v2.0.8) - 2025-11-12
+
 - make token verification failure a decoding error so that we send a 4xx instead of 5xx
 
-## v2.0.7 - 2025-11-12
+## [v2.0.7](https://github.com/France-ioi/AlgoreaServerless/compare/v2.0.6...v2.0.7) - 2025-11-12
+
 - do not require to be owner or to be able to watch to get messages
 - improve token verification (check expiration)
 
-## v2.0.6 - 2025-10-16
+## [v2.0.6](https://github.com/France-ioi/AlgoreaServerless/compare/v2.0.5...v2.0.6) - 2025-10-16
+
 - fix: do not create an parsing loop on parsing error. handle GoneException
 
-## v2.0.5 - 2025-10-16
+## [v2.0.5](https://github.com/France-ioi/AlgoreaServerless/compare/v2.0.4...v2.0.5) - 2025-10-16
+
 - return the error correctly on 500
 - fix the way we return responses
 
-## v2.0.4 - 2025-10-13
+## [v2.0.4](https://github.com/France-ioi/AlgoreaServerless/compare/v2.0.3...v2.0.4) - 2025-10-13
+
 - enable autoprune in serverless
 - add description to lambda function
 
-## v2.0.3 - 2025-10-10
+## [v2.0.3](https://github.com/France-ioi/AlgoreaServerless/compare/v2.0.2...v2.0.3) - 2025-10-10
+
 - fix the fix: proper "created" response when posting a message
 
-## v2.0.2 - 2025-10-10
+## [v2.0.2](https://github.com/France-ioi/AlgoreaServerless/compare/v2.0.1...v2.0.2) - 2025-10-10
+
 - fix: proper "created" response when posting a message
 
-## v2.0.1 - 2025-10-10
+## [v2.0.1](https://github.com/France-ioi/AlgoreaServerless/compare/v2.0.0...v2.0.1) - 2025-10-10
+
 - use a single handler for both ws and rest
 
-## v2.0.0 - 2025-10-09
+## [v2.0.0](https://github.com/France-ioi/AlgoreaServerless/compare/v1.1.3...v2.0.0) - 2025-10-09
+
 - initial release of the completely refactored multi-purposed REST+Websocket serverless app (previously "forum")

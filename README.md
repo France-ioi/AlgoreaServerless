@@ -103,7 +103,9 @@ If you do global changes (for instance the role permissions), you need to deploy
  
 ## Create a release
 
-In order to create a release:
+Ask an agent to run the `release` skill ([`.agents/skills/release/SKILL.md`](.agents/skills/release/SKILL.md)), optionally in auto mode. It drafts the `CHANGELOG.md` section from the merged PRs, proposes the version, then commits, tags, pushes and creates the GitHub release once you reply "do it".
+
+To do it by hand:
 - decide of a new version number (using semver)
 - update the changelog (add a new section, with the date of today and listing the fix and new features)
 - run the following command with your version number:
@@ -112,4 +114,4 @@ In order to create a release:
 VERSION=2.1.4; git add CHANGELOG.md && git commit -m "Release $VERSION" && git tag -a -m "Release v$VERSION" v$VERSION && git push origin v$VERSION && git push origin master
 ```
 
-The rest (GitHub release) is done by the CI.
+- create the GitHub release (`gh release create v$VERSION --verify-tag --title "Release $VERSION" --notes "<changelog section>"`): CI does not do it.

@@ -3,9 +3,9 @@
 ## CI (`.circleci/config.yml`)
 
 - **Every push:** `setup` (npm install, cached), then `tests-unit`, `tests-e2e` (context `stripe-tests`) and `lint` in parallel, on `node:20` images. The test jobs install OpenJDK 17 and DynamoDB Local.
-- **Tag `vX.Y.Z`:** `notify-building` → `github-release` (release notes taken from the latest `CHANGELOG.md` section) → `notify-ready`, reporting the version to the ops API. CI does not deploy.
+- **Tag `vX.Y.Z`:** `notify-ready` only, reporting the version to the ops API. CI neither deploys nor creates the GitHub release.
 
-Release procedure (changelog entry, tag, push): `README.md`.
+Release procedure (changelog entry, tag, push, GitHub release): the `release` skill in [`.agents/skills/release/SKILL.md`](../../.agents/skills/release/SKILL.md), summarized in `README.md`.
 
 ## Deploy
 

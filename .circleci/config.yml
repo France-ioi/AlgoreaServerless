@@ -35,23 +35,6 @@ jobs:
           paths:
             - .
 
-  github-release:
-    docker:
-    - image: cibuilds/github:0.10
-    steps:
-      - checkout
-      - run:
-          name: "Publish Release on GitHub"
-          command: |
-            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -b "`awk '/##.*/{n++;next};n==1;n==2{exit}' CHANGELOG.md`" -delete ${CIRCLE_TAG} ./CHANGELOG.md
-
-  notify-building:
-    docker:
-      - image: cimg/base:stable
-    steps:
-      - notify-app-version:
-          status: building
-
   notify-ready:
     docker:
       - image: cimg/base:stable
@@ -133,25 +116,7 @@ workflows:
           requires:
             - setup
       # Must not require setup: setup has no tag filter, so it never runs on tags.
-      - notify-building:
-          context: ops-notify
-          filters:
-            tags:
-              only: /^v\d+\.\d+\..*/
-            branches:
-              ignore: /.*/
-      - github-release:
-          context: github
-          requires:
-            - notify-building
-          filters:
-            tags:
-              only: /^v\d+\.\d+\..*/
-            branches:
-              ignore: /.*/
       - notify-ready:
-          requires:
-            - github-release
           context: ops-notify
           filters:
             tags:
