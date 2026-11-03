@@ -44,6 +44,10 @@ Every other branch is listed in the map's deep-dive table.
 
 Save plans in `.cursor/plans/`.
 
+## Git
+
+Never commit on or push to `master`. Work on a feature branch; open a pull request into `master`. If `HEAD` is already on `master`, create and check out a feature branch before the first commit.
+
 ## Agent skills
 
 ### Issue tracker
